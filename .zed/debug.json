@@ -1,0 +1,26 @@
+[
+    {
+        "label": "Debug hump",
+        "adapter": "Delve",
+        "request": "launch",
+        "mode": "debug",
+        "program": "./cmd/hump",
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Debug current Go file",
+        "adapter": "Delve",
+        "request": "launch",
+        "mode": "debug",
+        "program": "$ZED_FILE",
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Debug current package tests",
+        "adapter": "Delve",
+        "request": "launch",
+        "mode": "test",
+        "program": "$ZED_DIRNAME",
+        "cwd": "$ZED_WORKTREE_ROOT"
+    }
+]

@@ -73,5 +73,27 @@
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
         "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: Kafka (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_Kafka_Integration -coverpkg=./... -coverprofile=cover.out ./... && gocov convert cover.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: HTTP (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-http.html\"; gotestsum --format testdox -- -tags=integration -timeout 30m -run TestPipeline_HTTP_Integration -coverpkg=./internal/... -coverprofile=cover-http.out ./test/ && gocov convert cover-http.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-http.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
     }
 ]

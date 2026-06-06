@@ -46,6 +46,13 @@ func (c *healthCheck) check(skipOnErr bool) hg.Option {
 	})
 }
 
+// Operational reports whether the probe's most recent update marked the
+// component as operational. A probe that has never been updated reports false.
+func (c *healthCheck) Operational() bool {
+	state := c.state.Load()
+	return state != nil && state.value
+}
+
 // Update atomically replaces the probe state. value reports whether the
 // observed component is operational, and err is the last observed error
 // (may be nil). When value is false and err is nil, the probe reports a

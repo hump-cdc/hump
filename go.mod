@@ -3,6 +3,7 @@ module hump
 go 1.26.1
 
 require (
+	github.com/brianvoe/gofakeit/v7 v7.15.0
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hellofresh/health-go/v5 v5.5.5

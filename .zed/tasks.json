@@ -95,5 +95,49 @@
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
         "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: NATS Core (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-nats-core.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_NatsCore_Integration -coverpkg=./... -coverprofile=cover-nats-core.out ./... && gocov convert cover-nats-core.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-nats-core.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: NATS JetStream (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-nats-js.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_NatsJetStream_Integration -coverpkg=./... -coverprofile=cover-nats-js.out ./... && gocov convert cover-nats-js.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-nats-js.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: RabbitMQ Classic (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-rabbitmq-classic.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_RabbitMQClassic_Integration -coverpkg=./... -coverprofile=cover-rabbitmq-classic.out ./... && gocov convert cover-rabbitmq-classic.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-rabbitmq-classic.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Integration: RabbitMQ Stream (coverage)",
+        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-rabbitmq-stream.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_RabbitMQStream_Integration -coverpkg=./... -coverprofile=cover-rabbitmq-stream.out ./... && gocov convert cover-rabbitmq-stream.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-rabbitmq-stream.out",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
     }
 ]

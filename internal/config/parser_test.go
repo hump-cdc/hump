@@ -268,6 +268,55 @@ func TestParse_NestedTablesAreFlattened(t *testing.T) {
 	}
 }
 
+func TestParse_ReplicaDefaultsToFull(t *testing.T) {
+	src := `tables:
+  - schema: public
+    table: users
+    sinks:
+      - http:
+          url: http://x
+`
+	cfg, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.Tables[0].Replica != config.ReplicaIdentityFull {
+		t.Fatalf("want replica=full by default, got %q", cfg.Tables[0].Replica)
+	}
+}
+
+func TestParse_ReplicaUnmanaged(t *testing.T) {
+	src := `tables:
+  - schema: public
+    table: users
+    replica: unmanaged
+    sinks:
+      - http:
+          url: http://x
+`
+	cfg, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.Tables[0].Replica != config.ReplicaIdentityUnmanaged {
+		t.Fatalf("want replica=unmanaged, got %q", cfg.Tables[0].Replica)
+	}
+}
+
+func TestParse_ReplicaInvalidValueRejected(t *testing.T) {
+	src := `tables:
+  - schema: public
+    table: users
+    replica: bogus
+    sinks:
+      - http:
+          url: http://x
+`
+	if _, err := Parse(src); err == nil {
+		t.Fatalf("expected validation error for invalid replica value")
+	}
+}
+
 func TestParse_InvalidYAML(t *testing.T) {
 	if _, err := Parse("a: [unterminated\n"); err == nil {
 		t.Fatalf("expected error on invalid YAML")

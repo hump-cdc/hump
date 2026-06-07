@@ -9,8 +9,9 @@ import (
 // TableRegistry maps schema/table to its configured sinks and resolves
 // partition tables back to their parent table configuration.
 type TableRegistry struct {
-	tables     []introspector.TableRef
-	partitions map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef
+	tables      []introspector.TableRef
+	replicaFull []introspector.TableRef
+	partitions  map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef
 
 	// mapping table schema → table name → sinks
 	registry map[introspector.TableSchema]map[introspector.TableName][]config.SinkConfig
@@ -37,7 +38,11 @@ func RegistryFromConfig(cfg config.Configuration) *TableRegistry {
 		}
 
 		tables[t.Name] = t.Sinks
-		result.tables = append(result.tables, introspector.TableRef{Schema: t.Schema, Name: t.Name})
+		ref := introspector.TableRef{Schema: t.Schema, Name: t.Name}
+		result.tables = append(result.tables, ref)
+		if t.Replica == config.ReplicaIdentityFull {
+			result.replicaFull = append(result.replicaFull, ref)
+		}
 	}
 
 	return result
@@ -46,6 +51,14 @@ func RegistryFromConfig(cfg config.Configuration) *TableRegistry {
 // List returns all configured tables (schema and name).
 func (r *TableRegistry) List() []introspector.TableRef {
 	return r.tables
+}
+
+// ReplicaIdentityFullTables returns only the configured tables whose replica
+// identity hump manages (replica: full). Tables configured replica: unmanaged
+// are excluded so hump issues no REPLICA IDENTITY DDL for them or their
+// partitions.
+func (r *TableRegistry) ReplicaIdentityFullTables() []introspector.TableRef {
+	return r.replicaFull
 }
 
 // Resolve looks up sinks for a schema/table. If the table is not configured

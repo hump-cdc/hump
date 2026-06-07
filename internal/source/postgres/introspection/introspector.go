@@ -84,7 +84,7 @@ func (i *Introspector) invalidateLocked(ctx context.Context, conn *connection.Co
 
 	i.registry.UpdatePartitions(introspection.Partitions)
 
-	if err := i.ensureReplicaIdentity(ctx, conn, i.registry.List()); err != nil {
+	if err := i.ensureReplicaIdentity(ctx, conn, i.registry.ReplicaIdentityFullTables()); err != nil {
 		return err
 	}
 

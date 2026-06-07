@@ -11,4 +11,5 @@ var (
 	ErrWal                     = errors.New("WAL error")
 	ErrShutdownTimeout         = errors.New("service shutdown timeout")
 	ErrCrossValidate           = errors.New("configuration cross-validation error")
+	ErrShutdown                = errors.New("shutdown requested")
 )

@@ -11,6 +11,9 @@ import (
 //go:embed sql/slot.sql
 var slotSql string
 
+//go:embed sql/slot_remove.sql
+var slotRemoveSql string
+
 // EnsureReplicationSlotExists ensures the logical replication slot named
 // slotName exists and uses the pgoutput plugin.
 //
@@ -23,6 +26,20 @@ func EnsureReplicationSlotExists(ctx context.Context, conn *connection.Connectio
 
 	if _, err := conn.Exec(ctx, sql); err != nil {
 		return fmt.Errorf("ensure replication slot %q: %w", slotName, err)
+	}
+
+	return nil
+}
+
+// EnsureReplicationSlotRemoved drops the logical replication slot named slotName
+// if it exists and is inactive. It is a no-op when the slot is absent and
+// returns an error when the slot is currently active (held by another backend),
+// since pg_drop_replication_slot cannot drop an active slot.
+func EnsureReplicationSlotRemoved(ctx context.Context, conn *connection.Connection, slotName string) error {
+	sql := fmt.Sprintf(slotRemoveSql, connection.QuoteLiteral(slotName))
+
+	if _, err := conn.Exec(ctx, sql); err != nil {
+		return fmt.Errorf("remove replication slot %q: %w", slotName, err)
 	}
 
 	return nil

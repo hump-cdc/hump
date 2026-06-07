@@ -9,9 +9,12 @@ import (
 	"hump/internal/app/options"
 	"hump/internal/log"
 	"hump/internal/pipeline"
+	"hump/internal/source/postgres"
+	"hump/internal/source/postgres/connection"
 	"hump/internal/telemetry"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
+	"hump/internal/types/errs"
 )
 
 var logger = log.Scope("")
@@ -30,25 +33,40 @@ func main() {
 	r, release := app.New(context.Background())
 	defer release()
 
-	health, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
-	metrics, metricsHandler := metrics.New("hump")
+	if !cfg.Cleanup {
+		health, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
+		metrics, metricsHandler := metrics.New("hump")
 
-	if cfg.TelemetryPort != nil {
+		if cfg.TelemetryPort != nil {
+			r.Run(
+				// Telemetry
+				func(ctx context.Context) error {
+					t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
+					return t.Serve(*cfg.TelemetryPort)
+				})
+		}
+
 		r.Run(
-			// Telemetry
+			// WAL
 			func(ctx context.Context) error {
-				t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
-				return t.Serve(*cfg.TelemetryPort)
-			})
-	}
+				p := pipeline.New(health, metrics)
+				return p.Start(ctx, cfg.DatabaseUrl, cfg.Config, cfg.PublicationName, cfg.ReplicationSlotName)
+			},
+		)
+	} else {
+		r.Run(
+			// Cleanup: drop publication + slot, then stop the runner.
+			func(ctx context.Context) error {
+				connector := connection.New(cfg.DatabaseUrl)
+				if err := postgres.Cleanup(ctx, connector, cfg.PublicationName, cfg.ReplicationSlotName); err != nil {
+					return err
+				}
 
-	r.Run(
-		// WAL
-		func(ctx context.Context) error {
-			p := pipeline.New(health, metrics)
-			return p.Start(ctx, cfg.DatabaseUrl, cfg.Config, cfg.PublicationName, cfg.ReplicationSlotName)
-		},
-	)
+				logger.Info("Cleanup complete", "publication", cfg.PublicationName, "slot", cfg.ReplicationSlotName)
+				return errs.ErrShutdown
+			},
+		)
+	}
 
 	err := r.Wait()
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"hump/internal/app/shutdown"
+	"hump/internal/types/errs"
 	"syscall"
 	"time"
 )
@@ -55,7 +56,7 @@ func (r *runner) Wait() error {
 	shutdown.Shutdown(5 * time.Second)
 
 	// extract error
-	if err := context.Cause(r.context); err != nil && !errors.Is(err, errSignalInterrupt) && !errors.Is(err, errSignalTerminate) {
+	if err := context.Cause(r.context); err != nil && !errors.Is(err, errSignalInterrupt) && !errors.Is(err, errSignalTerminate) && !errors.Is(err, errs.ErrShutdown) {
 		return err
 	}
 

@@ -22,4 +22,5 @@ type Options struct {
 	PublicationName     string `short:"p" long:"publication" env:"PUB" description:"PostgreSQL publication name" default:"hump_pub"`
 	ReplicationSlotName string `short:"s" long:"slot" env:"SLOT" description:"PostgreSQL replication slot name" default:"hump_slot"`
 	TelemetryPort       *uint  `short:"t" long:"telemetry-port" env:"TELEMETRY_PORT" description:"Port for telemetry endpoints"`
+	Cleanup             bool   `long:"cleanup" description:"Run cleanup: drop the publication and replication slot, then exit"`
 }

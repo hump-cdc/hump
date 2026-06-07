@@ -97,3 +97,33 @@ func Configure(
 
 	return registry, introspector, nil
 }
+
+// Cleanup removes the publication and replication slot created for the service,
+// then returns. It does NOT alter replica identity on any table. It opens a
+// single connection from connector and closes it before returning.
+//
+// The replication slot is only dropped when inactive; an active slot (still held
+// by a running instance) yields an error so its retained WAL is not pulled out
+// from under a live consumer.
+func Cleanup(
+	ctx context.Context,
+	connector *Connector,
+	publicationName string,
+	slotName string,
+) error {
+	conn, err := connector.CreateConnection(ctx)
+	if err != nil {
+		return fmt.Errorf("open connection: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	if err := replication.EnsurePublicationRemoved(ctx, conn, publicationName); err != nil {
+		return fmt.Errorf("remove publication: %w", err)
+	}
+
+	if err := replication.EnsureReplicationSlotRemoved(ctx, conn, slotName); err != nil {
+		return fmt.Errorf("remove replication slot: %w", err)
+	}
+
+	return nil
+}

@@ -20,6 +20,9 @@ import (
 //go:embed sql/publication.sql
 var publicationSql string
 
+//go:embed sql/publication_remove.sql
+var publicationRemoveSql string
+
 // EnsurePublicationExists ensures the logical publication required for the
 // service exists in PostgreSQL and includes all configured tables.
 //
@@ -46,6 +49,18 @@ func EnsurePublicationExists(ctx context.Context, conn *connection.Connection, p
 
 	if _, err := conn.Exec(ctx, sql); err != nil {
 		return fmt.Errorf("ensure publication %q: %w", publicationName, err)
+	}
+
+	return nil
+}
+
+// EnsurePublicationRemoved drops the publication if it exists. It is a no-op
+// when the publication is absent.
+func EnsurePublicationRemoved(ctx context.Context, conn *connection.Connection, publicationName string) error {
+	sql := fmt.Sprintf(publicationRemoveSql, connection.QuoteIdentifier(publicationName))
+
+	if _, err := conn.Exec(ctx, sql); err != nil {
+		return fmt.Errorf("remove publication %q: %w", publicationName, err)
 	}
 
 	return nil

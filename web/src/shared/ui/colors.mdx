@@ -1,0 +1,140 @@
+import { Meta } from '@storybook/addon-docs/blocks'
+
+<Meta title="UI Kit/Colors" />
+
+export const TOKENS = [
+    {
+        group: 'Canvas & surfaces',
+        note: 'Elevation ramp — each step sits visually above the previous one.',
+        items: [
+            { token: 'canvas', light: '#ffffff', dark: '#010102', use: 'Base page background — the lowest layer everything else sits on.' },
+            { token: 'surface-1', light: '#f7f8f9', dark: '#0f1011', use: 'First raised layer: cards, panels, sidebars.' },
+            { token: 'surface-2', light: '#eef0f2', dark: '#141516', use: 'Second layer: inputs, controls, nested blocks.' },
+            { token: 'surface-3', light: '#e7e9ec', dark: '#18191a', use: 'Deepest fill: hover/active states, wells, code blocks.' },
+        ],
+    },
+    {
+        group: 'Ink (text & icons)',
+        note: 'Foreground contrast ramp — high to low emphasis.',
+        items: [
+            { token: 'ink', light: '#08090a', dark: '#f7f8f8', use: 'Primary text and icons — headings, key content.' },
+            { token: 'ink-muted', light: '#3c4149', dark: '#d0d6e0', use: 'Secondary text — body copy, descriptions.' },
+            { token: 'ink-subtle', light: '#6b7280', dark: '#8a8f98', use: 'Tertiary text — labels, captions, placeholders.' },
+            { token: 'ink-tertiary', light: '#9ca3af', dark: '#62666d', use: 'Faintest text — disabled, hints, metadata.' },
+        ],
+    },
+    {
+        group: 'Hairlines (borders & dividers)',
+        note: '',
+        items: [
+            { token: 'hairline', light: '#e6e8eb', dark: '#23252a', use: 'Default borders and dividers.' },
+            { token: 'hairline-strong', light: '#d4d7dc', dark: '#34343a', use: 'Emphasized borders — input outlines, focused edges.' },
+        ],
+    },
+    {
+        group: 'Primary (brand accent)',
+        note: 'primary / on-primary are theme-independent (same in light & dark).',
+        items: [
+            { token: 'primary', light: '#5e6ad2', dark: '#5e6ad2', use: 'Brand accent — primary buttons, links, active state, focus ring.' },
+            { token: 'on-primary', light: '#ffffff', dark: '#ffffff', use: 'Text/icons placed on a primary fill.' },
+            { token: 'primary-hover', light: '#4f5ac0', dark: '#828fff', use: 'Hover/pressed state of primary surfaces.' },
+            { token: 'primary-soft', light: '#eef0fb', dark: '#1b1d2e', use: 'Tinted primary background — selected rows, badges, subtle highlights.' },
+        ],
+    },
+    {
+        group: 'Success (positive)',
+        note: '',
+        items: [
+            { token: 'success', light: '#1a8534', dark: '#27a644', use: 'Positive status — success text, icons, solid fills.' },
+            { token: 'success-soft', light: '#e7f5ec', dark: '#11231a', use: 'Tinted success background — badges, banners.' },
+        ],
+    },
+    {
+        group: 'Danger (negative / destructive)',
+        note: '',
+        items: [
+            { token: 'danger', light: '#d4313a', dark: '#eb5757', use: 'Errors and destructive actions — delete, validation failures.' },
+            { token: 'danger-soft', light: '#fbeaeb', dark: '#2a1416', use: 'Tinted danger background — error banners, badges.' },
+        ],
+    },
+    {
+        group: 'Amber (warning / caution)',
+        note: '',
+        items: [
+            { token: 'amber', light: '#b7791f', dark: '#f2c94c', use: 'Warnings and caution — pending, attention-needed.' },
+            { token: 'amber-soft', light: '#fbf3da', dark: '#2a2410', use: 'Tinted warning background — banners, badges.' },
+        ],
+    },
+]
+
+export const Chip = ({ token }) => (
+    <div
+        style={{
+            width: 44,
+            height: 44,
+            borderRadius: 8,
+            backgroundColor: `var(--${token})`,
+            boxShadow: 'inset 0 0 0 1px rgba(127,127,127,0.25)',
+        }}
+    />
+)
+
+export const Row = ({ item }) => (
+    <tr style={{ borderTop: '1px solid var(--hairline)' }}>
+        <td style={{ padding: 12, verticalAlign: 'top' }}>
+            <code style={{ fontSize: 12, whiteSpace: 'nowrap' }}>--{item.token}</code>
+            <div style={{ marginTop: 4, fontSize: 11, opacity: 0.6 }}>
+                {`bg-${item.token} · text-${item.token} · border-${item.token}`}
+            </div>
+        </td>
+        <td style={{ padding: 12, verticalAlign: 'top' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Chip token={item.token} />
+                <code style={{ fontSize: 11, opacity: 0.7 }}>{item.light}</code>
+            </div>
+        </td>
+        <td style={{ padding: 12, verticalAlign: 'top' }}>
+            <div className="dark" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Chip token={item.token} />
+                <code style={{ fontSize: 11, opacity: 0.7 }}>{item.dark}</code>
+            </div>
+        </td>
+        <td style={{ padding: 12, verticalAlign: 'top', fontSize: 13, lineHeight: 1.5 }}>
+            {item.use}
+        </td>
+    </tr>
+)
+
+export const Group = ({ group }) => (
+    <div style={{ marginTop: 32 }}>
+        <h3 style={{ margin: '0 0 4px' }}>{group.group}</h3>
+        {group.note ? <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.7 }}>{group.note}</p> : null}
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+                <col style={{ width: 220 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 150 }} />
+                <col />
+            </colgroup>
+            <thead>
+                <tr style={{ textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', opacity: 0.6 }}>
+                    <th style={{ padding: '8px 12px' }}>Token</th>
+                    <th style={{ padding: '8px 12px' }}>Light</th>
+                    <th style={{ padding: '8px 12px' }}>Dark</th>
+                    <th style={{ padding: '8px 12px' }}>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                {group.items.map((item) => (
+                    <Row key={item.token} item={item} />
+                ))}
+            </tbody>
+        </table>
+    </div>
+)
+
+# Colors
+
+{TOKENS.map((group) => (
+    <Group key={group.group} group={group} />
+))}

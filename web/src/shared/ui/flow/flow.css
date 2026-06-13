@@ -1,0 +1,51 @@
+/* Token bridge for @xyflow/react: map its --xy-* theme variables to the project's
+   design tokens (app/styles.css). References the same CSS variables that the Tailwind
+   utilities resolve to, so it honors light/dark via the .dark class — no raw hex. */
+.react-flow {
+    --xy-background-color-default: var(--canvas);
+    --xy-background-pattern-dots-color-default: var(--hairline-strong);
+
+    --xy-edge-stroke-default: var(--ink-muted);
+    --xy-edge-stroke-width-default: 2;
+    --xy-edge-stroke-selected-default: var(--primary);
+
+    --xy-handle-background-color-default: var(--canvas);
+    --xy-handle-border-color-default: var(--hairline-strong);
+
+    --xy-controls-button-background-color-default: var(--surface-2);
+    --xy-controls-button-background-color-hover-default: var(--surface-3);
+    --xy-controls-button-border-color-default: var(--hairline);
+    --xy-controls-button-color-default: var(--ink-subtle);
+    --xy-controls-button-color-hover-default: var(--ink);
+    --xy-controls-box-shadow-default: 0 6px 18px -4px rgb(0 0 0 / 0.33);
+}
+
+/* Rounded zoom-controls card (plus / minus / fit), matching the design chrome. */
+.react-flow__controls {
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+}
+
+.react-flow__controls-button {
+    width: 32px;
+    height: 32px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.react-flow__controls-button:last-child {
+    border-bottom: none;
+}
+
+/* Connection handles: small filled circles; primary border on a selected node. */
+.react-flow__handle {
+    width: 8px;
+    height: 8px;
+    min-width: 8px;
+    min-height: 8px;
+    border-width: 2px;
+}
+
+.react-flow__node.selected .react-flow__handle {
+    border-color: var(--primary);
+}

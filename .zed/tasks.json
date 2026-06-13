@@ -34,6 +34,28 @@
         "cwd": "$ZED_WORKTREE_ROOT"
     },
     {
+        "label": "Run Web UI",
+        "command": "bun run dev",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "no_focus",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT/web"
+    },
+    {
+        "label": "Run Web UI Storybook",
+        "command": "bun run storybook",
+        "show_command": false,
+        "hide": "never",
+        "reveal": "no_focus",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT/web"
+    },
+    {
         "label": "Build",
         "command": "go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump",
         "env": {

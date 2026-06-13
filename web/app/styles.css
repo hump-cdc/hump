@@ -1,0 +1,294 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ── Self-hosted variable fonts (fetched on page open via these @font-face rules) ──
+   Design uses weights 400/500/600, normal only; the weight-axis range below covers them. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Tier 1: base / primitive palette — raw colors, theme-independent ── */
+:root {
+  --base-white: #ffffff;
+  --base-black: #010102;
+
+  /* neutral ramp (light → dark) */
+  --base-neutral-25:  #f7f8f9;
+  --base-neutral-50:  #f7f8f8;
+  --base-neutral-100: #eef0f2;
+  --base-neutral-150: #e7e9ec;
+  --base-neutral-175: #e6e8eb;
+  --base-neutral-200: #d4d7dc;
+  --base-neutral-250: #d0d6e0;
+  --base-neutral-400: #9ca3af;
+  --base-neutral-450: #8a8f98;
+  --base-neutral-500: #6b7280;
+  --base-neutral-550: #62666d;
+  --base-neutral-700: #3c4149;
+  --base-neutral-750: #34343a;
+  --base-neutral-800: #23252a;
+  --base-neutral-850: #18191a;
+  --base-neutral-875: #141516;
+  --base-neutral-900: #0f1011;
+  --base-neutral-950: #08090a;
+
+  --base-indigo-50:  #eef0fb;   /* primary */
+  --base-indigo-300: #828fff;
+  --base-indigo-500: #5e6ad2;
+  --base-indigo-600: #4f5ac0;
+  --base-indigo-950: #1b1d2e;
+
+  --base-green-50:  #e7f5ec;    /* success */
+  --base-green-400: #27a644;
+  --base-green-500: #1a8534;
+  --base-green-950: #11231a;
+
+  --base-red-50:  #fbeaeb;      /* danger */
+  --base-red-400: #eb5757;
+  --base-red-500: #d4313a;
+  --base-red-950: #2a1416;
+
+  --base-amber-50:  #fbf3da;    /* amber */
+  --base-amber-300: #f2c94c;
+  --base-amber-600: #b7791f;
+  --base-amber-950: #2a2410;
+
+  /* syntax accents — code viewer only, no brand role (light 500 / dark 300) */
+  --base-syntax-blue-500:   #1971c2;
+  --base-syntax-blue-300:   #7dd3fc;
+  --base-syntax-green-500:  #2f9e44;
+  --base-syntax-green-300:  #9ece6a;
+  --base-syntax-orange-500: #e8590c;
+  --base-syntax-orange-300: #f78c6c;
+  --base-syntax-purple-500: #9c36b5;
+  --base-syntax-purple-300: #c792ea;
+}
+
+/* ── Tier 2: semantic tokens — light (base, no class) ── */
+:root {
+  --canvas:          var(--base-white);
+  --surface-1:       var(--base-neutral-25);
+  --surface-2:       var(--base-neutral-100);
+  --surface-3:       var(--base-neutral-150);
+  --ink:             var(--base-neutral-950);
+  --ink-muted:       var(--base-neutral-700);
+  --ink-subtle:      var(--base-neutral-500);
+  --ink-tertiary:    var(--base-neutral-400);
+  --hairline:        var(--base-neutral-175);
+  --hairline-strong: var(--base-neutral-200);
+  --primary:         var(--base-indigo-500);
+  --on-primary:      var(--base-white);
+  --primary-hover:   var(--base-indigo-600);
+  --primary-soft:    var(--base-indigo-50);
+  --success:         var(--base-green-500);
+  --success-soft:    var(--base-green-50);
+  --danger:          var(--base-red-500);
+  --danger-soft:     var(--base-red-50);
+  --amber:           var(--base-amber-600);
+  --amber-soft:      var(--base-amber-50);
+
+  /* code viewer (shared/ui/code) — syntax highlighting.
+     bg/fg/comment/punctuation reuse neutral tokens that already flip under .dark;
+     only the accents are overridden in .dark below. */
+  --syntax-bg:          var(--surface-1);
+  --syntax-fg:          var(--ink-muted);
+  --syntax-comment:     var(--ink-tertiary);
+  --syntax-punctuation: var(--ink-subtle);
+  --syntax-tag:         var(--base-syntax-blue-500);
+  --syntax-string:      var(--base-syntax-green-500);
+  --syntax-number:      var(--base-syntax-orange-500);
+  --syntax-keyword:     var(--base-syntax-purple-500);
+}
+
+/* ── Tier 2: semantic tokens — dark overrides (re-point to other base tokens) ── */
+.dark {
+  --canvas:          var(--base-black);
+  --surface-1:       var(--base-neutral-900);
+  --surface-2:       var(--base-neutral-875);
+  --surface-3:       var(--base-neutral-850);
+  --ink:             var(--base-neutral-50);
+  --ink-muted:       var(--base-neutral-250);
+  --ink-subtle:      var(--base-neutral-450);
+  --ink-tertiary:    var(--base-neutral-550);
+  --hairline:        var(--base-neutral-800);
+  --hairline-strong: var(--base-neutral-750);
+  --primary-hover:   var(--base-indigo-300);
+  --primary-soft:    var(--base-indigo-950);
+  --success:         var(--base-green-400);
+  --success-soft:    var(--base-green-950);
+  --danger:          var(--base-red-400);
+  --danger-soft:     var(--base-red-950);
+  --amber:           var(--base-amber-300);
+  --amber-soft:      var(--base-amber-950);
+
+  --syntax-tag:      var(--base-syntax-blue-300);
+  --syntax-string:   var(--base-syntax-green-300);
+  --syntax-number:   var(--base-syntax-orange-300);
+  --syntax-keyword:  var(--base-syntax-purple-300);
+}
+
+/* ── Scrollbar ── */
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+/* ── Wipe Tailwind's default color palette ── */
+@theme {
+  --color-*: initial;
+}
+
+/* ── Typography scale from the Pencil template ── */
+@theme {
+  /* Font size — t-shirt names, size only (line-height/tracking stay separate) */
+  --text-*: initial;
+  --text-2xs:  0.625rem;      /* 10px */
+  --text-xs:   0.6875rem;     /* 11px */
+  --text-sm:   0.75rem;       /* 12px */
+  --text-base: 0.8125rem;     /* 13px */
+  --text-md:   0.875rem;      /* 14px */
+  --text-lg:   0.9375rem;     /* 15px */
+  --text-xl:   1rem;          /* 16px */
+  --text-2xl:  1.0625rem;     /* 17px */
+  --text-3xl:  1.375rem;      /* 22px */
+  --text-4xl:  1.75rem;       /* 28px */
+  --text-5xl:  1.875rem;      /* 30px */
+  --text-6xl:  2.5rem;        /* 40px */
+
+  /* Letter-spacing — px-exact, role-named */
+  --tracking-*: initial;
+  --tracking-display: -1.5px;  /* 40px hero value */
+  --tracking-stat:    -1px;    /* 30/22px stat values */
+  --tracking-title:   -0.6px;  /* 28px page title */
+  --tracking-heading: -0.3px;  /* 15-17px headings */
+  --tracking-tight:   -0.2px;  /* 13-14px titles */
+  --tracking-wide:     0.2px;  /* 12px labels */
+  --tracking-caps:     0.4px;  /* 10-11px uppercase */
+  --tracking-eyebrow:  0.6px;  /* 11px eyebrow */
+
+  /* Line-height — ratio scale */
+  --leading-*: initial;
+  --leading-none:    1;
+  --leading-tight:   1.15;     /* display / stat values */
+  --leading-snug:    1.3;
+  --leading-normal:  1.5;      /* body */
+  --leading-relaxed: 1.6;
+}
+
+/* ── Tier 3: expose semantic tokens (+ a couple base) as Tailwind utilities ── */
+@theme inline {
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: var(--base-white);
+  --color-black: var(--base-black);
+
+  --color-canvas:          var(--canvas);
+  --color-surface-1:       var(--surface-1);
+  --color-surface-2:       var(--surface-2);
+  --color-surface-3:       var(--surface-3);
+  --color-ink:             var(--ink);
+  --color-ink-muted:       var(--ink-muted);
+  --color-ink-subtle:      var(--ink-subtle);
+  --color-ink-tertiary:    var(--ink-tertiary);
+  --color-hairline:        var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-primary:         var(--primary);
+  --color-on-primary:      var(--on-primary);
+  --color-primary-hover:   var(--primary-hover);
+  --color-primary-soft:    var(--primary-soft);
+  --color-success:         var(--success);
+  --color-success-soft:    var(--success-soft);
+  --color-danger:          var(--danger);
+  --color-danger-soft:     var(--danger-soft);
+  --color-amber:           var(--amber);
+  --color-amber-soft:      var(--amber-soft);
+
+  --font-sans:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    fill 0.2s ease, stroke 0.2s ease !important;
+}
+
+/* Shiki YAML viewer (shared/ui/code). A single theme emits `var(--syntax-*)` colors
+   inline; those tokens flip light/dark via the cascade. Line numbers are CSS counters. */
+.hump-code {
+  --hump-code-ln: var(--ink-tertiary);
+}
+.hump-code .shiki {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.hump-code .shiki code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  counter-reset: hump-line;
+}
+.hump-code .shiki .line {
+  display: inline-block;
+  width: 100%;
+}
+.hump-code .shiki .line::before {
+  counter-increment: hump-line;
+  content: counter(hump-line);
+  display: inline-block;
+  width: 2rem;
+  margin-right: 1.5rem;
+  text-align: right;
+  color: var(--hump-code-ln);
+  user-select: none;
+}
+.hump-code .hump-code-fallback {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}

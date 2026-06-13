@@ -35,12 +35,15 @@ type Web interface {
 	Serve(port uint) error
 }
 
-type web struct{}
+type web struct {
+	metricsHandler http.Handler
+}
 
-// New constructs a [Web] server. It takes no dependencies yet; API handler
-// dependencies should be threaded in here as routes are added.
-func New() Web {
-	return &web{}
+// New constructs a [Web] server.
+func New(metricsHandler http.Handler) Web {
+	return &web{
+		metricsHandler: metricsHandler,
+	}
 }
 
 // Serve starts the web HTTP server on the given port and registers a shutdown
@@ -53,7 +56,7 @@ func (w *web) Serve(port uint) error {
 	router.Use(middleware.Compress(5))
 
 	api := humachi.New(router, huma.DefaultConfig("hump", version.Version))
-	registerRoutes(api)
+	registerRoutes(api, router, w.metricsHandler)
 
 	assets, err := fs.Sub(assetsFS, "assets")
 	if err != nil {

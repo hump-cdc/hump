@@ -51,7 +51,7 @@ func main() {
 			r.Run(
 				// Web UI
 				func(ctx context.Context) error {
-					w := web.New()
+					w := web.New(metricsHandler)
 					return w.Serve(*cfg.WebPort)
 				})
 		}

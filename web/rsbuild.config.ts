@@ -1,12 +1,32 @@
 import { tanstackRouter } from '@tanstack/router-plugin/rspack'
 
-import { defineConfig } from '@rsbuild/core'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { defineConfig, type RsbuildPlugin } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
 
 import { themeInitScript } from './src/shared/theme/theme-script'
 
+const appDir = fileURLToPath(new URL('./app', import.meta.url))
+
+const routeManifestPlugin: RsbuildPlugin = {
+    name: 'route-manifest',
+    setup(api) {
+        api.onAfterBuild(() => {
+            const gen = readFileSync(join(appDir, 'routeTree.gen.ts'), 'utf8')
+            const start = gen.indexOf('fullPaths:')
+            const end = gen.indexOf('fileRoutesByTo', start)
+            const block = start >= 0 && end > start ? gen.slice(start, end) : ''
+            const routes = [...new Set([...block.matchAll(/'([^']+)'/g)].map((m) => m[1]))].sort()
+            writeFileSync(join(api.context.distPath, 'routes.json'), JSON.stringify(routes))
+        })
+    },
+}
+
 export default defineConfig({
-    plugins: [pluginReact()],
+    plugins: [pluginReact(), routeManifestPlugin],
     html: {
         template: './index.html',
         title: 'hump',

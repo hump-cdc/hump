@@ -14,7 +14,12 @@ export default defineConfig({
         meta: { viewport: 'width=device-width, initial-scale=1' },
         tags: [{ tag: 'script', children: themeInitScript, head: true, append: false }],
     },
-    source: { entry: { index: './app/main.tsx' } },
+    source: {
+        entry: { index: './app/main.tsx' },
+        define: {
+            VERSION: JSON.stringify(process.env.VERSION ?? '0.0.0'),
+        },
+    },
     output: {
         distPath: { root: '../internal/web/assets' },
         cleanDistPath: true,

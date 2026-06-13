@@ -31,7 +31,7 @@ export const AppSidebar: FC = () => {
                         </div>
                         <div className="flex items-center gap-1.5 font-semibold text-ink group-data-[collapsible=icon]:hidden">
                             hump
-                            <Badge>1.0.0</Badge>
+                            <Badge>{VERSION}</Badge>
                             <a href="https://hump.dev" target="_blank" rel="noreferrer">
                                 <ExternalLink className="size-3.5 text-ink-tertiary" />
                             </a>

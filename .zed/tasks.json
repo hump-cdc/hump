@@ -1,7 +1,7 @@
 [
     {
         "label": "Run",
-        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/hump -f dev/hump.yaml -t 9100",
+        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/hump -f dev/hump.yaml -t 9100 -w 3200",
         "env": {
             "CGO_ENABLED": "0",
             "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable",
@@ -50,6 +50,21 @@
         "show_command": false,
         "hide": "never",
         "reveal": "no_focus",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT/web"
+    },
+    {
+        "label": "Build Web UI",
+        "command": "bun run build",
+        "env": {
+            "NODE_ENV": "production",
+            "VERSION": "0.0.1"
+        },
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
         "reveal_target": "dock",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,

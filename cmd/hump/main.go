@@ -15,6 +15,7 @@ import (
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/errs"
+	"hump/internal/web"
 )
 
 var logger = log.Scope("")
@@ -43,6 +44,15 @@ func main() {
 				func(ctx context.Context) error {
 					t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
 					return t.Serve(*cfg.TelemetryPort)
+				})
+		}
+
+		if cfg.WebPort != nil {
+			r.Run(
+				// Web UI
+				func(ctx context.Context) error {
+					w := web.New()
+					return w.Serve(*cfg.WebPort)
 				})
 		}
 

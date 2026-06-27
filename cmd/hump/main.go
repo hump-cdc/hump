@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"hump/internal/app"
 	"hump/internal/app/options"
+	cfg "hump/internal/config"
 	"hump/internal/log"
 	"hump/internal/pipeline"
 	"hump/internal/source/postgres"
@@ -14,14 +17,18 @@ import (
 	"hump/internal/telemetry"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
+	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/web"
+	"hump/internal/web/streamer"
+
+	"github.com/goccy/go-yaml"
 )
 
 var logger = log.Scope("")
 
 func main() {
-	cfg, e := options.Parse()
+	opts, e := options.Parse()
 	if errors.Is(e, options.ErrHelp) {
 		os.Exit(0)
 	}
@@ -34,45 +41,68 @@ func main() {
 	r, release := app.New(context.Background())
 	defer release()
 
-	if !cfg.Cleanup {
+	if !opts.Cleanup {
+		// Configuration
+		configuration, err := cfg.Parse(opts.Config)
+		if err != nil {
+			logger.Error(err.Error(), "error", err)
+			os.Exit(1)
+			return
+		}
+		cfgResult, _ := yaml.Marshal(&configuration)
+		logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
+
+		for _, t := range configuration.Tables {
+			logger.Debug("Configuration",
+				"schema", t.Schema,
+				"table", t.Name,
+				"sinks", formatSinks(t.Sinks),
+			)
+		}
+
+		// Services
 		health, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
 		metrics, metricsHandler := metrics.New("hump")
 
-		if cfg.TelemetryPort != nil {
+		// Shared operations stream fanned out to web SSE clients.
+		operations := streamer.New()
+
+		// Run
+		if opts.TelemetryPort != nil {
 			r.Run(
 				// Telemetry
 				func(ctx context.Context) error {
 					t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
-					return t.Serve(*cfg.TelemetryPort)
+					return t.Serve(*opts.TelemetryPort)
 				})
 		}
 
-		if cfg.WebPort != nil {
+		if opts.WebPort != nil {
 			r.Run(
 				// Web UI
 				func(ctx context.Context) error {
-					w := web.New(metricsHandler)
-					return w.Serve(*cfg.WebPort)
+					w := web.New(opts, configuration, operations, metricsHandler)
+					return w.Serve(ctx, *opts.WebPort)
 				})
 		}
 
 		r.Run(
 			// WAL
 			func(ctx context.Context) error {
-				p := pipeline.New(health, metrics)
-				return p.Start(ctx, cfg.DatabaseUrl, cfg.Config, cfg.PublicationName, cfg.ReplicationSlotName)
+				p := pipeline.New(health, operations, metrics)
+				return p.Start(ctx, opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
 			},
 		)
 	} else {
 		r.Run(
 			// Cleanup: drop publication + slot, then stop the runner.
 			func(ctx context.Context) error {
-				connector := connection.New(cfg.DatabaseUrl)
-				if err := postgres.Cleanup(ctx, connector, cfg.PublicationName, cfg.ReplicationSlotName); err != nil {
+				connector := connection.New(opts.DatabaseUrl)
+				if err := postgres.Cleanup(ctx, connector, opts.PublicationName, opts.ReplicationSlotName); err != nil {
 					return err
 				}
 
-				logger.Info("Cleanup complete", "publication", cfg.PublicationName, "slot", cfg.ReplicationSlotName)
+				logger.Info("Cleanup complete", "publication", opts.PublicationName, "slot", opts.ReplicationSlotName)
 				return errs.ErrShutdown
 			},
 		)
@@ -85,4 +115,12 @@ func main() {
 	} else {
 		logger.Info("Good bye!")
 	}
+}
+
+func formatSinks(sinks []config.SinkConfig) string {
+	parts := make([]string, 0, len(sinks))
+	for _, s := range sinks {
+		parts = append(parts, s.Sink.DisplayName())
+	}
+	return strings.Join(parts, ", ")
 }

@@ -1,20 +1,24 @@
 import type { FC } from 'react'
 
 import { AreaChartCard } from '@/shared/ui/card'
+import { formatNumberCompact } from '@/shared/utils'
 
-const ROWS = [620, 700, 660, 780, 720, 840, 800, 910, 860, 980, 920, 1040]
+import { useThroughput } from '../model/use-throughput'
 
-const DATA = ROWS.map((rowsPerSec, index) => ({
-    time: `16:${String(index * 5).padStart(2, '0')}`,
-    rowsPerSec,
-}))
+const formatRate = (value: number): string => formatNumberCompact(value)
 
-export const Throughput: FC = () => (
-    <AreaChartCard
-        title="Throughput"
-        subtitle="rows/sec"
-        data={DATA}
-        series={[{ dataKey: 'rowsPerSec', label: 'rows/sec', variant: 'primary' }]}
-        xAxisKey="time"
-    />
-)
+export const Throughput: FC = () => {
+    const { values } = useThroughput()
+
+    return (
+        <AreaChartCard
+            title="Throughput"
+            subtitle="rows/sec"
+            hint="Row changes processed per second."
+            data={values}
+            series={[{ dataKey: 'rowsPerSec', label: 'rows/sec', variant: 'primary' }]}
+            xAxisKey="time"
+            tooltipValueFormatter={formatRate}
+        />
+    )
+}

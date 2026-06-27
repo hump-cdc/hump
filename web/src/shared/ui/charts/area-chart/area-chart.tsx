@@ -9,6 +9,7 @@ import {
     ChartLegendContent,
     ChartTooltip,
     ChartTooltipContent,
+    type ChartValueFormatter,
 } from '@/shared/ui/charts/chart'
 import { cn } from '@/shared/utils'
 
@@ -33,6 +34,8 @@ type AreaChartProps = HTMLAttributes<HTMLDivElement> & {
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
+    /** Formats each value shown in the tooltip, e.g. `(value) => `${value}s``. */
+    tooltipValueFormatter?: ChartValueFormatter
     legend?: boolean
     ref?: Ref<HTMLDivElement>
 }
@@ -44,6 +47,7 @@ export const AreaChart: FC<AreaChartProps> = ({
     xAxisKey,
     stacked = true,
     tooltip = false,
+    tooltipValueFormatter,
     legend = false,
     ...props
 }) => {
@@ -66,7 +70,10 @@ export const AreaChart: FC<AreaChartProps> = ({
                     ))}
                 </defs>
                 {xAxisKey && <XAxis dataKey={xAxisKey} hide />}
-                <ChartTooltip position={{ x: 0, y: 0 }} content={tooltip ? <ChartTooltipContent /> : () => null} />
+                <ChartTooltip
+                    position={{ x: 0, y: 0 }}
+                    content={tooltip ? <ChartTooltipContent valueFormatter={tooltipValueFormatter} /> : () => null}
+                />
                 {legend && <ChartLegend content={<ChartLegendContent />} />}
                 {series.map(({ dataKey }) => (
                     <Area

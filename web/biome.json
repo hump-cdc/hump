@@ -12,7 +12,9 @@
             "**/src/**/*",
             "**/rsbuild.config.ts",
             "!**/app/routeTree.gen.ts",
-            "!**/app/styles.css"
+            "!**/app/styles.css",
+            "!**/src/shared/api/openapi.json",
+            "!**/src/shared/api/generated"
         ]
     },
     "formatter": {

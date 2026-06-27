@@ -78,6 +78,7 @@ export type DataTableClientProps<T> = DataTableBaseProps<T> & {
     fetchRows?: never
     rowCount?: never
     blockSize?: never
+    onLoadMore?: never
 }
 
 /**
@@ -98,6 +99,8 @@ export type DataTableServerProps<T> = DataTableBaseProps<T> & {
     rowCount?: number
     /** Rows fetched per request (block/window size). Defaults to `100`. */
     blockSize?: number
+    /** Changing this clears cached blocks and refetches the visible window in place. */
+    refreshToken?: number | string
     /** Component shown when a row is expanded. Its presence makes rows expandable. */
     getDetail?: DetailComponent<T>
     /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
@@ -105,6 +108,36 @@ export type DataTableServerProps<T> = DataTableBaseProps<T> & {
     /** Height of the expanded detail row in pixels (or per-row). Defaults to `200`. */
     detailHeight?: number | ((row: T) => number)
     data?: never
+    onLoadMore?: never
 }
 
-export type DataTableProps<T> = DataTableClientProps<T> | DataTableServerProps<T>
+/**
+ * Infinite/paginated rows fed from an external store (e.g. TanStack Query). `data`
+ * holds the contiguous prefix of rows loaded so far (`[0 .. data.length-1]`) and
+ * `rowCount` is the known total; the grid pads the tail with placeholders for a
+ * stable scrollbar and calls `onLoadMore` as the viewport nears the loaded tail.
+ * Unlike server mode, fetching/caching lives outside the table.
+ */
+export type DataTableInfiniteProps<T> = DataTableBaseProps<T> & {
+    /** Rows loaded so far: a contiguous prefix `[0 .. data.length-1]` of the full list. */
+    data: T[]
+    /** Total number of rows. Sizes the scrollbar and the placeholder tail. */
+    rowCount: number
+    /**
+     * Called when the viewport nears the loaded tail and more rows remain
+     * (`data.length < rowCount`). Presence of this prop selects infinite mode.
+     */
+    onLoadMore: () => void
+    /** When `true`, suppresses `onLoadMore` while a page is in flight. */
+    isFetchingNextPage?: boolean
+    /** Component shown when a row is expanded. Its presence makes rows expandable. */
+    getDetail?: DetailComponent<T>
+    /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
+    isRowExpandable?: (row: T) => boolean
+    /** Height of the expanded detail row in pixels (or per-row). Defaults to `200`. */
+    detailHeight?: number | ((row: T) => number)
+    fetchRows?: never
+    blockSize?: never
+}
+
+export type DataTableProps<T> = DataTableClientProps<T> | DataTableServerProps<T> | DataTableInfiniteProps<T>

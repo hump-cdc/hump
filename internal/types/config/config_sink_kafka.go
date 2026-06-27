@@ -53,6 +53,19 @@ func (s *KafkaSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sink.SinkTypeKafka), s.URL.Source())
 }
 
+// Metadata returns the connection host (rendered broker URL) and the rendered
+// topic for the given context.
+func (s *KafkaSink) Metadata(context sink.SinkContext) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+
+	url, _ := s.URL.Render(context)
+	target, _ := s.Topic.Render(context)
+
+	return parseHost(url), target
+}
+
 // CrossValidate is a no-op for Kafka sinks; they have no cross-sink invariants.
 func (*KafkaSink) CrossValidate([]Tables) error { return nil }
 

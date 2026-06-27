@@ -13,7 +13,11 @@ const DATA = COMMIT.map((commit, index) => ({
     sender: SENDER[index],
 }))
 
-type StoryArgs = Pick<ComponentProps<typeof AreaChartCard>, 'title' | 'subtitle' | 'legend' | 'stacked' | 'tooltip'> & {
+type StoryArgs = Pick<
+    ComponentProps<typeof AreaChartCard>,
+    'title' | 'subtitle' | 'hint' | 'legend' | 'stacked' | 'tooltip'
+> & {
+    value: string
     multiSeries: boolean
 }
 
@@ -22,6 +26,8 @@ const meta: Meta<StoryArgs> = {
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         subtitle: { name: 'Subtitle', control: 'text', table: { category: 'Content' } },
+        hint: { name: 'Hint', control: 'text', table: { category: 'Content' } },
+        value: { name: 'Value', control: 'text', table: { category: 'Content' } },
         multiSeries: { name: 'Multiple series', control: 'boolean', table: { category: 'Content' } },
         legend: { name: 'Legend', control: 'boolean', table: { category: 'Style' } },
         stacked: { name: 'Stacked', control: 'boolean', table: { category: 'Style' } },
@@ -30,16 +36,20 @@ const meta: Meta<StoryArgs> = {
     args: {
         title: 'Replication lag',
         subtitle: '',
+        hint: 'Describe the metric shown on this card.',
+        value: '',
         multiSeries: true,
         legend: true,
         stacked: false,
         tooltip: true,
     },
-    render: ({ title, subtitle, multiSeries, legend, stacked, tooltip }) => (
+    render: ({ title, subtitle, hint, value, multiSeries, legend, stacked, tooltip }) => (
         <AreaChartCard
-            className="w-[28rem]"
+            className="w-md"
             title={title}
             subtitle={subtitle || undefined}
+            hint={hint || undefined}
+            value={value || undefined}
             legend={legend}
             stacked={stacked}
             tooltip={tooltip}

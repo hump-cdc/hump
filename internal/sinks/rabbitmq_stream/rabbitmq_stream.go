@@ -8,14 +8,16 @@ import (
 
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/internal/types/stream"
 )
 
 // Process delivers a single WAL operation to a RabbitMQ Streams sink. It
 // renders the message, ensures the producer for the rendered stream exists
 // (running the per-(URL, stream) reconciler on first use), then publishes
 // under the producer's serialization mutex and waits for the publisher
-// confirmation.
-func Process(ctx context.Context, cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext) error {
+// confirmation. When streamEvent is non-nil the rendered message's fields are recorded
+// on it for the operations stream.
+func Process(ctx context.Context, cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -23,6 +25,11 @@ func Process(ctx context.Context, cfg config.RabbitMQStreamSink, operationContex
 	streamName, payload, headers, err := renderAll(cfg, operationContext)
 	if err != nil {
 		return wrapError(err)
+	}
+
+	if streamEvent != nil {
+		streamEvent.Payload = payload
+		streamEvent.Headers = headers
 	}
 
 	rp, err := getProducer(ctx, cfg, operationContext, streamName)

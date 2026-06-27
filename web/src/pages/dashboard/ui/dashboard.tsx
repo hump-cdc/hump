@@ -4,10 +4,10 @@ import { AsyncQueue } from '@/entities/dashboard/async-queue'
 import { CommitLag } from '@/entities/dashboard/commit-lag'
 import { Delivered } from '@/entities/dashboard/delivered'
 import { Failed } from '@/entities/dashboard/failed'
-import { RowsPerSec } from '@/entities/dashboard/rows-per-sec'
 import { SenderLag } from '@/entities/dashboard/sender-lag'
 import { Sinks } from '@/entities/dashboard/sinks'
 import { Tables } from '@/entities/dashboard/tables'
+import { Throughput } from '@/entities/dashboard/throughput'
 
 import { QuickLinks } from './quick-links'
 
@@ -16,7 +16,7 @@ export const Dashboard: FC = () => (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <CommitLag />
             <SenderLag />
-            <RowsPerSec />
+            <Throughput />
             <AsyncQueue />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

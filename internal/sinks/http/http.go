@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/internal/types/stream"
 	"io"
 	nethttp "net/http"
 )
@@ -14,8 +15,9 @@ var defaultClient = &nethttp.Client{}
 
 // Process delivers a single WAL operation to an HTTP sink by rendering the
 // configured URL, method, body, and headers from operationContext and issuing
-// the request with ctx.
-func Process(ctx context.Context, config config.HTTPSink, operationContext *sink.SinkContext) error {
+// the request with ctx. When streamEvent is non-nil the rendered request fields are
+// recorded on it for the operations stream.
+func Process(ctx context.Context, config config.HTTPSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -32,6 +34,12 @@ func Process(ctx context.Context, config config.HTTPSink, operationContext *sink
 
 	if err := fillHeaders(req, config, operationContext); err != nil {
 		return wrapError(err)
+	}
+
+	if streamEvent != nil {
+		streamEvent.Payload = message.body
+		streamEvent.Headers = requestHeaders(req.Header)
+		streamEvent.Metadata = map[string]string{"url": message.url, "method": message.method}
 	}
 
 	resp, err := defaultClient.Do(req)

@@ -11,6 +11,20 @@ import (
 	"hump/internal/types/sink"
 )
 
+// tableHeaders flattens an AMQP header table into a plain string map for the
+// operations stream. It returns nil when there are no headers.
+func tableHeaders(headers amqp.Table) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	out := make(map[string]string, len(headers))
+	for name, v := range headers {
+		out[name] = fmt.Sprint(v)
+	}
+	return out
+}
+
 // rabbitMessage bundles the rendered exchange/routing key with the
 // [amqp.Publishing] ready for [amqp.Channel.PublishWithContext].
 type rabbitMessage struct {

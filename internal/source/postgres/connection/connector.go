@@ -27,6 +27,29 @@ func New(connectionString string) *Connector {
 	return &Connector{connectionString: connectionString}
 }
 
+// Endpoint describes the target of a connection string without its credentials.
+type Endpoint struct {
+	Host     string
+	Port     uint16
+	Database string
+}
+
+// Describe parses connectionString and returns the target host, port, and
+// database name without opening a connection. Credentials are intentionally
+// omitted from the result.
+func Describe(connectionString string) (Endpoint, error) {
+	cfg, err := pgconn.ParseConfig(connectionString)
+	if err != nil {
+		return Endpoint{}, err
+	}
+
+	return Endpoint{
+		Host:     cfg.Host,
+		Port:     cfg.Port,
+		Database: cfg.Database,
+	}, nil
+}
+
 // CreateConnection opens a regular session with retry and returns a
 // Connection whose Exec/ExecParams transparently reconnect on
 // connection-level errors. The caller owns the connection and must Close it.

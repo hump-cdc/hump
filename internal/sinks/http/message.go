@@ -40,6 +40,20 @@ func buildMessage(config config.HTTPSink, operationContext *sink.SinkContext) (*
 	}, nil
 }
 
+// requestHeaders flattens the request headers into a plain string map (first
+// value per key) for the operations stream. It returns nil when there are none.
+func requestHeaders(header nethttp.Header) map[string]string {
+	if len(header) == 0 {
+		return nil
+	}
+
+	out := make(map[string]string, len(header))
+	for name := range header {
+		out[name] = header.Get(name)
+	}
+	return out
+}
+
 // fillHeaders sets the User-Agent to "hump/<version>" and applies each
 // configured header template against operationContext.
 func fillHeaders(req *nethttp.Request, config config.HTTPSink, operationContext *sink.SinkContext) error {

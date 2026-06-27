@@ -21,6 +21,7 @@ var SinkTypes = []SinkType{SinkTypeKafka, SinkTypeNatsCore, SinkTypeNatsJetStrea
 type Sink interface {
 	Type() SinkType
 	DisplayName() string
+	Metadata(context SinkContext) (host string, target string)
 }
 
 type SinkContext struct {

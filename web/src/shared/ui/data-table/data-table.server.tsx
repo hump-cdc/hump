@@ -18,6 +18,7 @@ export const ServerDataTable = <T,>({
     getRowId,
     rowCount,
     blockSize = DEFAULT_BLOCK_SIZE,
+    refreshToken,
     getDetail,
     isRowExpandable,
     detailHeight,
@@ -39,6 +40,7 @@ export const ServerDataTable = <T,>({
         getRowId,
         expandable,
         isRowExpandable: canExpand,
+        refreshToken,
     })
 
     const handleViewportChanged = useViewportRangeLoader<T>(ensureRange)

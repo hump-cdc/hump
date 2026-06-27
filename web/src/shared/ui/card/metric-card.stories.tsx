@@ -16,7 +16,7 @@ const asides = {
     label: <span className="text-xs font-medium text-ink-tertiary">depth</span>,
 } satisfies Record<string, ReactNode>
 
-type StoryArgs = Pick<ComponentProps<typeof MetricCard>, 'title' | 'tooltip' | 'variant' | 'asideTrend'> & {
+type StoryArgs = Pick<ComponentProps<typeof MetricCard>, 'title' | 'hint' | 'variant' | 'asideTrend' | 'separated'> & {
     value: string
     aside: keyof typeof asides
     direction: keyof typeof SAMPLE_VALUES
@@ -29,7 +29,7 @@ const meta: Meta<StoryArgs> = {
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         value: { name: 'Value', control: 'text', table: { category: 'Content' } },
-        tooltip: { name: 'Tooltip', control: 'text', table: { category: 'Content' } },
+        hint: { name: 'Hint', control: 'text', table: { category: 'Content' } },
         aside: {
             name: 'Aside',
             control: 'select',
@@ -56,31 +56,34 @@ const meta: Meta<StoryArgs> = {
             table: { category: 'Style' },
         },
         withSparkline: { name: 'Sparkline', control: 'boolean', table: { category: 'Style' } },
+        separated: { name: 'Header border', control: 'boolean', table: { category: 'Style' } },
     },
     args: {
         title: 'Delivered',
         value: '128,402',
-        tooltip: 'Describe the metric shown on this card.',
+        hint: 'Describe the metric shown on this card.',
         aside: 'auto',
         direction: 'up',
         asideTrend: 'positive',
         footer: 'success total',
         variant: 'success',
         withSparkline: true,
+        separated: false,
     },
-    render: ({ title, value, tooltip, aside, direction, asideTrend, footer, variant, withSparkline }) => {
+    render: ({ title, value, hint, aside, direction, asideTrend, footer, variant, withSparkline, separated }) => {
         const values = SAMPLE_VALUES[direction].map((point, index) => ({ date: `t-${index}`, value: point }))
 
         return (
             <MetricCard
                 className="w-72"
                 title={title}
-                tooltip={tooltip || undefined}
+                hint={hint || undefined}
                 aside={asides[aside]}
                 asideTrend={asideTrend}
                 value={value}
                 values={withSparkline ? values : undefined}
                 variant={variant}
+                separated={separated}
                 footer={footer || undefined}
             />
         )

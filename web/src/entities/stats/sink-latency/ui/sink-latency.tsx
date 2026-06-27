@@ -1,23 +1,25 @@
 import type { FC } from 'react'
 
 import { BarChartCard } from '@/shared/ui/card'
+import { formatNumber2 } from '@/shared/utils'
 
-const DATA = Array.from({ length: 16 }, (_, index) => ({
-    time: `16:${String(index * 5).padStart(2, '0')}`,
-    kafka: 0.3 + ((index * 7) % 20) / 100,
-    nats: 0.2 + ((index * 5) % 15) / 100,
-    rabbit: 0.15 + ((index * 3) % 12) / 100,
-}))
+import { useSinkLatency } from '../model/use-sink-latency'
 
-export const SinkLatency: FC = () => (
-    <BarChartCard
-        title="Sink latency"
-        data={DATA}
-        series={[
-            { dataKey: 'kafka', label: 'kafka', variant: 'primary' },
-            { dataKey: 'nats', label: 'nats', variant: 'success' },
-            { dataKey: 'rabbit', label: 'rabbit', variant: 'amber' },
-        ]}
-        xAxisKey="time"
-    />
-)
+const formatMs = (value: number): string => formatNumber2(value, 'ms')
+
+export const SinkLatency: FC = () => {
+    const { series, values } = useSinkLatency()
+
+    return (
+        <BarChartCard
+            title="Sink latency"
+            subtitle="P95(ms)"
+            hint="Time spent writing one change event to its destination, by sink type. P95 means 95% of writes finished faster than this."
+            data={values}
+            series={series}
+            xAxisKey="time"
+            stacked={true}
+            tooltipValueFormatter={formatMs}
+        />
+    )
+}

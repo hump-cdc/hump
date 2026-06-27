@@ -1,16 +1,24 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { formatNumber } from '@/shared/utils'
 
-const VALUES = [16, 18, 15, 20, 19, 22, 21, 24, 23, 26].map((value, index) => ({ date: `16:0${index}`, value }))
+import { useDelivered } from '../model/use-delivered'
 
-export const Delivered: FC = () => (
-    <MetricCard
-        title="Delivered"
-        tooltip="TODO: describe Delivered"
-        value="128 402"
-        values={VALUES}
-        variant="success"
-        aside={null}
-    />
-)
+const formatDelivered = (value: number): string => formatNumber(value)
+
+export const Delivered: FC = () => {
+    const { value, values } = useDelivered()
+
+    return (
+        <MetricCard
+            title="Delivered"
+            hint="Change events successfully written to their destinations during the time range."
+            value={value}
+            values={values}
+            tooltipValueFormatter={formatDelivered}
+            variant="success"
+            aside={null}
+        />
+    )
+}

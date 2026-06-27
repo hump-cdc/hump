@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hump/internal/config"
 	"hump/internal/pipeline"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
@@ -72,11 +73,17 @@ func setup(t *testing.T, opts ...setupOption) (context.Context, *pgx.Conn, conte
 	t.Log("Connected to postgres")
 
 	h, _, _, _ := health.New()
+	cfg, err := config.Parse(o.config)
+	if err != nil {
+		teardown()
+		return ctx, nil, nil, wait, fmt.Errorf("parse config: %w", err)
+	}
+
 	g.Go(func() error {
 		t.Log("Starting pipeline...")
 		m, _ := metrics.New("hump")
-		p := pipeline.New(h, m)
-		return p.Start(ctx, o.databaseURL, o.config, o.pubName, o.slotName)
+		p := pipeline.New(h, nil, m)
+		return p.Start(ctx, o.databaseURL, cfg, o.pubName, o.slotName)
 	})
 
 	// Wait for the WAL sender to come up before producing messages, otherwise a

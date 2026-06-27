@@ -48,23 +48,23 @@ const growthData = [
 ]
 
 const threeSeries = (): AreaSeries => [
-    { dataKey: 'delivered', label: 'Delivered', variant: 'success' },
-    { dataKey: 'retried', label: 'Retried', variant: 'primary' },
-    { dataKey: 'failed', label: 'Failed', variant: 'danger' },
+    { dataKey: 'delivered', label: 'Successfully delivered messages', variant: 'success' },
+    { dataKey: 'retried', label: 'Retried after transient failure', variant: 'primary' },
+    { dataKey: 'failed', label: 'Permanently failed deliveries', variant: 'danger' },
 ]
 
 const datasets = {
     '1 series — trend': {
         data: trendData,
-        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '1 series — volatile': {
         data: volatileData,
-        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '1 series — seasonal': {
         data: seasonalData,
-        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: AreaVariant): AreaSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '3 series — steady': {
         data: steadyData,

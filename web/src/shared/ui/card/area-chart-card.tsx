@@ -1,8 +1,10 @@
-import type { ComponentProps, FC, Ref } from 'react'
+import type { ComponentProps, FC, ReactNode, Ref } from 'react'
 
 import { cva } from 'class-variance-authority'
+import { Info } from 'lucide-react'
 
 import { AreaChart } from '@/shared/ui/charts/area-chart'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/utils'
 
 import { Card } from './card'
@@ -28,12 +30,15 @@ const swatchVariants = cva('h-1 w-5 rounded-sm', {
 type AreaChartCardProps = {
     title: string
     subtitle?: string
+    hint?: string
     legend?: boolean
+    value?: ReactNode
     data: ComponentProps<typeof AreaChart>['data']
     series: AreaSeries[]
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
+    tooltipValueFormatter?: ComponentProps<typeof AreaChart>['tooltipValueFormatter']
     chartClassName?: string
     className?: string
     ref?: Ref<HTMLDivElement>
@@ -42,12 +47,15 @@ type AreaChartCardProps = {
 export const AreaChartCard: FC<AreaChartCardProps> = ({
     title,
     subtitle,
+    hint,
     legend = true,
+    value,
     data,
     series,
     xAxisKey,
     stacked = false,
     tooltip = true,
+    tooltipValueFormatter,
     chartClassName = 'h-56',
     className,
     ...props
@@ -71,12 +79,30 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
             }
         >
             <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                <span className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                    {hint && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                    <Info className="size-3.5 text-ink-tertiary" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56 text-pretty">{hint}</TooltipContent>
+                        </Tooltip>
+                    )}
+                </span>
                 {subtitle && <span className="font-mono text-xs text-ink-tertiary">{subtitle}</span>}
             </div>
         </CardHeader>
 
-        <CardContent className="p-4">
+        <CardContent className="flex flex-col gap-3 p-4">
+            {value !== null && value !== undefined && value !== '' && (
+                <div className="flex items-center gap-2 font-mono text-3xl font-semibold tracking-tight text-ink">
+                    {value}
+                </div>
+            )}
+
             <AreaChart
                 className={chartClassName}
                 data={data}
@@ -84,6 +110,7 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
                 xAxisKey={xAxisKey}
                 stacked={stacked}
                 tooltip={tooltip}
+                tooltipValueFormatter={tooltipValueFormatter}
             />
         </CardContent>
     </Card>

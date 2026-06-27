@@ -38,6 +38,7 @@ export default defineConfig({
         entry: { index: './app/main.tsx' },
         define: {
             VERSION: JSON.stringify(process.env.VERSION ?? '0.0.0'),
+            API_URL: JSON.stringify(process.env.API_URL ?? ''),
         },
     },
     output: {

@@ -1,16 +1,24 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { formatNumber } from '@/shared/utils'
 
-const VALUES = [6, 8, 7, 10, 9, 7, 11, 8, 6, 12].map((value, index) => ({ date: `16:0${index}`, value }))
+import { useFailed } from '../model/use-failed'
 
-export const Failed: FC = () => (
-    <MetricCard
-        title="Failed"
-        tooltip="TODO: describe Failed"
-        value="12"
-        values={VALUES}
-        variant="danger"
-        aside={null}
-    />
-)
+const formatFailed = (value: number): string => formatNumber(value)
+
+export const Failed: FC = () => {
+    const { value, values } = useFailed()
+
+    return (
+        <MetricCard
+            title="Failed"
+            hint="Delivery attempts that failed during the time range."
+            value={value}
+            values={values}
+            tooltipValueFormatter={formatFailed}
+            variant="danger"
+            aside={null}
+        />
+    )
+}

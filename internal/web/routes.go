@@ -1,16 +1,13 @@
 package web
 
 import (
-	"net/http"
+	"hump/internal/web/routes"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
 )
 
-func registerRoutes(api huma.API, router chi.Router, metricsHandler http.Handler) {
-	_ = api
-
-	if metricsHandler != nil {
-		router.Handle("/api/metrics", metricsHandler)
-	}
+func (w *Web) routes(api huma.API) {
+	routes.RegisterConfig(api, w.opts, w.cfg)
+	routes.RegisterMetrics(api, w.metricsHandler)
+	routes.RegisterOperations(api, w.streamer)
 }

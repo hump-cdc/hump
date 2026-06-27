@@ -42,6 +42,21 @@ func (s *HTTPSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sink.SinkTypeHTTP), s.URL.Source())
 }
 
+// Metadata returns the connection host (rendered URL hostname) and the rendered
+// HTTP method for the given context.
+func (s *HTTPSink) Metadata(context sink.SinkContext) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+
+	url, _ := s.URL.Render(context)
+	host := parseHost(url)
+	method, _ := s.Method.Render(context)
+	target := fmt.Sprintf("HTTP %s %s", method, host)
+
+	return host, target
+}
+
 // CrossValidate is a no-op for HTTP sinks; they have no cross-sink invariants.
 func (*HTTPSink) CrossValidate([]Tables) error { return nil }
 

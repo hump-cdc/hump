@@ -1,16 +1,26 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { formatNumber2 } from '@/shared/utils'
 
-const VALUES = [3, 2, 4, 3, 2, 3, 2, 4, 3, 2].map((value, index) => ({ date: `16:0${index}`, value }))
+import { useFailRate } from '../model/use-fail-rate'
 
-export const FailRate: FC = () => (
-    <MetricCard
-        title="Fail rate"
-        tooltip="Share of delivery attempts that failed across all sinks."
-        value="0.03%"
-        values={VALUES}
-        variant="primary"
-        asideTrend="negative"
-    />
-)
+const formatPercent = (value: number): string => formatNumber2(value, '%')
+
+export const FailRate: FC = () => {
+    const { value, values } = useFailRate()
+
+    return (
+        <MetricCard
+            title="Fail rate"
+            hint="Failed deliveries as a percentage of successful ones, across all sinks."
+            value={formatNumber2(value, '%')}
+            values={values}
+            tooltipValueFormatter={formatPercent}
+            variant="danger"
+            separated
+            chartClassName="h-24"
+            asideTrend="negative"
+        />
+    )
+}

@@ -1,6 +1,3 @@
-// Package web exposes the HTTP server that serves the bundled web UI
-// (a single-page application embedded under assets/) and the Huma-backed
-// JSON API mounted under /api.
 package web
 
 import (
@@ -8,17 +5,21 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"io/fs"
+	"net"
 	"net/http"
 
+	"hump/internal/app/options"
 	"hump/internal/app/shutdown"
 	"hump/internal/log"
+	"hump/internal/types/config"
+	"hump/internal/web/middleware"
+	"hump/internal/web/streamer"
 	"hump/pkg/version"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 var logger = log.Scope("web")
@@ -26,51 +27,63 @@ var logger = log.Scope("web")
 //go:embed assets
 var assetsFS embed.FS
 
-// Web is the HTTP-facing surface that serves the embedded web UI and the
-// JSON API on a single port.
-type Web interface {
-	// Serve binds to the given TCP port and blocks until the registered
-	// shutdown hook closes the underlying server. It returns nil on a clean
-	// shutdown and the server error otherwise.
-	Serve(port uint) error
-}
-
-type web struct {
+type Web struct {
+	opts           options.Options
+	cfg            config.Configuration
+	streamer       *streamer.FanOutStreamer
 	metricsHandler http.Handler
 }
 
-// New constructs a [Web] server.
-func New(metricsHandler http.Handler) Web {
-	return &web{
+// New constructs a Web UI server.
+func New(opts options.Options, cfg config.Configuration, streamer *streamer.FanOutStreamer, metricsHandler http.Handler) *Web {
+	return &Web{
+		opts:           opts,
+		cfg:            cfg,
+		streamer:       streamer,
 		metricsHandler: metricsHandler,
 	}
 }
 
-// Serve starts the web HTTP server on the given port and registers a shutdown
-// hook that gracefully stops it when the application shuts down. Requests to
-// /api/* are handled by Huma; everything else is served from the embedded SPA
-// assets with a fallback to index.html for client-side routes.
-func (w *web) Serve(port uint) error {
+func (w *Web) Router() *chi.Mux {
+	// Router
 	router := chi.NewMux()
 
-	router.Use(middleware.Compress(5))
+	// Middleware
+	router.Use(chimiddleware.Compress(5))
+	router.Use(middleware.Cors())
+	router.NotFound(middleware.Static(assetsFS))
 
-	api := humachi.New(router, huma.DefaultConfig("hump", version.Version))
-	registerRoutes(api, router, w.metricsHandler)
+	return router
+}
 
-	assets, err := fs.Sub(assetsFS, "assets")
+func (w *Web) Api(router *chi.Mux) (huma.API, error) {
+	cfg := huma.DefaultConfig("hump", version.Version)
+	cfg.CreateHooks = nil
+	cfg.OpenAPIPath = ""
+	cfg.DocsPath = ""
+	cfg.SchemasPath = ""
+
+	api := humachi.New(router, cfg)
+	w.routes(api)
+
+	return api, nil
+}
+
+func (w *Web) Serve(ctx context.Context, port uint) error {
+	router := w.Router()
+	_, err := w.Api(router)
 	if err != nil {
 		return err
 	}
-	router.NotFound(staticHandler(assets))
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: router,
+		Addr:        fmt.Sprintf(":%d", port),
+		Handler:     router,
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
-	shutdown.OnShutdown("web", func(ctx context.Context) error {
-		return server.Shutdown(ctx)
+	shutdown.OnShutdown("web", func(shutdownCtx context.Context) error {
+		return server.Shutdown(shutdownCtx)
 	})
 
 	logger.Info(fmt.Sprintf("Web UI started at http://localhost:%d", port))

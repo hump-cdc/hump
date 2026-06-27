@@ -2,7 +2,7 @@ import type { FC } from 'react'
 
 import { ChevronsRight } from 'lucide-react'
 
-import { Badge } from '@/shared/ui/badge'
+import { LiveControls } from '@/entities/config/state'
 import { Header, HeaderTitle } from '@/shared/ui/header'
 import { SidebarTrigger, useSidebar } from '@/shared/ui/sidebar'
 import { useStaticData } from '@/shared/utils'
@@ -32,9 +32,7 @@ export const AppHeader: FC = () => {
             <div className="flex flex-nowrap items-center gap-2">
                 {aside}
 
-                <Badge variant="healthy" dot>
-                    live
-                </Badge>
+                <LiveControls />
             </div>
         </Header>
     )

@@ -7,6 +7,11 @@
             "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable",
             "LOG_VERBOSE": "false",
             "LOG_FORMAT": "pretty",
+            "CORS": "http://localhost:3000",
+            "KAFKA_HOST": "localhost:9092",
+            "NATS_URL": "nats://localhost:4222",
+            "RABBITMQ_URL": "amqp://hump:hump@localhost:5672/",
+            "RABBITMQ_STREAM_URL": "rabbitmq-stream://hump:hump@localhost:5552/%2F",
         },
         "show_command": false,
         "hide": "on_success",
@@ -36,6 +41,9 @@
     {
         "label": "Run Web UI",
         "command": "bun run dev",
+        "env": {
+            "API_URL": "http://localhost:3200"
+        },
         "show_command": false,
         "hide": "never",
         "reveal": "no_focus",
@@ -72,9 +80,27 @@
     },
     {
         "label": "Build",
-        "command": "go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump",
+        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi && cd web && bun run build && cd .. && go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump",
         "env": {
-            "CGO_ENABLED": "0"
+            "CGO_ENABLED": "0",
+            "NODE_ENV": "production",
+            "VERSION": "0.0.1",
+            "OPENAPI_OUT": "$ZED_WORKTREE_ROOT/web/src/shared/api/openapi.json"
+        },
+        "show_command": false,
+        "hide": "never",
+        "reveal": "always",
+        "reveal_target": "dock",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "Generate OpenAPI",
+        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi",
+        "env": {
+            "CGO_ENABLED": "0",
+            "OPENAPI_OUT": "$ZED_WORKTREE_ROOT/web/src/shared/api/openapi.json"
         },
         "show_command": false,
         "hide": "never",

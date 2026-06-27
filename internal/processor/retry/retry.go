@@ -15,6 +15,7 @@ import (
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
+	"hump/internal/types/stream"
 )
 
 // retry executes sink handlers with retry, backoff, and concurrency control,
@@ -46,7 +47,11 @@ func (r *retry) Process(
 	ctx context.Context,
 	sink config.SinkConfig,
 	concurrencyKey string,
-	handler func(ctx context.Context) error,
+	host string,
+	target string,
+	streamEvent stream.Event,
+	publisher stream.Publisher,
+	handler func(ctx context.Context, evt *stream.Event) error,
 ) {
 	sinkType := string(sink.Sink.Type())
 	sinkName := sink.Sink.DisplayName()
@@ -65,12 +70,12 @@ func (r *retry) Process(
 		defer r.wg.Done()
 	}
 
-	err := r.runWithRetry(ctx, sinkType, sinkName, sink.Retry, handler)
+	err := r.runWithRetry(ctx, sinkType, sinkName, host, target, sink.Retry, streamEvent, publisher, handler)
 	if err == nil {
-		r.metrics.SinkMessagesSuccess(1, sinkType, sinkName)
+		r.metrics.SinkMessagesSuccess(1, sinkType, host, target)
 	} else {
 		if !errors.Is(err, context.Canceled) {
-			r.metrics.SinkMessagesFailure(1, sinkType, sinkName)
+			r.metrics.SinkMessagesFailure(1, sinkType, host, target)
 
 			r.logger.Error("Processing failed after retries",
 				"sink", sinkName,
@@ -95,8 +100,12 @@ func (r *retry) runWithRetry(
 	ctx context.Context,
 	sinkType string,
 	sinkName string,
+	host string,
+	target string,
 	cfg *config.Retry,
-	handler func(ctx context.Context) error,
+	baseEvent stream.Event,
+	publisher stream.Publisher,
+	handler func(ctx context.Context, evt *stream.Event) error,
 ) error {
 	maxAttempts := max(cfg.MaxAttempts, 1)
 
@@ -108,13 +117,51 @@ func (r *retry) runWithRetry(
 		}
 
 		if attempt > 1 {
-			r.metrics.SinkMessagesRetry(1, sinkType, sinkName)
+			r.metrics.SinkMessagesRetry(1, sinkType, host, target)
+		}
+
+		// Only attempt 1 fills the operation event; retries publish a lightweight
+		// RetryEvent that carries no rendered payload.
+		var streamEvent stream.Event
+		var evtPtr *stream.Event
+		if publisher != nil && attempt == 1 {
+			streamEvent = baseEvent
+			evtPtr = &streamEvent
 		}
 
 		// call the handler with attempt timeout
 		start := time.Now()
-		err := r.callWithTimeout(ctx, cfg.AttemptTimeout, handler)
-		r.metrics.SinkDuration(time.Since(start).Seconds(), sinkType, sinkName)
+		err, completed := r.callWithTimeout(ctx, cfg.AttemptTimeout, func(c context.Context) error {
+			return handler(c, evtPtr)
+		})
+		elapsed := time.Since(start)
+		r.metrics.SinkDuration(elapsed.Seconds(), sinkType, host, target)
+
+		// Stream the outcome after the publish attempt (success or failure).
+		if publisher != nil {
+			if attempt == 1 {
+				// Read the shared evt only when the handler completed; on timeout
+				// its goroutine may still be running, so fall back to our private
+				// baseEvent copy to stay race-free.
+				out := baseEvent
+				if completed {
+					out = streamEvent
+				}
+				out.Success = err == nil
+				out.Error = errString(err)
+				out.DurationMs = int32(elapsed.Milliseconds())
+				publisher.Publish(out)
+			} else {
+				publisher.Publish(stream.RetryEvent{
+					OperationID: baseEvent.ID,
+					Attempt:     attempt,
+					Success:     err == nil,
+					Error:       errString(err),
+					Timestamp:   time.Now(),
+					DurationMs:  int32(elapsed.Milliseconds()),
+				})
+			}
+		}
 
 		if err == nil {
 			if attempt > 1 {
@@ -168,14 +215,18 @@ func (r *retry) runWithRetry(
 	return lastErr
 }
 
-func (r *retry) callWithTimeout(ctx context.Context, timeout time.Duration, handler func(ctx context.Context) error) error {
+// callWithTimeout runs handler under an attempt timeout. The returned completed
+// flag reports whether the handler actually finished (true) versus the attempt
+// timing out while the handler goroutine is still running (false); callers use
+// it to know when state the handler mutated is safe to read.
+func (r *retry) callWithTimeout(ctx context.Context, timeout time.Duration, handler func(ctx context.Context) error) (error, bool) {
 	// setup timeout
 	runCtx, cancel := context.WithTimeout(ctx, max(timeout, 0))
 	defer cancel()
 
 	// check if context is already done before starting the handler
 	if err := runCtx.Err(); err != nil {
-		return err
+		return err, false
 	}
 
 	// run the handler in a separate goroutine
@@ -187,10 +238,18 @@ func (r *retry) callWithTimeout(ctx context.Context, timeout time.Duration, hand
 	// wait for either the handler to finish or the timeout to expire
 	select {
 	case <-runCtx.Done():
-		return fmt.Errorf("%w: %s", errors.Join(errs.ErrSinkRetryAttemptTimeout, runCtx.Err()), timeout)
+		return fmt.Errorf("%w: %s", errors.Join(errs.ErrSinkRetryAttemptTimeout, runCtx.Err()), timeout), false
 	case err := <-handlerDone:
-		return err
+		return err, true
 	}
+}
+
+// errString returns the error message, or "" when err is nil.
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (r *retry) backoffDelay(b config.Backoff, attempt int) time.Duration {

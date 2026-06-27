@@ -1,16 +1,24 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { formatNumber2 } from '@/shared/utils'
 
-const VALUES = [8, 12, 10, 14, 11, 16, 13, 18, 15, 22].map((value, index) => ({ date: `16:0${index}`, value }))
+import { useCommitLag } from '../model/use-commit-lag'
 
-export const CommitLag: FC = () => (
-    <MetricCard
-        title="Commit lag"
-        tooltip="Commit lag — delay between a row being committed in Postgres and Hump reading it from the replication stream (WAL)."
-        value="1.2s"
-        values={VALUES}
-        variant="primary"
-        asideTrend="negative"
-    />
-)
+const formatSeconds = (value: number): string => formatNumber2(value, 's')
+
+export const CommitLag: FC = () => {
+    const { value, values } = useCommitLag()
+
+    return (
+        <MetricCard
+            title="Commit lag"
+            hint="How far behind the database the pipeline is. It's the time between a change being saved in the database and the pipeline picking it up. Small values mean you're seeing changes almost as they happen; a growing number means the pipeline can't keep up with the write rate."
+            value={value}
+            values={values}
+            tooltipValueFormatter={formatSeconds}
+            variant="primary"
+            asideTrend="negative"
+        />
+    )
+}

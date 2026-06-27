@@ -4,18 +4,18 @@
 sinks:
     - name: kafka1
       kafka:
-          url: "localhost:9092"
+          url: '{{ env "KAFKA_HOST" }}'
           topic: "{{.Table}}"
           partitionKey: "{{coalesce .Next.id .Prev.id}}"
     - name: nats-core
       nats-core:
-          url: "nats://localhost:4222"
+          url: '{{ env "NATS_URL" }}'
           username: "hump"
           password: "hump"
           subject: "hump.{{.Schema}}.{{.Table}}"
     - name: nats-jetstream
       nats-jetstream:
-          url: "nats://localhost:4222"
+          url: '{{ env "NATS_URL" }}'
           username: "hump"
           password: "hump"
           subject: "hump.js.{{.Schema}}.{{.Table}}"
@@ -27,7 +27,7 @@ sinks:
           storage: file
     - name: rabbitmq1
       rabbitmq:
-          url: "amqp://hump:hump@localhost:5672/"
+          url: '{{ env "RABBITMQ_URL" }}'
           exchange:
               name: "hump.{{.Schema}}"
               type: topic
@@ -38,17 +38,17 @@ sinks:
       # concurrencyKey: test
     - name: rabbitmq-stream
       rabbitmq-stream:
-          url: "rabbitmq-stream://hump:hump@localhost:5552/%2F"
+          url: '{{ env "RABBITMQ_STREAM_URL" }}'
           stream:
               name: "hump.{{.Schema}}.{{.Table}}"
-    # - name: http1
-    #   http:
-    #       url: "https://webhook.site/c804df17-d993-4127-993a-a4aba9546cc6"
-    #       method: "POST"
-    #   failure: skip
-    #   delivery:
-    #       mode: async
-    #       maxConcurrent: 3
+    - name: http1
+      http:
+          url: "http://localhost:3050/submit"
+          method: "POST"
+      failure: skip
+      delivery:
+          mode: async
+          maxConcurrent: 3
 
 tables:
     - tables:
@@ -61,11 +61,12 @@ tables:
           - schema: public
             table: events
       sinks:
+          # - preset: http1
           - preset: kafka1
           - preset: nats-core
-          - preset: nats-jetstream
-          - preset: rabbitmq1
-          - preset: rabbitmq-stream
+          # - preset: nats-jetstream
+          # - preset: rabbitmq1
+          # - preset: rabbitmq-stream
     # - table: events
     #   schema: public
     #   sinks:

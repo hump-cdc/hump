@@ -2,6 +2,7 @@ package nats
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"hump/internal/types/config"
@@ -54,6 +55,23 @@ func buildMessage(cfg config.NatsCommon, operationContext *sink.SinkContext) (*n
 	}, nil
 }
 
+// natsHeaders flattens NATS message headers into a plain string map (first
+// value per key) for the operations stream. It returns nil when there are none.
+func natsHeaders(header nats.Header) map[string]string {
+	if len(header) == 0 {
+		return nil
+	}
+
+	out := make(map[string]string, len(header))
+	for name, values := range header {
+		if len(values) == 0 {
+			continue
+		}
+		out[name] = values[0]
+	}
+	return out
+}
+
 // validateSubject enforces NATS subject grammar: non-empty, no whitespace, no
 // wildcards (`*`/`>`), only `.` as a segment separator, every segment non-empty.
 func validateSubject(subject string) error {
@@ -69,10 +87,8 @@ func validateSubject(subject string) error {
 		return fmt.Errorf("invalid subject %q: %w", subject, errInvalidSubject)
 	}
 
-	for _, segment := range strings.Split(subject, ".") {
-		if segment == "" {
-			return fmt.Errorf("invalid subject %q: %w", subject, errInvalidSubject)
-		}
+	if slices.Contains(strings.Split(subject, "."), "") {
+		return fmt.Errorf("invalid subject %q: %w", subject, errInvalidSubject)
 	}
 
 	return nil

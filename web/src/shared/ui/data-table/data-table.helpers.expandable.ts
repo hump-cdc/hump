@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** Internal row wrapper: real master rows, injected detail rows, and not-yet-loaded placeholders. */
 export type InternalRow<T> =
@@ -72,6 +72,37 @@ export const useExpandableRows = <T>({ data, getRowId, expandable, isRowExpandab
     return { rows, toggle }
 }
 
+type PrefixOptions<T> = {
+    data: T[]
+    rowCount: number
+    getRowId: (row: T) => string
+    expandable: boolean
+    isRowExpandable: (row: T) => boolean
+}
+
+/**
+ * Infinite mode: flattens the contiguous loaded prefix `data` into master rows
+ * (injecting detail rows after expanded masters) and pads the tail with
+ * placeholders for indices `data.length .. rowCount-1`, so the scrollbar is
+ * stable and unloaded rows render as skeletons.
+ */
+export const usePrefixRows = <T>({ data, rowCount, getRowId, expandable, isRowExpandable }: PrefixOptions<T>) => {
+    const { expanded, toggle } = useExpandedSet()
+
+    const rows = useMemo<InternalRow<T>[]>(() => {
+        const result: InternalRow<T>[] = []
+        data.forEach((row, index) => {
+            pushMaster(result, row, index, getRowId(row), expandable && isRowExpandable(row), expanded)
+        })
+        for (let index = data.length; index < rowCount; index++) {
+            result.push({ kind: 'placeholder', id: `${PLACEHOLDER_PREFIX}${index}`, index })
+        }
+        return result
+    }, [data, rowCount, getRowId, expandable, isRowExpandable, expanded])
+
+    return { rows, toggle }
+}
+
 type WindowedOptions<T> = {
     rowCount?: number
     blockSize: number
@@ -79,6 +110,8 @@ type WindowedOptions<T> = {
     getRowId: (row: T) => string
     expandable: boolean
     isRowExpandable: (row: T) => boolean
+    /** When this changes, cached blocks are dropped and the visible window is refetched in place. */
+    refreshToken?: number | string
 }
 
 /**
@@ -94,12 +127,14 @@ export const useWindowedRows = <T>({
     getRowId,
     expandable,
     isRowExpandable,
+    refreshToken,
 }: WindowedOptions<T>) => {
     const { expanded, toggle } = useExpandedSet()
     const [loaded, setLoaded] = useState<ReadonlyMap<number, T>>(() => new Map())
     const loadedCountRef = useRef(0)
     const loadingBlocks = useRef<Set<number>>(new Set())
     const doneRef = useRef(false)
+    const lastRangeRef = useRef({ start: 0, end: blockSize })
 
     const loadBlock = useCallback(
         (block: number) => {
@@ -137,6 +172,7 @@ export const useWindowedRows = <T>({
 
     const ensureRange = useCallback(
         (startIndex: number, endIndex: number) => {
+            lastRangeRef.current = { start: startIndex, end: endIndex }
             const firstBlock = Math.max(0, Math.floor(startIndex / blockSize))
             const lastBlock = Math.floor(endIndex / blockSize)
             for (let block = firstBlock; block <= lastBlock; block++) {
@@ -151,6 +187,33 @@ export const useWindowedRows = <T>({
         },
         [blockSize, loaded, loadBlock, rowCount],
     )
+
+    // Drop cached blocks and refetch the visible window when `refreshToken` changes.
+    // Used by live data sources whose row order shifts (e.g. new rows at the top).
+    const reload = useCallback(() => {
+        loadingBlocks.current.clear()
+        doneRef.current = false
+        loadedCountRef.current = 0
+        setLoaded(new Map())
+        const { start, end } = lastRangeRef.current
+        const firstBlock = Math.max(0, Math.floor(start / blockSize))
+        const lastBlock = Math.floor(end / blockSize)
+        for (let block = firstBlock; block <= lastBlock; block++) {
+            loadBlock(block)
+        }
+    }, [blockSize, loadBlock])
+
+    const reloadRef = useRef(reload)
+    reloadRef.current = reload
+    const firstRun = useRef(true)
+    // biome-ignore lint/correctness/useExhaustiveDependencies: refreshToken is an intentional trigger; reload is read via a ref.
+    useEffect(() => {
+        if (firstRun.current) {
+            firstRun.current = false
+            return
+        }
+        reloadRef.current()
+    }, [refreshToken])
 
     const rows = useMemo<InternalRow<T>[]>(() => {
         const total = rowCount ?? loaded.size

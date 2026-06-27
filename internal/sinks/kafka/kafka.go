@@ -5,12 +5,14 @@ import (
 
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/internal/types/stream"
 )
 
 // Process delivers a single WAL operation to a Kafka sink by acquiring (or
 // reusing) the configured client, building a record from operationContext,
-// and producing it synchronously with ctx.
-func Process(ctx context.Context, config config.KafkaSink, operationContext *sink.SinkContext) error {
+// and producing it synchronously with ctx. When streamEvent is non-nil the built
+// record's rendered fields are recorded on it for the operations stream.
+func Process(ctx context.Context, config config.KafkaSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -23,6 +25,12 @@ func Process(ctx context.Context, config config.KafkaSink, operationContext *sin
 	message, err := buildMessage(config, operationContext)
 	if err != nil {
 		return wrapError(err)
+	}
+
+	if streamEvent != nil {
+		streamEvent.Payload = string(message.Value)
+		streamEvent.Headers = recordHeaders(message.Headers)
+		streamEvent.Metadata = map[string]string{"partitionKey": string(message.Key)}
 	}
 
 	if err := client.ProduceSync(ctx, message).FirstErr(); err != nil {

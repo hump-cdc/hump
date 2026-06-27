@@ -52,6 +52,19 @@ func (s *RabbitMQStreamSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sink.SinkTypeRabbitMQStream), s.URL.Source())
 }
 
+// Metadata returns the connection host (rendered URL) and the rendered stream
+// name for the given context.
+func (s *RabbitMQStreamSink) Metadata(context sink.SinkContext) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+
+	url, _ := s.URL.Render(context)
+	target, _ := s.Stream.Name.Render(context)
+
+	return parseHost(url), target
+}
+
 func (s *RabbitMQStreamSink) UnmarshalYAML(node ast.Node) error {
 	type rabbitmqStream RabbitMQStreamSink
 	if err := decode(node, (*rabbitmqStream)(s)); err != nil {

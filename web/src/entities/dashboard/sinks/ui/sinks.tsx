@@ -2,69 +2,69 @@ import { Link } from '@tanstack/react-router'
 
 import type { FC } from 'react'
 
-import { Check, ChevronRight, Info, X } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 
-import { Badge } from '@/shared/ui/badge'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
+import { Sink } from '@/shared/ui/sink'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/utils'
 
-const SINKS = [
-    { name: 'kafka1', type: 'kafka', ok: true },
-    { name: 'nats-core', type: 'nats', ok: true },
-    { name: 'nats-jetstream', type: 'nats', ok: true },
-    { name: 'rabbitmq1', type: 'rabbitmq', ok: false },
-    { name: 'rabbitmq-stream', type: 'rabbitmq', ok: true },
-]
+import { useSinks } from '../model/use-sinks'
 
-export const Sinks: FC = () => (
-    <Card className="overflow-hidden">
-        <CardHeader
-            aside={
-                <Link
-                    to="/operations"
-                    className="flex items-center gap-1.5 text-xs font-medium text-ink-subtle hover:text-ink"
-                >
-                    Open operations
-                    <ChevronRight className="size-3.5" />
-                </Link>
-            }
-        >
-            <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-ink">Sinks</span>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                            <Info className="size-3.5 text-ink-tertiary" />
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-56 text-pretty">
-                        Destinations Hump delivers replicated rows to.
-                    </TooltipContent>
-                </Tooltip>
-                <span className="text-xs text-ink-tertiary">{SINKS.length} presets</span>
-            </div>
-        </CardHeader>
+export const Sinks: FC = () => {
+    const sinks = useSinks()
 
-        <CardContent>
-            <div className="flex flex-col">
-                {SINKS.map(({ name, type, ok }, index) => (
-                    <div
-                        key={name}
-                        className={cn(
-                            'flex items-center justify-between px-4 py-3',
-                            index < SINKS.length - 1 && 'border-b border-hairline',
-                        )}
+    return (
+        <Card className="overflow-hidden">
+            <CardHeader
+                aside={
+                    <Link
+                        to="/operations"
+                        className="flex items-center gap-1.5 text-xs font-medium text-ink-subtle hover:text-ink"
                     >
-                        <div className="flex items-center gap-2.5">
-                            <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-danger')} />
-                            <span className="text-sm font-medium text-ink">{name}</span>
-                            <Badge variant="neutral">{type}</Badge>
-                        </div>
-                        {ok ? <Check className="size-3 text-success" /> : <X className="size-3 text-danger" />}
-                    </div>
-                ))}
-            </div>
-        </CardContent>
-    </Card>
-)
+                        Open operations
+                        <ChevronRight className="size-3.5" />
+                    </Link>
+                }
+            >
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold tracking-tight text-ink">Sinks</span>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                                <Info className="size-3.5 text-ink-tertiary" />
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-56 text-pretty">
+                            Configured delivery destinations for replicated rows.
+                        </TooltipContent>
+                    </Tooltip>
+                    <span className="text-xs text-ink-tertiary">{sinks.length} configured</span>
+                </div>
+            </CardHeader>
+
+            <CardContent>
+                <div className="flex max-h-56 flex-col overflow-y-auto">
+                    {sinks.length === 0 ? (
+                        <span className="px-4 py-3 text-xs text-ink-tertiary">No sinks configured</span>
+                    ) : (
+                        sinks.map(({ key, type, host, ok }, index) => (
+                            <div
+                                key={key}
+                                className={cn(
+                                    'flex items-center justify-between px-4 py-3',
+                                    index < sinks.length - 1 && 'border-b border-hairline',
+                                )}
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-danger')} />
+                                    <Sink type={type} host={host} />
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}

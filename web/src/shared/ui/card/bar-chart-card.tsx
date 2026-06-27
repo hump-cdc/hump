@@ -1,8 +1,10 @@
 import type { ComponentProps, FC, Ref } from 'react'
 
 import { cva } from 'class-variance-authority'
+import { Info } from 'lucide-react'
 
 import { BarChart } from '@/shared/ui/charts/bar-chart'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/utils'
 
 import { Card } from './card'
@@ -28,12 +30,14 @@ const swatchVariants = cva('size-2.5 rounded-xs', {
 type BarChartCardProps = {
     title: string
     subtitle?: string
+    hint?: string
     legend?: boolean
     data: ComponentProps<typeof BarChart>['data']
     series: BarSeries[]
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
+    tooltipValueFormatter?: ComponentProps<typeof BarChart>['tooltipValueFormatter']
     chartClassName?: string
     className?: string
     ref?: Ref<HTMLDivElement>
@@ -42,12 +46,14 @@ type BarChartCardProps = {
 export const BarChartCard: FC<BarChartCardProps> = ({
     title,
     subtitle,
+    hint,
     legend = true,
     data,
     series,
     xAxisKey,
     stacked = true,
     tooltip = true,
+    tooltipValueFormatter,
     chartClassName = 'h-56',
     className,
     ...props
@@ -71,7 +77,19 @@ export const BarChartCard: FC<BarChartCardProps> = ({
             }
         >
             <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                <span className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                    {hint && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                    <Info className="size-3.5 text-ink-tertiary" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56 text-pretty">{hint}</TooltipContent>
+                        </Tooltip>
+                    )}
+                </span>
                 {subtitle && <span className="font-mono text-xs text-ink-tertiary">{subtitle}</span>}
             </div>
         </CardHeader>
@@ -84,6 +102,7 @@ export const BarChartCard: FC<BarChartCardProps> = ({
                 xAxisKey={xAxisKey}
                 stacked={stacked}
                 tooltip={tooltip}
+                tooltipValueFormatter={tooltipValueFormatter}
             />
         </CardContent>
     </Card>

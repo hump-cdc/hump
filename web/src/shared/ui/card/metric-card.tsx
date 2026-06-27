@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/utils'
 
 import { Card } from './card'
+import { CardContent } from './card-content'
+import { CardHeader } from './card-header'
 
 type MetricVariant = NonNullable<ComponentProps<typeof BarChart>['series']>[number]['variant']
 
@@ -35,9 +37,7 @@ const renderTrendAside = (values: MetricCardProps['values'], trend: AsideTrend |
     const previous = values[values.length - 2].value
     const latest = values[values.length - 1].value
 
-    if (latest === previous) {
-        return <Minus className="size-4 text-ink-tertiary" />
-    }
+    if (latest === previous) return null
 
     const increasing = latest > previous
     const isGood = trend === 'positive' ? increasing : !increasing
@@ -49,13 +49,16 @@ const renderTrendAside = (values: MetricCardProps['values'], trend: AsideTrend |
 
 type MetricCardProps = {
     title: string
-    tooltip?: string
+    hint?: string
     aside?: ReactNode
     asideTrend?: AsideTrend | null
     value?: ReactNode
     values?: Array<{ date: string; value: number }>
+    tooltipValueFormatter?: ComponentProps<typeof BarChart>['tooltipValueFormatter']
     chartSize?: 'sm' | 'md' | 'lg'
+    chartClassName?: string
     variant?: MetricVariant
+    separated?: boolean
     footer?: ReactNode
     className?: string
     ref?: Ref<HTMLDivElement>
@@ -63,49 +66,76 @@ type MetricCardProps = {
 
 export const MetricCard: FC<MetricCardProps> = ({
     title,
-    tooltip,
+    hint,
     aside,
     asideTrend = 'positive',
     value,
     values,
+    tooltipValueFormatter,
     chartSize = 'sm',
+    chartClassName,
     variant = 'primary',
+    separated = false,
     footer,
     className,
     ...props
-}) => (
-    <Card separated={false} className={cn('gap-3 p-5 overflow-visible', className)} {...props}>
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium text-ink-subtle">{title}</span>
-                {tooltip && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                                <Info className="size-3.5 text-ink-tertiary" />
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-56 text-pretty">{tooltip}</TooltipContent>
-                    </Tooltip>
-                )}
-            </div>
-            {aside === undefined ? renderTrendAside(values, asideTrend) : aside}
+}) => {
+    const label = (
+        <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-ink-subtle">{title}</span>
+            {hint && (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                            <Info className="size-3.5 text-ink-tertiary" />
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-56 text-pretty">{hint}</TooltipContent>
+                </Tooltip>
+            )}
         </div>
+    )
 
-        {value !== null && value !== undefined && value !== '' && (
-            <div className={valueVariants({ variant })}>{value}</div>
-        )}
+    const headerAside = aside === undefined ? renderTrendAside(values, asideTrend) : aside
 
-        {values && (
-            <BarChart
-                className={chartSize === 'lg' ? 'h-32' : chartSize === 'md' ? 'h-20' : 'h-8'}
-                data={values}
-                series={[{ dataKey: 'value', label: title, variant }]}
-                xAxisKey="date"
-                tooltip
-            />
-        )}
+    const body = (
+        <>
+            {value !== null && value !== undefined && value !== '' && (
+                <div className={valueVariants({ variant })}>{value}</div>
+            )}
 
-        {footer != null && <span className="text-xs font-medium text-ink-subtle">{footer}</span>}
-    </Card>
-)
+            {values && (
+                <BarChart
+                    className={cn(chartSize === 'lg' ? 'h-32' : chartSize === 'md' ? 'h-20' : 'h-8', chartClassName)}
+                    data={values}
+                    series={[{ dataKey: 'value', label: title, variant }]}
+                    xAxisKey="date"
+                    tooltip
+                    tooltipValueFormatter={tooltipValueFormatter}
+                />
+            )}
+
+            {footer != null && <span className="text-xs font-medium text-ink-subtle">{footer}</span>}
+        </>
+    )
+
+    if (separated) {
+        return (
+            <Card className={cn('overflow-visible', className)} {...props}>
+                <CardHeader aside={headerAside}>{label}</CardHeader>
+                <CardContent className="flex flex-col gap-3 p-4">{body}</CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Card separated={false} className={cn('gap-3 p-5 overflow-visible', className)} {...props}>
+            <div className="flex items-center justify-between">
+                {label}
+                {headerAside}
+            </div>
+
+            {body}
+        </Card>
+    )
+}

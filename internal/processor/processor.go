@@ -3,7 +3,9 @@ package processor
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"hump/internal/log"
@@ -19,6 +21,7 @@ import (
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/sink"
+	"hump/internal/types/stream"
 	"hump/internal/types/wal"
 	"hump/pkg/version"
 )
@@ -27,13 +30,16 @@ import (
 // originating table, applying per-target retry and concurrency control.
 type processor struct {
 	introspector *introspection.Introspector
+	publisher    stream.Publisher
 	metrics      *metrics.Metrics
 	asyncLimiter *asynclimiter.AsyncLimiter
+	seq          atomic.Uint64
 }
 
-func New(introspector *introspection.Introspector, metrics *metrics.Metrics) *processor {
+func New(introspector *introspection.Introspector, publisher stream.Publisher, metrics *metrics.Metrics) *processor {
 	return &processor{
 		introspector: introspector,
+		publisher:    publisher,
 		metrics:      metrics,
 		asyncLimiter: asynclimiter.New(metrics),
 	}
@@ -104,25 +110,47 @@ func (p *processor) Process(
 			concurrencyKey = fmt.Sprintf("%s(%s)", operationContext.SinkType, operationContext.SinkName)
 		}
 
+		metaHost, metaTarget := target.Sink.Metadata(operationContext)
+
+		// Only stream (and pay the per-sink render cost) when a web client is
+		// actually subscribed to the operations stream. When streaming, the base
+		// event carries a per-operation correlation id; the retry layer emits the
+		// operation event and any retry events after each publish attempt.
+		var pub stream.Publisher
+		var streamEvent stream.Event
+		if p.publisher != nil && p.publisher.HasSubscribers() {
+			pub = p.publisher
+			streamEvent = stream.Event{
+				ID:        strconv.FormatUint(p.seq.Add(1), 10),
+				Timestamp: timestamp,
+				Schema:    resolvedSchema,
+				Table:     resolvedTable,
+				Operation: operation,
+				SinkType:  string(target.Sink.Type()),
+				Host:      metaHost,
+				Target:    metaTarget,
+			}
+		}
+
 		wg.Add(1)
 		go r.Process(
-			ctx, target, concurrencyKey,
-			func(ctx context.Context) error {
+			ctx, target, concurrencyKey, metaHost, metaTarget, streamEvent, pub,
+			func(ctx context.Context, streamEvent *stream.Event) error {
 				var err error
 
 				switch sink := target.Sink.(type) {
 				case *config.KafkaSink:
-					err = kafka.Process(ctx, *sink, &operationContext)
+					err = kafka.Process(ctx, *sink, &operationContext, streamEvent)
 				case *config.NatsCoreSink:
-					err = nats.ProcessCore(ctx, *sink, &operationContext)
+					err = nats.ProcessCore(ctx, *sink, &operationContext, streamEvent)
 				case *config.NatsJetStreamSink:
-					err = nats.ProcessJetStream(ctx, *sink, &operationContext)
+					err = nats.ProcessJetStream(ctx, *sink, &operationContext, streamEvent)
 				case *config.HTTPSink:
-					err = http.Process(ctx, *sink, &operationContext)
+					err = http.Process(ctx, *sink, &operationContext, streamEvent)
 				case *config.RabbitMQSink:
-					err = rabbitmq.Process(ctx, *sink, &operationContext)
+					err = rabbitmq.Process(ctx, *sink, &operationContext, streamEvent)
 				case *config.RabbitMQStreamSink:
-					err = rabbitmq_stream.Process(ctx, *sink, &operationContext)
+					err = rabbitmq_stream.Process(ctx, *sink, &operationContext, streamEvent)
 				default:
 					return errs.ErrUnknownSinkType
 				}

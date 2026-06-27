@@ -62,13 +62,13 @@ func New(namespace string) (*Metrics, http.Handler) {
 		sinkMessages: factory.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "sink_messages_total",
-			Help:      "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), and sink name.",
-		}, []string{"status", "type", "name"}),
+			Help:      "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/HTTP method).",
+		}, []string{"status", "type", "host", "target"}),
 		sinkDuration: factory.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Name:      "sink_duration_seconds",
-			Help:      "Time spent dispatching a single message to a sink, in seconds, labeled by sink type and sink name. Measures end-to-end write latency including any retries within a single attempt.",
-		}, []string{"type", "name"}),
+			Help:      "Time spent dispatching a single message to a sink, in seconds, labeled by sink type, connection host, and rendered target (topic/subject/exchange/stream/HTTP method). Measures end-to-end write latency including any retries within a single attempt.",
+		}, []string{"type", "host", "target"}),
 
 		limiterPending: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -117,27 +117,27 @@ func (m *Metrics) ProcessedRowsTruncateDuration(value float64, db, schema, table
 }
 
 // SinkMessagesSuccess increments the count of messages delivered
-// successfully to the sink identified by sinkType and name.
-func (m *Metrics) SinkMessagesSuccess(value float64, sinkType string, name string) {
-	m.sinkMessages.WithLabelValues("success", sinkType, name).Add(value)
+// successfully to the sink identified by sinkType, host, and target.
+func (m *Metrics) SinkMessagesSuccess(value float64, sinkType, host, target string) {
+	m.sinkMessages.WithLabelValues("success", sinkType, host, target).Add(value)
 }
 
 // SinkMessagesRetry increments the count of retried delivery attempts for
-// the sink identified by sinkType and name.
-func (m *Metrics) SinkMessagesRetry(value float64, sinkType string, name string) {
-	m.sinkMessages.WithLabelValues("retry", sinkType, name).Add(value)
+// the sink identified by sinkType, host, and target.
+func (m *Metrics) SinkMessagesRetry(value float64, sinkType, host, target string) {
+	m.sinkMessages.WithLabelValues("retry", sinkType, host, target).Add(value)
 }
 
 // SinkMessagesFailure increments the count of permanently failed deliveries
-// for the sink identified by sinkType and name.
-func (m *Metrics) SinkMessagesFailure(value float64, sinkType string, name string) {
-	m.sinkMessages.WithLabelValues("failure", sinkType, name).Add(value)
+// for the sink identified by sinkType, host, and target.
+func (m *Metrics) SinkMessagesFailure(value float64, sinkType, host, target string) {
+	m.sinkMessages.WithLabelValues("failure", sinkType, host, target).Add(value)
 }
 
 // SinkDuration observes the time spent dispatching a single message to the
-// sink identified by sinkType and name.
-func (m *Metrics) SinkDuration(duration float64, sinkType string, name string) {
-	m.sinkDuration.WithLabelValues(sinkType, name).Observe(duration)
+// sink identified by sinkType, host, and target.
+func (m *Metrics) SinkDuration(duration float64, sinkType, host, target string) {
+	m.sinkDuration.WithLabelValues(sinkType, host, target).Observe(duration)
 }
 
 // LimiterPendingInc records that one item entered the limiter for key

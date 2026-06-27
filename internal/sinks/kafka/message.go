@@ -47,3 +47,17 @@ func buildMessage(config config.KafkaSink, operationContext *sink.SinkContext) (
 
 	return record, nil
 }
+
+// recordHeaders converts Kafka record headers into a plain string map for the
+// operations stream. It returns nil when there are no headers.
+func recordHeaders(headers []kgo.RecordHeader) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	out := make(map[string]string, len(headers))
+	for _, h := range headers {
+		out[h.Key] = string(h.Value)
+	}
+	return out
+}

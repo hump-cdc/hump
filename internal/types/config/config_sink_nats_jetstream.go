@@ -50,6 +50,19 @@ func (s *NatsJetStreamSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sink.SinkTypeNatsJetStream), s.URL.Source())
 }
 
+// Metadata returns the connection host (rendered URL) and the rendered subject
+// for the given context.
+func (s *NatsJetStreamSink) Metadata(context sink.SinkContext) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+
+	url, _ := s.URL.Render(context)
+	target, _ := s.Subject.Render(context)
+
+	return parseHost(url), target
+}
+
 func (s *NatsJetStreamSink) UnmarshalYAML(node ast.Node) error {
 	type natsJetStream NatsJetStreamSink
 	if err := decode(node, (*natsJetStream)(s)); err != nil {

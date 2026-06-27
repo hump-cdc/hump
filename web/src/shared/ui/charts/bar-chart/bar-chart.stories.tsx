@@ -13,6 +13,11 @@ const toMonthly = (values: number[]): Array<Record<string, number | string>> =>
 const trendData = toMonthly([46, 62, 55, 78, 70, 90, 84, 108, 96, 120, 112, 134, 150, 128])
 const volatileData = toMonthly([80, 40, 95, 50, 110, 35, 90, 60, 120, 45, 100, 70])
 const seasonalData = toMonthly([30, 45, 70, 110, 140, 150, 130, 95, 60, 40, 35, 50])
+const zerosData = toMonthly([0, 64, 0, 96, 40, 0, 72, 0, 110, 0, 56, 0])
+const allZerosData = toMonthly([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+const noSeriesData: Array<Record<string, number | string>> = Array.from({ length: 12 }, (_, index) => ({
+    month: `M${index + 1}`,
+}))
 
 const steadyData = [
     { month: 'Jan', delivered: 80, retried: 24, failed: 8 },
@@ -47,24 +52,54 @@ const growthData = [
     { month: 'Aug', delivered: 156, retried: 32, failed: 16 },
 ]
 
+const zerosSeriesData = [
+    { month: 'Jan', delivered: 80, retried: 0, failed: 0 },
+    { month: 'Feb', delivered: 96, retried: 18, failed: 0 },
+    { month: 'Mar', delivered: 0, retried: 30, failed: 6 },
+    { month: 'Apr', delivered: 110, retried: 0, failed: 14 },
+    { month: 'May', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Jun', delivered: 124, retried: 16, failed: 0 },
+    { month: 'Jul', delivered: 100, retried: 28, failed: 0 },
+    { month: 'Aug', delivered: 0, retried: 20, failed: 7 },
+]
+
+const allZerosSeriesData = [
+    { month: 'Jan', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Feb', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Mar', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Apr', delivered: 0, retried: 0, failed: 0 },
+    { month: 'May', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Jun', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Jul', delivered: 0, retried: 0, failed: 0 },
+    { month: 'Aug', delivered: 0, retried: 0, failed: 0 },
+]
+
 const threeSeries = (): BarSeries => [
-    { dataKey: 'delivered', label: 'Delivered', variant: 'success' },
-    { dataKey: 'retried', label: 'Retried', variant: 'primary' },
-    { dataKey: 'failed', label: 'Failed', variant: 'danger' },
+    { dataKey: 'delivered', label: 'Successfully delivered messages', variant: 'success' },
+    { dataKey: 'retried', label: 'Retried after transient failure', variant: 'primary' },
+    { dataKey: 'failed', label: 'Permanently failed deliveries', variant: 'danger' },
 ]
 
 const datasets = {
     '1 series — trend': {
         data: trendData,
-        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '1 series — volatile': {
         data: volatileData,
-        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '1 series — seasonal': {
         data: seasonalData,
-        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Amount', variant }],
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
+    },
+    '1 series — with zeros': {
+        data: zerosData,
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
+    },
+    '1 series — all zeros': {
+        data: allZerosData,
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
     '3 series — steady': {
         data: steadyData,
@@ -77,6 +112,18 @@ const datasets = {
     '3 series — growth': {
         data: growthData,
         series: threeSeries,
+    },
+    '3 series — with zeros': {
+        data: zerosSeriesData,
+        series: threeSeries,
+    },
+    '3 series — all zeros': {
+        data: allZerosSeriesData,
+        series: threeSeries,
+    },
+    'no series': {
+        data: noSeriesData,
+        series: (): BarSeries => [],
     },
 } satisfies Record<string, { data: Array<Record<string, number | string>>; series: (variant: BarVariant) => BarSeries }>
 

@@ -3,10 +3,8 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	cfg "hump/internal/config"
 	"hump/internal/log"
 	"hump/internal/processor"
 	"hump/internal/source/postgres"
@@ -15,9 +13,7 @@ import (
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
-	"hump/internal/types/errs"
-
-	"github.com/goccy/go-yaml"
+	"hump/internal/types/stream"
 )
 
 var logger = log.Scope("pipeline")
@@ -28,40 +24,25 @@ type Pipeline interface {
 	// Start parses the configuration, connects to Postgres using databaseUrl,
 	// and begins streaming WAL changes for the given publication and slot until
 	// ctx is cancelled or an unrecoverable error occurs.
-	Start(ctx context.Context, databaseUrl, config, publicationName, slotName string) error
+	Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error
 }
 
 type pipeline struct {
-	health  *health.Health
-	metrics *metrics.Metrics
+	health    *health.Health
+	publisher stream.Publisher
+	metrics   *metrics.Metrics
 }
 
-func New(health *health.Health, metrics *metrics.Metrics) Pipeline {
+func New(health *health.Health, publisher stream.Publisher, metrics *metrics.Metrics) Pipeline {
 	return &pipeline{
-		health:  health,
-		metrics: metrics,
+		health:    health,
+		publisher: publisher,
+		metrics:   metrics,
 	}
 }
 
 // Start runs the pipeline.
-func (p *pipeline) Start(ctx context.Context, databaseUrl, config, publicationName, slotName string) error {
-	cfg, err := cfg.Parse(config)
-
-	if err != nil {
-		logger.Error(err.Error())
-		return errs.ErrConfigurationParse
-	}
-
-	cfgResult, _ := yaml.Marshal(&cfg)
-	logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
-
-	for _, t := range cfg.Tables {
-		logger.Debug("Configuration",
-			"schema", t.Schema,
-			"table", t.Name,
-			"sinks", formatSinks(t.Sinks),
-		)
-	}
+func (p *pipeline) Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error {
 
 	connector := connection.New(databaseUrl)
 
@@ -83,7 +64,7 @@ func (p *pipeline) Start(ctx context.Context, databaseUrl, config, publicationNa
 		return fmt.Errorf("failed to get database summary: %w", err)
 	}
 
-	proc := processor.New(introspector, p.metrics)
+	proc := processor.New(introspector, p.publisher, p.metrics)
 
 	w, err := wal.New(ctx, connector, publicationName, slotName, p.health, p.metrics, proc.Process)
 	if err != nil {
@@ -96,12 +77,4 @@ func (p *pipeline) Start(ctx context.Context, databaseUrl, config, publicationNa
 	defer w.Close(closeCtx)
 
 	return err
-}
-
-func formatSinks(sinks []config.SinkConfig) string {
-	parts := make([]string, 0, len(sinks))
-	for _, s := range sinks {
-		parts = append(parts, s.Sink.DisplayName())
-	}
-	return strings.Join(parts, ", ")
 }

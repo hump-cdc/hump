@@ -23,6 +23,19 @@ func (s *NatsCoreSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sink.SinkTypeNatsCore), s.URL.Source())
 }
 
+// Metadata returns the connection host (rendered URL) and the rendered subject
+// for the given context.
+func (s *NatsCoreSink) Metadata(context sink.SinkContext) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+
+	url, _ := s.URL.Render(context)
+	target, _ := s.Subject.Render(context)
+
+	return parseHost(url), target
+}
+
 func (s *NatsCoreSink) UnmarshalYAML(node ast.Node) error {
 	type natsCore NatsCoreSink
 	if err := decode(node, (*natsCore)(s)); err != nil {

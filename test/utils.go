@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hump/internal/config"
+	"hump/config"
 	"hump/internal/pipeline"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"

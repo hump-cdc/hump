@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	cfg "hump/config"
 	"hump/internal/app"
 	"hump/internal/app/options"
-	cfg "hump/internal/config"
 	"hump/internal/pipeline"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"

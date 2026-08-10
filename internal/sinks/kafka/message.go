@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"fmt"
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
 
@@ -50,12 +51,12 @@ func buildMessage(config config.KafkaSink, operationContext *sink.SinkContext) (
 
 // recordHeaders converts Kafka record headers into a plain string map for the
 // operations stream. It returns nil when there are no headers.
-func recordHeaders(headers []kgo.RecordHeader) map[string]string {
+func recordHeaders(headers []kgo.RecordHeader) domain.Headers {
 	if len(headers) == 0 {
 		return nil
 	}
 
-	out := make(map[string]string, len(headers))
+	out := make(domain.Headers, len(headers))
 	for _, h := range headers {
 		out[h.Key] = string(h.Value)
 	}

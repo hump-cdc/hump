@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"hump/internal/processor"
+	"hump/internal/application/process_operation"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/source/postgres/wal"
@@ -64,7 +64,7 @@ func (p *pipeline) Start(ctx context.Context, databaseUrl string, cfg config.Con
 		return fmt.Errorf("failed to get database summary: %w", err)
 	}
 
-	proc := processor.New(introspector, p.publisher, p.metrics)
+	proc := process_operation.NewUseCase(introspector, p.publisher, p.metrics)
 
 	w, err := wal.New(ctx, connector, publicationName, slotName, p.health, p.metrics, proc.Process)
 	if err != nil {

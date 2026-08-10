@@ -1,6 +1,6 @@
 package schema
 
-import "hump/internal/types/introspector"
+import "hump/internal/domain"
 
 // TableType classifies how a PostgreSQL table participates in partitioning.
 // Replication behavior (publication clauses, replica identity) varies by type.
@@ -19,8 +19,8 @@ const (
 // Partition identifies a single partition (or hypertable chunk) by its
 // physical schema and table name.
 type Partition struct {
-	Schema introspector.TableSchema
-	Table  introspector.TableName
+	Schema domain.TableSchema
+	Table  domain.TableName
 }
 
 // TableInfo describes a configured table: its classification and the set of
@@ -31,4 +31,4 @@ type TableInfo struct {
 }
 
 // TablesWithPartitions maps schema -> table name -> table info.
-type TablesWithPartitions map[introspector.TableSchema]map[introspector.TableName]*TableInfo
+type TablesWithPartitions map[domain.TableSchema]map[domain.TableName]*TableInfo

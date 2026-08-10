@@ -8,6 +8,7 @@ import (
 	"context"
 	"sync"
 
+	"hump/internal/domain"
 	"hump/internal/source/postgres/catalog"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/types/config"
@@ -101,7 +102,7 @@ func (i *Introspector) invalidateLocked(ctx context.Context, conn *connection.Co
 // a full introspection. If no configuration is found it re-introspects once
 // (to pick up partitions created after startup), and ignores future lookups
 // for the same key if still not found.
-func (i *Introspector) ResolveTableConfiguration(ctx context.Context, schemaName, name string) (introspector.TableRef, []config.SinkConfig, error) {
+func (i *Introspector) ResolveTableConfiguration(ctx context.Context, schemaName domain.TableSchema, name domain.TableName) (introspector.TableRef, []config.SinkConfig, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -126,7 +127,7 @@ func (i *Introspector) ResolveTableConfiguration(ctx context.Context, schemaName
 	}
 
 	// if not found, check whether table is ignored (e.g., we already tried to find it after previous introspection and it was not found)
-	key := schemaName + "." + name
+	key := string(schemaName) + "." + string(name)
 	if _, ignored := i.ignoredTables[key]; ignored {
 		return introspector.TableRef{}, nil, nil
 	}

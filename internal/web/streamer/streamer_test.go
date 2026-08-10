@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"hump/internal/domain"
 	"hump/internal/types/stream"
-	"hump/internal/types/wal"
 )
 
 func recv(t *testing.T, ch <-chan interface{}) (interface{}, bool) {
@@ -43,7 +43,7 @@ func TestFanOut(t *testing.T) {
 	_, a := s.Subscribe()
 	_, b := s.Subscribe()
 
-	want := stream.Event{Schema: "public", Table: "users", Operation: wal.WalOperationInsert}
+	want := stream.Event{Schema: "public", Table: "users", Operation: domain.OperationInsert}
 	s.Publish(want)
 
 	if got, ok := recv(t, a); !ok || got.(stream.Event).Table != want.Table {

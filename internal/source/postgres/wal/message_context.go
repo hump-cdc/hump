@@ -3,6 +3,8 @@ package wal
 import (
 	"maps"
 	"sync"
+
+	"hump/internal/domain"
 )
 
 // messageContext is a thread-safe store for messages emitted via
@@ -11,7 +13,7 @@ import (
 // attached to subsequent change events.
 type messageContext struct {
 	mu       sync.Mutex
-	messages map[string]string
+	messages domain.Headers
 }
 
 // Append stores a message under the given name, overwriting any prior value.
@@ -23,22 +25,22 @@ func (c *messageContext) Append(name, value string) {
 }
 
 // Flush returns the buffered messages and resets the internal store.
-func (c *messageContext) Flush() map[string]string {
+func (c *messageContext) Flush() domain.Headers {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	messages := c.messages
-	c.messages = map[string]string{}
+	c.messages = domain.Headers{}
 
 	return messages
 }
 
 // Dump returns a copy of the buffered messages without clearing the store.
-func (c *messageContext) Dump() map[string]string {
+func (c *messageContext) Dump() domain.Headers {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	messages := make(map[string]string, len(c.messages))
+	messages := make(domain.Headers, len(c.messages))
 	maps.Copy(messages, c.messages)
 
 	return messages

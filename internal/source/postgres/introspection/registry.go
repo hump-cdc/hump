@@ -1,6 +1,7 @@
 package introspection
 
 import (
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/introspector"
 	"maps"
@@ -11,18 +12,18 @@ import (
 type TableRegistry struct {
 	tables      []introspector.TableRef
 	replicaFull []introspector.TableRef
-	partitions  map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef
+	partitions  map[domain.TableSchema]map[domain.TableName]introspector.TableRef
 
 	// mapping table schema → table name → sinks
-	registry map[introspector.TableSchema]map[introspector.TableName][]config.SinkConfig
+	registry map[domain.TableSchema]map[domain.TableName][]config.SinkConfig
 }
 
 // NewTableRegistry returns an empty TableRegistry. Use RegistryFromConfig
 // when populating from a parsed configuration.
 func NewTableRegistry() *TableRegistry {
 	return &TableRegistry{
-		registry:   make(map[introspector.TableSchema]map[introspector.TableName][]config.SinkConfig),
-		partitions: make(map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef),
+		registry:   make(map[domain.TableSchema]map[domain.TableName][]config.SinkConfig),
+		partitions: make(map[domain.TableSchema]map[domain.TableName]introspector.TableRef),
 	}
 }
 
@@ -31,14 +32,17 @@ func RegistryFromConfig(cfg config.Configuration) *TableRegistry {
 	result := NewTableRegistry()
 
 	for _, t := range cfg.Tables {
-		tables, ok := result.registry[t.Schema]
+		schemaName := domain.TableSchema(t.Schema)
+		name := domain.TableName(t.Name)
+
+		tables, ok := result.registry[schemaName]
 		if !ok {
-			tables = make(map[introspector.TableName][]config.SinkConfig)
-			result.registry[t.Schema] = tables
+			tables = make(map[domain.TableName][]config.SinkConfig)
+			result.registry[schemaName] = tables
 		}
 
-		tables[t.Name] = t.Sinks
-		ref := introspector.TableRef{Schema: t.Schema, Name: t.Name}
+		tables[name] = t.Sinks
+		ref := introspector.TableRef{Schema: schemaName, Name: name}
 		result.tables = append(result.tables, ref)
 		if t.Replica == config.ReplicaIdentityFull {
 			result.replicaFull = append(result.replicaFull, ref)
@@ -65,7 +69,7 @@ func (r *TableRegistry) ReplicaIdentityFullTables() []introspector.TableRef {
 // directly, it falls back to the partition→parent mapping. The returned
 // TableRef points to the resolved parent table when the input was a partition,
 // or to the input table itself when it was configured directly.
-func (r *TableRegistry) Resolve(schemaName, name string) (introspector.TableRef, []config.SinkConfig) {
+func (r *TableRegistry) Resolve(schemaName domain.TableSchema, name domain.TableName) (introspector.TableRef, []config.SinkConfig) {
 	if s, ok := r.registry[schemaName]; ok {
 		if sinks, ok := s[name]; ok {
 			return introspector.TableRef{Schema: schemaName, Name: name}, sinks
@@ -78,17 +82,17 @@ func (r *TableRegistry) Resolve(schemaName, name string) (introspector.TableRef,
 }
 
 // Partitions returns the partition→parent mapping.
-func (r *TableRegistry) Partitions() map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef {
+func (r *TableRegistry) Partitions() map[domain.TableSchema]map[domain.TableName]introspector.TableRef {
 	return r.partitions
 }
 
 // UpdatePartitions replaces the partition→parent mapping. The input is
 // copied so the registry does not alias the caller's map.
-func (r *TableRegistry) UpdatePartitions(partitions map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef) {
-	result := make(map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef, len(partitions))
+func (r *TableRegistry) UpdatePartitions(partitions map[domain.TableSchema]map[domain.TableName]introspector.TableRef) {
+	result := make(map[domain.TableSchema]map[domain.TableName]introspector.TableRef, len(partitions))
 
 	for schemaName, tables := range partitions {
-		c := make(map[introspector.TableName]introspector.TableRef, len(tables))
+		c := make(map[domain.TableName]introspector.TableRef, len(tables))
 		maps.Copy(c, tables)
 		result[schemaName] = c
 	}
@@ -98,7 +102,7 @@ func (r *TableRegistry) UpdatePartitions(partitions map[introspector.TableSchema
 
 // resolveByPartition returns the parent TableRef for a partition, or false
 // when schemaName/name is not a tracked partition.
-func (r *TableRegistry) resolveByPartition(schemaName, name string) (introspector.TableRef, bool) {
+func (r *TableRegistry) resolveByPartition(schemaName domain.TableSchema, name domain.TableName) (introspector.TableRef, bool) {
 	if s, ok := r.partitions[schemaName]; ok {
 		if ref, ok := s[name]; ok {
 			return ref, true

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"hump/internal/domain"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/source/postgres/schema"
 	"hump/internal/types/introspector"
@@ -33,11 +34,11 @@ func GetTablesWithPartitions(ctx context.Context, conn *connection.Connection, t
 		return nil, err
 	}
 
-	schemas := make([]introspector.TableSchema, len(tables))
-	names := make([]introspector.TableName, len(tables))
+	schemas := make([]string, len(tables))
+	names := make([]string, len(tables))
 	for i, t := range tables {
-		schemas[i] = t.Schema
-		names[i] = t.Name
+		schemas[i] = string(t.Schema)
+		names[i] = string(t.Name)
 	}
 
 	sql := tablesNoTimescaleSql
@@ -74,15 +75,15 @@ func GetTablesWithPartitions(ctx context.Context, conn *connection.Connection, t
 			return nil, fmt.Errorf("get tables with partitions: expected 5 columns, got %d", len(values))
 		}
 
-		schemaName := introspector.TableSchema(values[0])
-		name := introspector.TableName(values[1])
+		schemaName := domain.TableSchema(values[0])
+		name := domain.TableName(values[1])
 		tableType := schema.TableType(string(values[2]))
 		partitionSchema := values[3]
 		partitionTable := values[4]
 
 		schemaMap, ok := result[schemaName]
 		if !ok {
-			schemaMap = make(map[introspector.TableName]*schema.TableInfo)
+			schemaMap = make(map[domain.TableName]*schema.TableInfo)
 			result[schemaName] = schemaMap
 		}
 
@@ -93,9 +94,9 @@ func GetTablesWithPartitions(ctx context.Context, conn *connection.Connection, t
 		}
 
 		if partitionSchema != nil {
-			p := schema.Partition{Schema: introspector.TableSchema(partitionSchema)}
+			p := schema.Partition{Schema: domain.TableSchema(partitionSchema)}
 			if partitionTable != nil {
-				p.Table = introspector.TableName(partitionTable)
+				p.Table = domain.TableName(partitionTable)
 			}
 			info.Partitions = append(info.Partitions, p)
 		}
@@ -104,7 +105,7 @@ func GetTablesWithPartitions(ctx context.Context, conn *connection.Connection, t
 	var missing []string
 	for _, t := range tables {
 		if _, ok := result[t.Schema][t.Name]; !ok {
-			missing = append(missing, t.Schema+"."+t.Name)
+			missing = append(missing, string(t.Schema)+"."+string(t.Name))
 		}
 	}
 	if len(missing) > 0 {
@@ -116,7 +117,7 @@ func GetTablesWithPartitions(ctx context.Context, conn *connection.Connection, t
 
 // GetTableByPartition returns the parent table reference whose partition list
 // contains (partitionSchema, partitionTable). Returns nil if no parent matches.
-func GetTableByPartition(ctx context.Context, conn *connection.Connection, partitionSchema, partitionTable string, tables []introspector.TableRef) (*introspector.TableRef, error) {
+func GetTableByPartition(ctx context.Context, conn *connection.Connection, partitionSchema domain.TableSchema, partitionTable domain.TableName, tables []introspector.TableRef) (*introspector.TableRef, error) {
 	source, err := GetTablesWithPartitions(ctx, conn, tables)
 	if err != nil {
 		return nil, err

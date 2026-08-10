@@ -105,8 +105,8 @@ func GetSummary(ctx context.Context, conn *connection.Connection, tables []intro
 	schemas := make([]string, len(tables))
 	names := make([]string, len(tables))
 	for i, t := range tables {
-		schemas[i] = t.Schema
-		names[i] = t.Name
+		schemas[i] = string(t.Schema)
+		names[i] = string(t.Name)
 	}
 
 	m := pgtype.NewMap()

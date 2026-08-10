@@ -3,28 +3,21 @@ package wal
 import (
 	"context"
 	"time"
-)
 
-type WalOperation string
-
-var (
-	WalOperationInsert   WalOperation = "insert"
-	WalOperationUpdate   WalOperation = "update"
-	WalOperationDelete   WalOperation = "delete"
-	WalOperationTruncate WalOperation = "truncate"
+	"hump/internal/domain"
 )
 
 type ProcessHandler func(
 	ctx context.Context,
 	timestamp time.Time,
-	operation WalOperation,
-	dbName string,
-	schema string,
-	table string,
-	headers map[string]string,
-	prev map[string]any,
-	next map[string]any,
-) (string, string, string, error)
+	operation domain.OperationType,
+	dbName domain.DbName,
+	schema domain.TableSchema,
+	table domain.TableName,
+	headers domain.Headers,
+	prev domain.DbRecord,
+	next domain.DbRecord,
+) (domain.DbName, domain.TableSchema, domain.TableName, error)
 
 type Wal interface {
 	Start(ctx context.Context) error

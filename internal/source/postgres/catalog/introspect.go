@@ -6,6 +6,7 @@ package catalog
 import (
 	"context"
 
+	"hump/internal/domain"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/source/postgres/schema"
 	"hump/internal/types/introspector"
@@ -22,9 +23,9 @@ type IntrospectedTable struct {
 // table view (Tables) and a flat partition→parent reverse index (Partitions).
 type TablesIntrospection struct {
 	// Tables maps schema -> table name -> table info with partitions.
-	Tables map[introspector.TableSchema]map[introspector.TableName]*IntrospectedTable
+	Tables map[domain.TableSchema]map[domain.TableName]*IntrospectedTable
 	// Partitions maps partition schema -> partition name -> parent table reference.
-	Partitions map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef
+	Partitions map[domain.TableSchema]map[domain.TableName]introspector.TableRef
 }
 
 // IntrospectTables runs GetTablesWithPartitions and reshapes the result into a
@@ -40,14 +41,14 @@ func IntrospectTables(ctx context.Context, conn *connection.Connection, tables [
 	// Extract results
 
 	result := &TablesIntrospection{
-		Tables:     make(map[introspector.TableSchema]map[introspector.TableName]*IntrospectedTable),
-		Partitions: make(map[introspector.TableSchema]map[introspector.TableName]introspector.TableRef),
+		Tables:     make(map[domain.TableSchema]map[domain.TableName]*IntrospectedTable),
+		Partitions: make(map[domain.TableSchema]map[domain.TableName]introspector.TableRef),
 	}
 
 	for schemaName, nameMap := range dbTables {
 		tables, ok := result.Tables[schemaName]
 		if !ok {
-			tables = make(map[introspector.TableName]*IntrospectedTable)
+			tables = make(map[domain.TableName]*IntrospectedTable)
 			result.Tables[schemaName] = tables
 		}
 
@@ -71,7 +72,7 @@ func IntrospectTables(ctx context.Context, conn *connection.Connection, tables [
 
 				partSchema, ok := result.Partitions[p.Schema]
 				if !ok {
-					partSchema = make(map[introspector.TableName]introspector.TableRef)
+					partSchema = make(map[domain.TableName]introspector.TableRef)
 					result.Partitions[p.Schema] = partSchema
 				}
 				partSchema[p.Table] = introspector.TableRef{Schema: schemaName, Name: name}

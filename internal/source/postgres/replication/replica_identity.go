@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"hump/internal/domain"
 	"hump/internal/source/postgres/catalog"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/source/postgres/schema"
@@ -31,8 +32,8 @@ func EnsureReplicaIdentityFull(ctx context.Context, conn *connection.Connection,
 
 	seen := make(map[string]struct{})
 	var targets []introspector.TableRef
-	add := func(s, name string) {
-		key := s + "." + name
+	add := func(s domain.TableSchema, name domain.TableName) {
+		key := string(s) + "." + string(name)
 		if _, ok := seen[key]; ok {
 			return
 		}
@@ -66,9 +67,9 @@ func EnsureReplicaIdentityFull(ctx context.Context, conn *connection.Connection,
 
 // setReplicaIdentityFull issues ALTER TABLE ... REPLICA IDENTITY FULL for the
 // given table. The embedded SQL is a no-op when the table is already FULL.
-func setReplicaIdentityFull(ctx context.Context, conn *connection.Connection, schemaName, name string) error {
-	qualifiedLiteral := connection.QuoteLiteral(schemaName + "." + name)
-	qualifiedIdentifier := connection.QuoteIdentifier(schemaName) + "." + connection.QuoteIdentifier(name)
+func setReplicaIdentityFull(ctx context.Context, conn *connection.Connection, schemaName domain.TableSchema, name domain.TableName) error {
+	qualifiedLiteral := connection.QuoteLiteral(string(schemaName) + "." + string(name))
+	qualifiedIdentifier := connection.QuoteIdentifier(string(schemaName)) + "." + connection.QuoteIdentifier(string(name))
 
 	sql := fmt.Sprintf(replicaIdentitySql, qualifiedLiteral, qualifiedIdentifier)
 

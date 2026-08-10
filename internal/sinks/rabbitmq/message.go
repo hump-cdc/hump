@@ -6,6 +6,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
 	"hump/pkg/template"
@@ -13,12 +14,12 @@ import (
 
 // tableHeaders flattens an AMQP header table into a plain string map for the
 // operations stream. It returns nil when there are no headers.
-func tableHeaders(headers amqp.Table) map[string]string {
+func tableHeaders(headers amqp.Table) domain.Headers {
 	if len(headers) == 0 {
 		return nil
 	}
 
-	out := make(map[string]string, len(headers))
+	out := make(domain.Headers, len(headers))
 	for name, v := range headers {
 		out[name] = fmt.Sprint(v)
 	}

@@ -3,10 +3,12 @@ package connection
 import (
 	"context"
 	"fmt"
-	"hump/pkg/telemetry/log"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"hump/internal/domain"
+	"hump/pkg/telemetry/log"
 )
 
 // connectionMaxAttempts caps the number of connect and exec retries before
@@ -31,7 +33,7 @@ func New(connectionString string) *Connector {
 type Endpoint struct {
 	Host     string
 	Port     uint16
-	Database string
+	Database domain.DbName
 }
 
 // Describe parses connectionString and returns the target host, port, and
@@ -46,7 +48,7 @@ func Describe(connectionString string) (Endpoint, error) {
 	return Endpoint{
 		Host:     cfg.Host,
 		Port:     cfg.Port,
-		Database: cfg.Database,
+		Database: domain.DbName(cfg.Database),
 	}, nil
 }
 
@@ -68,7 +70,7 @@ func (c *Connector) CreateConnection(ctx context.Context) (*Connection, error) {
 // CreateReplicationConnection opens a session with the `replication=database`
 // runtime parameter and returns the raw *pgconn.PgConn. The caller owns the
 // connection and must Close it.
-func (c *Connector) CreateReplicationConnection(ctx context.Context) (*pgconn.PgConn, string, error) {
+func (c *Connector) CreateReplicationConnection(ctx context.Context) (*pgconn.PgConn, domain.DbName, error) {
 	connectionString, err := withReplication(c.connectionString)
 	if err != nil {
 		return nil, "", err
@@ -78,9 +80,9 @@ func (c *Connector) CreateReplicationConnection(ctx context.Context) (*pgconn.Pg
 }
 
 // connect opens a single pgconn session, retrying up to connectionMaxAttempts
-// times with exponential backoff. The returned string is the database name
+// times with exponential backoff. The returned DbName is the database name
 // parsed from connectionString.
-func connect(ctx context.Context, connectionString string) (*pgconn.PgConn, string, error) {
+func connect(ctx context.Context, connectionString string) (*pgconn.PgConn, domain.DbName, error) {
 	cfg, err := pgconn.ParseConfig(connectionString)
 	if err != nil {
 		return nil, "", err
@@ -95,7 +97,7 @@ func connect(ctx context.Context, connectionString string) (*pgconn.PgConn, stri
 	for attempt := range connectionMaxAttempts {
 		connection, err := pgconn.ConnectConfig(ctx, cfg)
 		if err == nil {
-			return connection, cfg.Database, nil
+			return connection, domain.DbName(cfg.Database), nil
 		}
 
 		lastErr = err

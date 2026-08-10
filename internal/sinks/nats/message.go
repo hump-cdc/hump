@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
 
@@ -57,12 +58,12 @@ func buildMessage(cfg config.NatsCommon, operationContext *sink.SinkContext) (*n
 
 // natsHeaders flattens NATS message headers into a plain string map (first
 // value per key) for the operations stream. It returns nil when there are none.
-func natsHeaders(header nats.Header) map[string]string {
+func natsHeaders(header nats.Header) domain.Headers {
 	if len(header) == 0 {
 		return nil
 	}
 
-	out := make(map[string]string, len(header))
+	out := make(domain.Headers, len(header))
 	for name, values := range header {
 		if len(values) == 0 {
 			continue

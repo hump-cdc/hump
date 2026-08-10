@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"hump/internal/domain"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
@@ -32,7 +33,7 @@ import (
 type Wal struct {
 	connection *pgconn.PgConn
 
-	dbName          string
+	dbName          domain.DbName
 	publicationName string
 	slotName        string
 
@@ -83,7 +84,7 @@ func New(
 			fmt.Sprintf("publication_names '%s'", publicationName),
 			"messages 'true'",
 		},
-		messageContext: &messageContext{messages: map[string]string{}},
+		messageContext: &messageContext{messages: domain.Headers{}},
 		lastCommitTime: time.Time{},
 		health:         health,
 		metrics:        metrics,
@@ -272,7 +273,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, wal.WalOperationInsert, w.dbName, relation.Namespace, relation.RelationName, headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationInsert, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -292,7 +293,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, wal.WalOperationUpdate, w.dbName, relation.Namespace, relation.RelationName, headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationUpdate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -312,7 +313,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, wal.WalOperationDelete, w.dbName, relation.Namespace, relation.RelationName, headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationDelete, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -329,7 +330,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 				return fmt.Errorf("unknown relation ID: %d: %w", relationId, errs.ErrWal)
 			}
 
-			dbName, schema, table, e := w.process(ctx, timestamp, wal.WalOperationTruncate, w.dbName, relation.Namespace, relation.RelationName, headers, nil, nil)
+			dbName, schema, table, e := w.process(ctx, timestamp, domain.OperationTruncate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, nil, nil)
 			if e != nil {
 				resultErrs = append(resultErrs, e)
 			} else {
@@ -348,10 +349,10 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 // decodeRow turns the optional previous and next tuples of a change event
 // into column maps using relation for column names and OIDs. Unchanged TOAST
 // columns ('u') are dropped from prev and copied from prev into next.
-func (w *Wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogrepl.RelationMessageV2) (map[string]any, map[string]any, error) {
-	var prev map[string]any
+func (w *Wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogrepl.RelationMessageV2) (domain.DbRecord, domain.DbRecord, error) {
+	var prev domain.DbRecord
 	if prevRow != nil {
-		prev = map[string]any{}
+		prev = domain.DbRecord{}
 
 		for index, column := range prevRow.Columns {
 			columnName := relation.Columns[index].Name
@@ -370,9 +371,9 @@ func (w *Wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogre
 		}
 	}
 
-	var next map[string]any
+	var next domain.DbRecord
 	if nextRow != nil {
-		next = map[string]any{}
+		next = domain.DbRecord{}
 
 		for index, column := range nextRow.Columns {
 			columnName := relation.Columns[index].Name

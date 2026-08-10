@@ -6,24 +6,24 @@ package stream
 import (
 	"time"
 
-	"hump/internal/types/wal"
+	"hump/internal/domain"
 )
 
 // Event is a single change-data-capture operation delivered to a sink, shaped
 // for the live operations stream consumed by the web UI. It is emitted once per
 // operation, after the first publish attempt, carrying that attempt's outcome.
 type Event struct {
-	ID        string           `json:"id"`
-	Timestamp time.Time        `json:"timestamp"`
-	Schema    string           `json:"schema"`
-	Table     string           `json:"table"`
-	Operation wal.WalOperation `json:"operation"`
-	SinkType  string           `json:"sinkType"`
-	Host      string           `json:"host"`
-	Target    string           `json:"target"`
+	ID        string               `json:"id"`
+	Timestamp time.Time            `json:"timestamp"`
+	Schema    domain.TableSchema   `json:"schema"`
+	Table     domain.TableName     `json:"table"`
+	Operation domain.OperationType `json:"operation"`
+	SinkType  string               `json:"sinkType"`
+	Host      string               `json:"host"`
+	Target    string               `json:"target"`
 
-	Headers map[string]string `json:"headers,omitempty"`
-	Payload string            `json:"payload,omitempty"`
+	Headers domain.Headers `json:"headers,omitempty"`
+	Payload string         `json:"payload,omitempty"`
 
 	Metadata map[string]string `json:"metadata,omitempty"`
 

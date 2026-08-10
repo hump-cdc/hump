@@ -76,7 +76,7 @@ func buildPublicationClause(info schema.TablesWithPartitions) string {
 
 	for schemaName, byName := range info {
 		for name, t := range byName {
-			qualified := connection.QuoteIdentifier(schemaName) + "." + connection.QuoteIdentifier(name)
+			qualified := connection.QuoteIdentifier(string(schemaName)) + "." + connection.QuoteIdentifier(string(name))
 			switch t.Type {
 			case schema.TableTypeRegular, schema.TableTypePartitioned:
 				tableSet[qualified] = struct{}{}
@@ -86,7 +86,7 @@ func buildPublicationClause(info schema.TablesWithPartitions) string {
 					if p.Schema == "" {
 						continue
 					}
-					schemaSet[p.Schema] = struct{}{}
+					schemaSet[string(p.Schema)] = struct{}{}
 				}
 			}
 		}

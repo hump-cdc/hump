@@ -1,4 +1,4 @@
-package processor
+package process_operation
 
 import (
 	"context"
@@ -8,8 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	asynclimiter "hump/internal/processor/async_limiter"
-	"hump/internal/processor/retry"
+	"hump/internal/domain"
 	"hump/internal/sinks/http"
 	"hump/internal/sinks/kafka"
 	"hump/internal/sinks/nats"
@@ -21,47 +20,48 @@ import (
 	"hump/internal/types/errs"
 	"hump/internal/types/sink"
 	"hump/internal/types/stream"
-	"hump/internal/types/wal"
+	"hump/pkg/limit"
+	"hump/pkg/retry"
 	"hump/pkg/telemetry/log"
 	"hump/pkg/version"
 )
 
-// processor dispatches a single WAL change to every sink configured for the
+// UseCase dispatches a single WAL change to every sink configured for the
 // originating table, applying per-target retry and concurrency control.
-type processor struct {
+type UseCase struct {
 	introspector *introspection.Introspector
 	publisher    stream.Publisher
 	metrics      *metrics.Metrics
-	asyncLimiter *asynclimiter.AsyncLimiter
+	limiter      *limit.Limit
 	seq          atomic.Uint64
 }
 
-func New(introspector *introspection.Introspector, publisher stream.Publisher, metrics *metrics.Metrics) *processor {
-	return &processor{
+func NewUseCase(introspector *introspection.Introspector, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
+	return &UseCase{
 		introspector: introspector,
 		publisher:    publisher,
 		metrics:      metrics,
-		asyncLimiter: asynclimiter.New(metrics),
+		limiter:      limit.New(metrics),
 	}
 }
 
 // Process resolves the configured sinks for the (schema, table) pair and
 // delivers the WAL operation to each of them in parallel, returning only after
 // every fan-out goroutine has finished.
-func (p *processor) Process(
+func (p *UseCase) Process(
 	ctx context.Context,
 
 	timestamp time.Time,
-	operation wal.WalOperation,
+	operation domain.OperationType,
 
-	dbName string,
-	schema string,
-	table string,
+	dbName domain.DbName,
+	schema domain.TableSchema,
+	table domain.TableName,
 
-	headers map[string]string,
-	prev map[string]any,
-	next map[string]any,
-) (string, string, string, error) {
+	headers domain.Headers,
+	prev domain.DbRecord,
+	next domain.DbRecord,
+) (domain.DbName, domain.TableSchema, domain.TableName, error) {
 	traceparent := headers["traceparent"]
 	logger := log.Scope("processor").WithTraceparent(traceparent)
 
@@ -83,7 +83,7 @@ func (p *processor) Process(
 	resolvedSchema, resolvedTable := ref.Schema, ref.Name
 
 	var wg sync.WaitGroup
-	r := retry.New(&wg, traceparent, p.asyncLimiter, p.metrics)
+	r := retry.New(&wg, traceparent, p.limiter, p.metrics)
 
 	for _, target := range targets {
 		operationContext := sink.SinkContext{

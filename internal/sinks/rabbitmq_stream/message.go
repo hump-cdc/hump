@@ -3,6 +3,7 @@ package rabbitmq_stream
 import (
 	"fmt"
 
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
 )
@@ -10,7 +11,7 @@ import (
 // renderAll renders the templated stream name, payload, and headers from cfg
 // against operationContext. Returns each rendered value separately so the
 // caller can use them with the stream client's typed APIs.
-func renderAll(cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext) (streamName, payload string, headers map[string]string, err error) {
+func renderAll(cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext) (streamName, payload string, headers domain.Headers, err error) {
 	streamName, err = cfg.Stream.Name.Render(operationContext)
 	if err != nil {
 		err = fmt.Errorf("render stream.name: %w", err)
@@ -23,7 +24,7 @@ func renderAll(cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext
 		return
 	}
 
-	headers = make(map[string]string, len(cfg.Headers))
+	headers = make(domain.Headers, len(cfg.Headers))
 	for name, tmpl := range cfg.Headers {
 		v, hErr := tmpl.Render(operationContext)
 		if hErr != nil {
@@ -39,7 +40,7 @@ func renderAll(cfg config.RabbitMQStreamSink, operationContext *sink.SinkContext
 // toAMQPProps copies the rendered headers into the AMQP 1.0
 // application-properties map shape used by the stream client. Empty-rendered
 // values are dropped.
-func toAMQPProps(headers map[string]string) map[string]any {
+func toAMQPProps(headers domain.Headers) map[string]any {
 	if len(headers) == 0 {
 		return nil
 	}

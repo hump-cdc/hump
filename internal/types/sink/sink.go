@@ -1,7 +1,7 @@
 package sink
 
 import (
-	"hump/internal/types/wal"
+	"hump/internal/domain"
 	"time"
 )
 
@@ -31,14 +31,14 @@ type SinkContext struct {
 	SinkName string
 
 	Timestamp time.Time
-	Operation wal.WalOperation
+	Operation domain.OperationType
 
-	Database string
-	Schema   string
-	Table    string
+	Database domain.DbName
+	Schema   domain.TableSchema
+	Table    domain.TableName
 
-	Headers map[string]string
+	Headers domain.Headers
 
-	Prev map[string]any
-	Next map[string]any
+	Prev domain.DbRecord
+	Next domain.DbRecord
 }

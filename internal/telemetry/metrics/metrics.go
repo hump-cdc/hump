@@ -9,6 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"hump/internal/domain"
 )
 
 // Metrics is the set of Prometheus instruments reported by the pipeline:
@@ -94,26 +96,26 @@ func (m *Metrics) LagCommit(seconds float64) {
 
 // ProcessedRowsInsertDuration observes the processing duration of a single
 // INSERT row for the given (db, schema, table).
-func (m *Metrics) ProcessedRowsInsertDuration(value float64, db, schema, table string) {
-	m.processedRowsDuration.WithLabelValues("insert", db, schema, table).Observe(value)
+func (m *Metrics) ProcessedRowsInsertDuration(value float64, db domain.DbName, schema domain.TableSchema, table domain.TableName) {
+	m.processedRowsDuration.WithLabelValues("insert", string(db), string(schema), string(table)).Observe(value)
 }
 
 // ProcessedRowsUpdateDuration observes the processing duration of a single
 // UPDATE row for the given (db, schema, table).
-func (m *Metrics) ProcessedRowsUpdateDuration(value float64, db, schema, table string) {
-	m.processedRowsDuration.WithLabelValues("update", db, schema, table).Observe(value)
+func (m *Metrics) ProcessedRowsUpdateDuration(value float64, db domain.DbName, schema domain.TableSchema, table domain.TableName) {
+	m.processedRowsDuration.WithLabelValues("update", string(db), string(schema), string(table)).Observe(value)
 }
 
 // ProcessedRowsDeleteDuration observes the processing duration of a single
 // DELETE row for the given (db, schema, table).
-func (m *Metrics) ProcessedRowsDeleteDuration(value float64, db, schema, table string) {
-	m.processedRowsDuration.WithLabelValues("delete", db, schema, table).Observe(value)
+func (m *Metrics) ProcessedRowsDeleteDuration(value float64, db domain.DbName, schema domain.TableSchema, table domain.TableName) {
+	m.processedRowsDuration.WithLabelValues("delete", string(db), string(schema), string(table)).Observe(value)
 }
 
 // ProcessedRowsTruncateDuration observes the processing duration of a
 // TRUNCATE operation for the given (db, schema, table).
-func (m *Metrics) ProcessedRowsTruncateDuration(value float64, db, schema, table string) {
-	m.processedRowsDuration.WithLabelValues("truncate", db, schema, table).Observe(value)
+func (m *Metrics) ProcessedRowsTruncateDuration(value float64, db domain.DbName, schema domain.TableSchema, table domain.TableName) {
+	m.processedRowsDuration.WithLabelValues("truncate", string(db), string(schema), string(table)).Observe(value)
 }
 
 // SinkMessagesSuccess increments the count of messages delivered

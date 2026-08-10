@@ -89,7 +89,7 @@ func handler(opts options.Options, cfg config.Configuration) func(ctx context.Co
 		resp.Body.RawConfig = opts.Config
 		resp.Body.Database.Host = endpoint.Host
 		resp.Body.Database.Port = endpoint.Port
-		resp.Body.Database.Name = endpoint.Database
+		resp.Body.Database.Name = string(endpoint.Database)
 		resp.Body.Database.PublicationName = opts.PublicationName
 		resp.Body.Database.ReplicationSlotName = opts.ReplicationSlotName
 		resp.Body.Database.MaxReplicationSlots = dbConfig.MaxReplicationSlots

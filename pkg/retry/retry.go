@@ -10,31 +10,31 @@ import (
 	"sync"
 	"time"
 
-	asynclimiter "hump/internal/processor/async_limiter"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/stream"
+	"hump/pkg/limit"
 	"hump/pkg/telemetry/log"
 )
 
 // retry executes sink handlers with retry, backoff, and concurrency control,
 // recording metrics and accumulating fatal errors for crash-on-failure sinks.
 type retry struct {
-	wg           *sync.WaitGroup
-	asyncLimiter *asynclimiter.AsyncLimiter
-	logger       *log.Log
-	metrics      *metrics.Metrics
-	errors       *Errors
+	wg      *sync.WaitGroup
+	limiter *limit.Limit
+	logger  *log.Log
+	metrics *metrics.Metrics
+	errors  *Errors
 }
 
-func New(wg *sync.WaitGroup, traceparent string, asyncLimiter *asynclimiter.AsyncLimiter, metrics *metrics.Metrics) *retry {
+func New(wg *sync.WaitGroup, traceparent string, limiter *limit.Limit, metrics *metrics.Metrics) *retry {
 	return &retry{
-		wg:           wg,
-		asyncLimiter: asyncLimiter,
-		logger:       log.Scope("retry").WithTraceparent(traceparent),
-		metrics:      metrics,
-		errors:       &Errors{},
+		wg:      wg,
+		limiter: limiter,
+		logger:  log.Scope("retry").WithTraceparent(traceparent),
+		metrics: metrics,
+		errors:  &Errors{},
 	}
 }
 
@@ -61,10 +61,10 @@ func (r *retry) Process(
 		r.wg.Done()
 
 		// limit concurrency for async sinks
-		if err := r.asyncLimiter.Acquire(ctx, concurrencyKey, int64(sink.Delivery.MaxConcurrent)); err != nil {
+		if err := r.limiter.Acquire(ctx, concurrencyKey, int64(sink.Delivery.MaxConcurrent)); err != nil {
 			return
 		}
-		defer r.asyncLimiter.Release(concurrencyKey)
+		defer r.limiter.Release(concurrencyKey)
 	} else {
 		// reliable: wait for the processing to complete before releasing the processor
 		defer r.wg.Done()

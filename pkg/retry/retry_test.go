@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	asynclimiter "hump/internal/processor/async_limiter"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/stream"
+	"hump/pkg/limit"
 )
 
 type fakePublisher struct {
@@ -36,7 +36,7 @@ func (f *fakePublisher) snapshot() []stream.Message {
 func newRetry() *retry {
 	m, _ := metrics.New("test")
 	var wg sync.WaitGroup
-	return New(&wg, "", asynclimiter.New(m), m)
+	return New(&wg, "", limit.New(m), m)
 }
 
 func linearRetry(maxAttempts int, timeout time.Duration) *config.Retry {

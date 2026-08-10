@@ -4,6 +4,7 @@ import (
 	"fmt"
 	nethttp "net/http"
 
+	"hump/internal/domain"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
 	"hump/pkg/version"
@@ -42,12 +43,12 @@ func buildMessage(config config.HTTPSink, operationContext *sink.SinkContext) (*
 
 // requestHeaders flattens the request headers into a plain string map (first
 // value per key) for the operations stream. It returns nil when there are none.
-func requestHeaders(header nethttp.Header) map[string]string {
+func requestHeaders(header nethttp.Header) domain.Headers {
 	if len(header) == 0 {
 		return nil
 	}
 
-	out := make(map[string]string, len(header))
+	out := make(domain.Headers, len(header))
 	for name := range header {
 		out[name] = header.Get(name)
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"hump/internal/log"
 	"hump/internal/processor"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
@@ -14,6 +13,7 @@ import (
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/stream"
+	"hump/pkg/telemetry/log"
 )
 
 var logger = log.Scope("pipeline")

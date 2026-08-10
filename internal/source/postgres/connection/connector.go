@@ -3,7 +3,7 @@ package connection
 import (
 	"context"
 	"fmt"
-	"hump/internal/log"
+	"hump/pkg/telemetry/log"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgconn"

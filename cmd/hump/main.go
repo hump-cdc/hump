@@ -10,7 +10,6 @@ import (
 	"hump/internal/app"
 	"hump/internal/app/options"
 	cfg "hump/internal/config"
-	"hump/internal/log"
 	"hump/internal/pipeline"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
@@ -19,8 +18,10 @@ import (
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
+	"hump/internal/types/stream"
 	"hump/internal/web"
 	"hump/internal/web/streamer"
+	"hump/pkg/telemetry/log"
 
 	"github.com/goccy/go-yaml"
 )
@@ -65,7 +66,26 @@ func main() {
 		metrics, metricsHandler := metrics.New("hump")
 
 		// Shared operations stream fanned out to web SSE clients.
-		operations := streamer.New()
+		operations := streamer.New[stream.Message]()
+
+		// TODO: remove
+		// r.Run(func(ctx context.Context) error {
+		// 	ticker := time.NewTicker(5 * time.Second)
+		// 	defer ticker.Stop()
+
+		// 	reporter := newMetricsReporter(metrics)
+
+		// 	for {
+		// 		select {
+		// 		case <-ctx.Done():
+		// 			return nil
+		// 		case <-ticker.C:
+		// 			if err := reporter.report(); err != nil {
+		// 				logger.Warn(err.Error(), "error", err)
+		// 			}
+		// 		}
+		// 	}
+		// })
 
 		// Run
 		if opts.TelemetryPort != nil {

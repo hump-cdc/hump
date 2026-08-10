@@ -8,7 +8,7 @@ import (
 	"hump/internal/types/wal"
 )
 
-func recv(t *testing.T, ch <-chan stream.Message) (stream.Message, bool) {
+func recv(t *testing.T, ch <-chan interface{}) (interface{}, bool) {
 	t.Helper()
 	select {
 	case ev, ok := <-ch:
@@ -20,7 +20,7 @@ func recv(t *testing.T, ch <-chan stream.Message) (stream.Message, bool) {
 }
 
 func TestHasSubscribers(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	if s.HasSubscribers() {
 		t.Fatal("expected no subscribers on a fresh streamer")
@@ -38,7 +38,7 @@ func TestHasSubscribers(t *testing.T) {
 }
 
 func TestFanOut(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	_, a := s.Subscribe()
 	_, b := s.Subscribe()
@@ -55,7 +55,7 @@ func TestFanOut(t *testing.T) {
 }
 
 func TestSlowSubscriberDropsWithoutBlocking(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	id, ch := s.Subscribe()
 
@@ -94,7 +94,7 @@ func TestSlowSubscriberDropsWithoutBlocking(t *testing.T) {
 }
 
 func TestUnsubscribeClosesChannel(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	id, ch := s.Subscribe()
 	s.Unsubscribe(id)
@@ -105,7 +105,7 @@ func TestUnsubscribeClosesChannel(t *testing.T) {
 }
 
 func TestCloseClosesSubscriberChannels(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	_, a := s.Subscribe()
 	_, b := s.Subscribe()
@@ -121,7 +121,7 @@ func TestCloseClosesSubscriberChannels(t *testing.T) {
 }
 
 func TestPublishAfterCloseIsNoOp(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 	s.close()
 
 	// Must not panic on a send to the closed in channel, and must not block.
@@ -139,7 +139,7 @@ func TestPublishAfterCloseIsNoOp(t *testing.T) {
 }
 
 func TestSubscribeAfterCloseReturnsClosedChannel(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 	s.close()
 
 	_, ch := s.Subscribe()
@@ -149,7 +149,7 @@ func TestSubscribeAfterCloseReturnsClosedChannel(t *testing.T) {
 }
 
 func TestCloseIsIdempotent(t *testing.T) {
-	s := New()
+	s := New[stream.Message]()
 
 	s.close()
 	s.close() // must not panic

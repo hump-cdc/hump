@@ -10,10 +10,11 @@ import (
 
 	"hump/internal/app/options"
 	"hump/internal/app/shutdown"
-	"hump/internal/log"
 	"hump/internal/types/config"
+	"hump/internal/types/stream"
 	"hump/internal/web/middleware"
 	"hump/internal/web/streamer"
+	"hump/pkg/telemetry/log"
 	"hump/pkg/version"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -30,12 +31,12 @@ var assetsFS embed.FS
 type Web struct {
 	opts           options.Options
 	cfg            config.Configuration
-	streamer       *streamer.FanOutStreamer
+	streamer       *streamer.FanOutStreamer[stream.Message]
 	metricsHandler http.Handler
 }
 
 // New constructs a Web UI server.
-func New(opts options.Options, cfg config.Configuration, streamer *streamer.FanOutStreamer, metricsHandler http.Handler) *Web {
+func New(opts options.Options, cfg config.Configuration, streamer *streamer.FanOutStreamer[stream.Message], metricsHandler http.Handler) *Web {
 	return &Web{
 		opts:           opts,
 		cfg:            cfg,

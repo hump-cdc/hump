@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"hump/internal/log"
 	asynclimiter "hump/internal/processor/async_limiter"
 	"hump/internal/processor/retry"
 	"hump/internal/sinks/http"
@@ -23,6 +22,7 @@ import (
 	"hump/internal/types/sink"
 	"hump/internal/types/stream"
 	"hump/internal/types/wal"
+	"hump/pkg/telemetry/log"
 	"hump/pkg/version"
 )
 

@@ -1,4 +1,4 @@
-"use strict";(self.webpackChunkhump=self.webpackChunkhump||[]).push([["288"],{3291(e,t,s){s.d(t,{om:()=>O,e4:()=>T,fg:()=>q,Wu:()=>V,aR:()=>z,Zp:()=>K});var a=s(2361),r=s(5291),l=s(3422),n=s(4747),i=s(1431),c=s(4199),d=s(8413),o=s(620),x=s(6058);let m={light:"",dark:".dark"},u=(0,d.createContext)(null),h=e=>{let{id:t,config:s}=e,r=Object.entries(s).filter(e=>{let[,t]=e;return t.theme??t.color});return r.length?(0,a.jsx)("style",{dangerouslySetInnerHTML:{__html:Object.entries(m).map(e=>{let[s,a]=e;return`
+"use strict";(self.webpackChunkhump=self.webpackChunkhump||[]).push([["288"],{3291(e,t,s){s.d(t,{om:()=>O,e4:()=>T,fg:()=>q,Wu:()=>V,aR:()=>z,Zp:()=>K});var a=s(2361),r=s(5291),l=s(3422),n=s(4747),i=s(1431),c=s(4199),d=s(8413),o=s(620),x=s(3286);let m={light:"",dark:".dark"},u=(0,d.createContext)(null),h=e=>{let{id:t,config:s}=e,r=Object.entries(s).filter(e=>{let[,t]=e;return t.theme??t.color});return r.length?(0,a.jsx)("style",{dangerouslySetInnerHTML:{__html:Object.entries(m).map(e=>{let[s,a]=e;return`
 ${a} [data-chart=${t}] {
 ${r.map(e=>{var t;let[a,r]=e,l=(null==(t=r.theme)?void 0:t[s])??r.color;return l?`  --color-${a}: ${l};`:null}).join("\n")}
 }

@@ -9,30 +9,30 @@ import (
 	"sync"
 
 	"hump/internal/app/shutdown"
-	"hump/internal/types/stream"
 )
 
 // subscriberBuffer is the per-subscriber channel capacity. Events are dropped
 // for a subscriber whose buffer is full.
 const subscriberBuffer = 64
 
-// FanOutStreamer implements stream.Publisher by fanning events out to every
-// active subscriber. Each event is an stream.Event or stream.RetryEvent.
-type FanOutStreamer struct {
-	in chan stream.Message
+// FanOutStreamer fans events of type T out to every active subscriber. With
+// T = stream.Message it implements stream.Publisher, and each event is an
+// stream.Event or stream.RetryEvent.
+type FanOutStreamer[T any] struct {
+	in chan T
 
 	mu     sync.RWMutex
-	out    map[uint64]chan stream.Message
+	out    map[uint64]chan any
 	nextID uint64
 	closed bool
 }
 
 // New creates a FanOutStreamer, starts its fan-out goroutine, and registers a
 // shutdown hook that tears it down when the application stops.
-func New() *FanOutStreamer {
-	s := &FanOutStreamer{
-		in:  make(chan stream.Message),
-		out: make(map[uint64]chan stream.Message),
+func New[T any]() *FanOutStreamer[T] {
+	s := &FanOutStreamer[T]{
+		in:  make(chan T),
+		out: make(map[uint64]chan any),
 	}
 	go s.run()
 
@@ -46,7 +46,7 @@ func New() *FanOutStreamer {
 
 // run delivers each incoming event to every subscriber, skipping any whose
 // buffer is full. It returns once the in channel is closed.
-func (s *FanOutStreamer) run() {
+func (s *FanOutStreamer[T]) run() {
 	for event := range s.in {
 		s.mu.RLock()
 		for id, ch := range s.out {
@@ -62,11 +62,10 @@ func (s *FanOutStreamer) run() {
 	}
 }
 
-// Publish hands an event (an stream.Event or stream.RetryEvent) to the fan-out
-// goroutine. It blocks only until that goroutine receives, which is fast since
+// Publish hands an event to the fan-out goroutine. It blocks only until that goroutine receives, which is fast since
 // fan-out itself never blocks. After the streamer is closed the event is
 // dropped, so producers that outlive shutdown never send on a closed channel.
-func (s *FanOutStreamer) Publish(event stream.Message) {
+func (s *FanOutStreamer[T]) Publish(event T) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -78,22 +77,23 @@ func (s *FanOutStreamer) Publish(event stream.Message) {
 }
 
 // HasSubscribers reports whether at least one client is currently subscribed.
-func (s *FanOutStreamer) HasSubscribers() bool {
+func (s *FanOutStreamer[T]) HasSubscribers() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.out) > 0
 }
 
 // Subscribe registers a new subscriber and returns its id together with the
-// channel that receives fanned-out events. Call Unsubscribe with the id when the
-// client disconnects. If the streamer is already closed it returns a closed
-// channel so the caller exits immediately.
-func (s *FanOutStreamer) Subscribe() (uint64, <-chan stream.Message) {
+// channel that receives fanned-out events. Values on the channel are always a T,
+// since Publish only accepts those. Call Unsubscribe with the id when the client
+// disconnects. If the streamer is already closed it returns a closed channel so
+// the caller exits immediately.
+func (s *FanOutStreamer[T]) Subscribe() (uint64, <-chan any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed {
-		ch := make(chan stream.Message)
+		ch := make(chan any)
 		close(ch)
 		return 0, ch
 	}
@@ -101,7 +101,7 @@ func (s *FanOutStreamer) Subscribe() (uint64, <-chan stream.Message) {
 	id := s.nextID
 	s.nextID++
 
-	ch := make(chan stream.Message, subscriberBuffer)
+	ch := make(chan any, subscriberBuffer)
 	s.out[id] = ch
 
 	return id, ch
@@ -109,7 +109,7 @@ func (s *FanOutStreamer) Subscribe() (uint64, <-chan stream.Message) {
 
 // Unsubscribe removes the subscriber with the given id and closes its channel.
 // It is safe to call more than once.
-func (s *FanOutStreamer) Unsubscribe(id uint64) {
+func (s *FanOutStreamer[T]) Unsubscribe(id uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -123,7 +123,7 @@ func (s *FanOutStreamer) Unsubscribe(id uint64) {
 // in ends run's range loop, so the goroutine returns on its own; closing each
 // subscriber channel makes its SSE handler observe !ok and return. It is
 // idempotent.
-func (s *FanOutStreamer) close() {
+func (s *FanOutStreamer[T]) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

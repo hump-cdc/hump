@@ -17,12 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"hump/internal/log"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/errs"
 	"hump/internal/types/wal"
+	"hump/pkg/telemetry/log"
 )
 
 // Wal owns a single logical replication session: the dedicated pgconn used to

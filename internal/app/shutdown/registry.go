@@ -3,8 +3,8 @@ package shutdown
 import (
 	"context"
 	"errors"
-	"hump/internal/log"
 	"hump/internal/types/errs"
+	"hump/pkg/telemetry/log"
 	"slices"
 	"sync"
 	"time"

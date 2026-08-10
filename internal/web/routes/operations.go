@@ -14,7 +14,7 @@ import (
 // RegisterOperations registers the SSE endpoint that streams change-data-capture
 // operations to connected clients. Each connection gets its own subscription on
 // the streamer, which is removed when the client disconnects.
-func RegisterOperations(api huma.API, s *streamer.FanOutStreamer) {
+func RegisterOperations(api huma.API, s *streamer.FanOutStreamer[stream.Message]) {
 	sse.Register(api, huma.Operation{
 		OperationID: "operations.stream",
 		Method:      http.MethodGet,

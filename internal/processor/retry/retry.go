@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"hump/internal/log"
 	asynclimiter "hump/internal/processor/async_limiter"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/stream"
+	"hump/pkg/telemetry/log"
 )
 
 // retry executes sink handlers with retry, backoff, and concurrency control,

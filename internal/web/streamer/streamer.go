@@ -8,7 +8,7 @@ import (
 	"context"
 	"sync"
 
-	"hump/internal/app/shutdown"
+	"hump/pkg/app/shutdown"
 )
 
 // subscriberBuffer is the per-subscriber channel capacity. Events are dropped

@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"errors"
-	"hump/internal/app/shutdown"
 	"hump/internal/types/errs"
+	"hump/pkg/app/shutdown"
 	"syscall"
 	"time"
 )

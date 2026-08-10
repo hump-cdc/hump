@@ -9,9 +9,9 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"hump/internal/app/shutdown"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/pkg/app/shutdown"
 	"hump/pkg/version"
 )
 

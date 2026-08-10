@@ -8,12 +8,12 @@ import (
 	"net"
 	"net/http"
 
-	"hump/internal/app/options"
-	"hump/internal/app/shutdown"
 	"hump/internal/types/config"
 	"hump/internal/types/stream"
 	"hump/internal/web/middleware"
 	"hump/internal/web/streamer"
+	"hump/pkg/app/options"
+	"hump/pkg/app/shutdown"
 	"hump/pkg/telemetry/log"
 	"hump/pkg/version"
 

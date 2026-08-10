@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"hump/internal/app/options"
 	"hump/internal/types/config"
 	"hump/internal/web"
+	"hump/pkg/app/options"
 
 	"github.com/go-chi/chi/v5"
 )

@@ -9,9 +9,9 @@ import (
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
-	"hump/internal/app/shutdown"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/pkg/app/shutdown"
 )
 
 const (

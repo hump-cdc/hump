@@ -11,10 +11,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 
-	"hump/internal/app/shutdown"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/sink"
+	"hump/pkg/app/shutdown"
 )
 
 // clientKey identifies a NATS client by the rendered connection parameters

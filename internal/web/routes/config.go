@@ -2,11 +2,11 @@ package routes
 
 import (
 	"context"
-	"hump/internal/app/options"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/pkg/app/options"
 	"hump/pkg/version"
 	"net/http"
 

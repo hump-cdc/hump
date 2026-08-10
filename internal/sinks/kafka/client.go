@@ -12,9 +12,9 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 
-	"hump/internal/app/shutdown"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/pkg/app/shutdown"
 )
 
 // clientKey identifies a Kafka client by the rendered url parameters

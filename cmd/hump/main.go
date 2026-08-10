@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	cfg "hump/config"
-	"hump/internal/app"
-	"hump/internal/app/options"
 	"hump/internal/pipeline"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
@@ -21,6 +19,8 @@ import (
 	"hump/internal/types/stream"
 	"hump/internal/web"
 	"hump/internal/web/streamer"
+	"hump/pkg/app"
+	"hump/pkg/app/options"
 	"hump/pkg/telemetry/log"
 
 	"github.com/goccy/go-yaml"

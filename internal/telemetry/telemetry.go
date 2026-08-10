@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hump/internal/app/shutdown"
+	"hump/pkg/app/shutdown"
 	"hump/pkg/telemetry/log"
 	"net/http"
 )

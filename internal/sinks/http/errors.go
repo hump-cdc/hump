@@ -6,8 +6,8 @@ import (
 	"net"
 	nethttp "net/http"
 
-	"hump/internal/template"
 	"hump/internal/types/errs"
+	"hump/pkg/template"
 )
 
 // errBuildRequest marks a failure to build the outgoing request from the

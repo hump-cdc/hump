@@ -6,9 +6,9 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"hump/internal/template"
 	"hump/internal/types/config"
 	"hump/internal/types/sink"
+	"hump/pkg/template"
 )
 
 // tableHeaders flattens an AMQP header table into a plain string map for the

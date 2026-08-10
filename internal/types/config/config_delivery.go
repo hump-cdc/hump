@@ -2,7 +2,7 @@ package config
 
 import (
 	_ "embed"
-	"hump/internal/template"
+	"hump/pkg/template"
 
 	"github.com/goccy/go-yaml/ast"
 )

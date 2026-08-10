@@ -1,7 +1,7 @@
 package template
 
 import (
-	"hump/internal/template/funcs"
+	"hump/pkg/template/funcs"
 	"regexp"
 	"strings"
 	"testing"

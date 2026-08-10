@@ -2,7 +2,7 @@ package template
 
 import (
 	"fmt"
-	"hump/internal/template/funcs"
+	"hump/pkg/template/funcs"
 	"strings"
 	"text/template"
 

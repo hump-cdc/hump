@@ -7,8 +7,8 @@ import (
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
-	"hump/internal/template"
 	"hump/internal/types/errs"
+	"hump/pkg/template"
 )
 
 // Sentinel errors classified by [wrapError].

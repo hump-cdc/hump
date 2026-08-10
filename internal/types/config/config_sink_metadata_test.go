@@ -3,8 +3,8 @@ package config
 import (
 	"testing"
 
-	"hump/internal/template"
 	"hump/internal/types/sink"
+	"hump/pkg/template"
 )
 
 func TestParseHost(t *testing.T) {

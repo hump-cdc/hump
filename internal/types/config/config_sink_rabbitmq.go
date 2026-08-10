@@ -3,7 +3,7 @@ package config
 import (
 	_ "embed"
 
-	"hump/internal/template"
+	"hump/pkg/template"
 )
 
 var (

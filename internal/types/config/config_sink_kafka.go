@@ -4,8 +4,8 @@ import (
 	_ "embed"
 	"fmt"
 
-	"hump/internal/template"
 	"hump/internal/types/sink"
+	"hump/pkg/template"
 
 	"github.com/goccy/go-yaml/ast"
 )

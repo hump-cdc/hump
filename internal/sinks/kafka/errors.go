@@ -6,8 +6,8 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kerr"
 
-	"hump/internal/template"
 	"hump/internal/types/errs"
+	"hump/pkg/template"
 )
 
 // wrapError returns a "kafka" wrapped error, joining [errs.ErrSinkPermanent]

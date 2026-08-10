@@ -8,8 +8,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"hump/internal/template"
 	"hump/internal/types/errs"
+	"hump/pkg/template"
 )
 
 // errCodeExpectedStreamMismatch is the JetStream API error code returned when

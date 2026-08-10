@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"hump/internal/template"
 	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/sink"
+	"hump/pkg/template"
 
 	"github.com/goccy/go-yaml"
 )

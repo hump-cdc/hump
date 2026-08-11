@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"hump/config"
+	"hump/internal/adapter/sink"
 	"hump/internal/pipeline"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
@@ -82,7 +83,7 @@ func setup(t *testing.T, opts ...setupOption) (context.Context, *pgx.Conn, conte
 	g.Go(func() error {
 		t.Log("Starting pipeline...")
 		m, _ := metrics.New("hump")
-		p := pipeline.New(h, nil, m)
+		p := pipeline.New(h, nil, m, sink.New())
 		return p.Start(ctx, o.databaseURL, cfg, o.pubName, o.slotName)
 	})
 

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/stream"
 	"hump/pkg/limit"
@@ -45,7 +44,11 @@ func New(wg *sync.WaitGroup, traceparent string, limiter *limit.Limit, metrics *
 // reliable sinks are recorded and surfaced by Error.
 func (r *retry) Process(
 	ctx context.Context,
-	sink config.SinkConfig,
+	failure *Failure,
+	policy *Retry,
+	delivery *Delivery,
+	sinkType string,
+	sinkName string,
 	concurrencyKey string,
 	host string,
 	target string,
@@ -53,15 +56,12 @@ func (r *retry) Process(
 	publisher stream.Publisher,
 	handler func(ctx context.Context, evt *stream.Event) error,
 ) {
-	sinkType := string(sink.Sink.Type())
-	sinkName := sink.Sink.DisplayName()
-
-	if sink.Delivery.Mode == config.DeliveryModeAsync {
+	if delivery.Mode == DeliveryModeAsync {
 		// async: release the processor immediately; work continues in this goroutine
 		r.wg.Done()
 
 		// limit concurrency for async sinks
-		if err := r.limiter.Acquire(ctx, concurrencyKey, int64(sink.Delivery.MaxConcurrent)); err != nil {
+		if err := r.limiter.Acquire(ctx, concurrencyKey, int64(delivery.MaxConcurrent)); err != nil {
 			return
 		}
 		defer r.limiter.Release(concurrencyKey)
@@ -70,7 +70,7 @@ func (r *retry) Process(
 		defer r.wg.Done()
 	}
 
-	err := r.runWithRetry(ctx, sinkType, sinkName, host, target, sink.Retry, streamEvent, publisher, handler)
+	err := r.runWithRetry(ctx, sinkType, sinkName, host, target, policy, streamEvent, publisher, handler)
 	if err == nil {
 		r.metrics.SinkMessagesSuccess(1, sinkType, host, target)
 	} else {
@@ -79,12 +79,12 @@ func (r *retry) Process(
 
 			r.logger.Error("Processing failed after retries",
 				"sink", sinkName,
-				"attempts", sink.Retry.MaxAttempts,
+				"attempts", policy.MaxAttempts,
 				"error", err,
 			)
 
-			if sink.Failure.Mode == config.FailureModeCrash && sink.Delivery.Mode != config.DeliveryModeAsync {
-				r.errors.Append(fmt.Errorf("%s(%s) processing failed after %d attempts: %w", sinkType, sinkName, sink.Retry.MaxAttempts, err))
+			if failure.Mode == FailureModeCrash && delivery.Mode != DeliveryModeAsync {
+				r.errors.Append(fmt.Errorf("%s(%s) processing failed after %d attempts: %w", sinkType, sinkName, policy.MaxAttempts, err))
 			}
 		}
 	}
@@ -102,7 +102,7 @@ func (r *retry) runWithRetry(
 	sinkName string,
 	host string,
 	target string,
-	cfg *config.Retry,
+	cfg *Retry,
 	baseEvent stream.Event,
 	publisher stream.Publisher,
 	handler func(ctx context.Context, evt *stream.Event) error,
@@ -252,13 +252,13 @@ func errString(err error) string {
 	return err.Error()
 }
 
-func (r *retry) backoffDelay(b config.Backoff, attempt int) time.Duration {
+func (r *retry) backoffDelay(b Backoff, attempt int) time.Duration {
 	var delay time.Duration
 
 	switch b.Type {
-	case config.BackoffTypeLinear:
+	case BackoffTypeLinear:
 		delay = b.Initial + b.Increment*time.Duration(attempt-1)
-	case config.BackoffTypeExponential:
+	case BackoffTypeExponential:
 		mult := b.Multiplier
 		if mult <= 0 {
 			mult = 2
@@ -278,7 +278,7 @@ func (r *retry) backoffDelay(b config.Backoff, attempt int) time.Duration {
 		delay = b.Max
 	}
 
-	if b.Jitter == config.JitterModeFull && delay > 0 {
+	if b.Jitter == JitterModeFull && delay > 0 {
 		delay = time.Duration(rand.Int64N(int64(delay)))
 	}
 

@@ -1,6 +1,10 @@
 package config
 
-import "github.com/goccy/go-yaml/ast"
+import (
+	"hump/internal/port/sink"
+
+	"github.com/goccy/go-yaml/ast"
+)
 
 type Configuration struct {
 	Tables []Tables `yaml:"tables" validate:"min=1"`
@@ -10,7 +14,7 @@ type Tables struct {
 	Schema  string          `yaml:"schema"            validate:"omitempty"`
 	Name    string          `yaml:"table"             validate:"required"`
 	Replica ReplicaIdentity `yaml:"replica,omitempty" validate:"omitempty,oneof=full unmanaged"`
-	Sinks   []SinkConfig    `yaml:"sinks"             validate:"min=1"`
+	Sinks   []sink.Config   `yaml:"sinks"             validate:"min=1"`
 }
 
 func (t *Tables) UnmarshalYAML(node ast.Node) error {

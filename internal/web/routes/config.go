@@ -5,12 +5,12 @@ import (
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/types/config"
-	"hump/internal/types/sink"
 	"hump/pkg/app/options"
 	"hump/pkg/version"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"hump/internal/port/sink"
 )
 
 // ConfigSink identifies one sink endpoint: its type together with the connection

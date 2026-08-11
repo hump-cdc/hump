@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
 	"hump/internal/types/stream"
 	"hump/pkg/limit"
 )
@@ -39,11 +38,11 @@ func newRetry() *retry {
 	return New(&wg, "", limit.New(m), m)
 }
 
-func linearRetry(maxAttempts int, timeout time.Duration) *config.Retry {
-	return &config.Retry{
+func linearRetry(maxAttempts int, timeout time.Duration) *Retry {
+	return &Retry{
 		MaxAttempts:    maxAttempts,
 		AttemptTimeout: timeout,
-		Backoff:        config.Backoff{Type: config.BackoffTypeLinear},
+		Backoff:        Backoff{Type: BackoffTypeLinear},
 	}
 }
 

@@ -9,16 +9,9 @@ import (
 	"time"
 
 	"hump/internal/domain"
-	"hump/internal/sinks/http"
-	"hump/internal/sinks/kafka"
-	"hump/internal/sinks/nats"
-	"hump/internal/sinks/rabbitmq"
-	"hump/internal/sinks/rabbitmq_stream"
+	"hump/internal/port/sink"
 	"hump/internal/source/postgres/introspection"
 	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
-	"hump/internal/types/errs"
-	"hump/internal/types/sink"
 	"hump/internal/types/stream"
 	"hump/pkg/limit"
 	"hump/pkg/retry"
@@ -30,15 +23,17 @@ import (
 // originating table, applying per-target retry and concurrency control.
 type UseCase struct {
 	introspector *introspection.Introspector
+	sinks        sink.Sink
 	publisher    stream.Publisher
 	metrics      *metrics.Metrics
 	limiter      *limit.Limit
 	seq          atomic.Uint64
 }
 
-func NewUseCase(introspector *introspection.Introspector, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
+func NewUseCase(introspector *introspection.Introspector, sinks sink.Sink, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
 	return &UseCase{
 		introspector: introspector,
+		sinks:        sinks,
 		publisher:    publisher,
 		metrics:      metrics,
 		limiter:      limit.New(metrics),
@@ -134,28 +129,12 @@ func (p *UseCase) Process(
 
 		wg.Add(1)
 		go r.Process(
-			ctx, target, concurrencyKey, metaHost, metaTarget, streamEvent, pub,
+			ctx,
+			target.Failure, target.Retry, target.Delivery,
+			operationContext.SinkType, operationContext.SinkName,
+			concurrencyKey, metaHost, metaTarget, streamEvent, pub,
 			func(ctx context.Context, streamEvent *stream.Event) error {
-				var err error
-
-				switch sink := target.Sink.(type) {
-				case *config.KafkaSink:
-					err = kafka.Process(ctx, *sink, &operationContext, streamEvent)
-				case *config.NatsCoreSink:
-					err = nats.ProcessCore(ctx, *sink, &operationContext, streamEvent)
-				case *config.NatsJetStreamSink:
-					err = nats.ProcessJetStream(ctx, *sink, &operationContext, streamEvent)
-				case *config.HTTPSink:
-					err = http.Process(ctx, *sink, &operationContext, streamEvent)
-				case *config.RabbitMQSink:
-					err = rabbitmq.Process(ctx, *sink, &operationContext, streamEvent)
-				case *config.RabbitMQStreamSink:
-					err = rabbitmq_stream.Process(ctx, *sink, &operationContext, streamEvent)
-				default:
-					return errs.ErrUnknownSinkType
-				}
-
-				return err
+				return p.sinks.Process(ctx, target.Sink, &operationContext, streamEvent)
 			})
 	}
 	wg.Wait()

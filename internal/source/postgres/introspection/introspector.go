@@ -9,9 +9,9 @@ import (
 	"sync"
 
 	"hump/internal/domain"
+	"hump/internal/port/sink"
 	"hump/internal/source/postgres/catalog"
 	"hump/internal/source/postgres/connection"
-	"hump/internal/types/config"
 	"hump/internal/types/introspector"
 )
 
@@ -102,7 +102,7 @@ func (i *Introspector) invalidateLocked(ctx context.Context, conn *connection.Co
 // a full introspection. If no configuration is found it re-introspects once
 // (to pick up partitions created after startup), and ignores future lookups
 // for the same key if still not found.
-func (i *Introspector) ResolveTableConfiguration(ctx context.Context, schemaName domain.TableSchema, name domain.TableName) (introspector.TableRef, []config.SinkConfig, error) {
+func (i *Introspector) ResolveTableConfiguration(ctx context.Context, schemaName domain.TableSchema, name domain.TableName) (introspector.TableRef, []sink.Config, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 

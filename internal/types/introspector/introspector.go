@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"hump/internal/domain"
-	"hump/internal/types/config"
+	"hump/internal/port/sink"
 )
 
 type TableRef struct {
@@ -14,5 +14,5 @@ type TableRef struct {
 
 type Introspector interface {
 	Invalidate(ctx context.Context, table *TableRef) error
-	ResolveTableConfiguration(ctx context.Context, schemaName domain.TableSchema, name domain.TableName) (TableRef, []config.SinkConfig, error)
+	ResolveTableConfiguration(ctx context.Context, schemaName domain.TableSchema, name domain.TableName) (TableRef, []sink.Config, error)
 }

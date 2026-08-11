@@ -8,13 +8,14 @@ import (
 	"strings"
 
 	cfg "hump/config"
+	sinkadapter "hump/internal/adapter/sink"
 	"hump/internal/pipeline"
+	"hump/internal/port/sink"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/telemetry"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/internal/types/stream"
 	"hump/internal/web"
@@ -109,7 +110,7 @@ func main() {
 		r.Run(
 			// WAL
 			func(ctx context.Context) error {
-				p := pipeline.New(health, operations, metrics)
+				p := pipeline.New(health, operations, metrics, sinkadapter.New())
 				return p.Start(ctx, opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
 			},
 		)
@@ -137,7 +138,7 @@ func main() {
 	}
 }
 
-func formatSinks(sinks []config.SinkConfig) string {
+func formatSinks(sinks []sink.Config) string {
 	parts := make([]string, 0, len(sinks))
 	for _, s := range sinks {
 		parts = append(parts, s.Sink.DisplayName())

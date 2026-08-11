@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"hump/internal/application/process_operation"
+	"hump/internal/port/sink"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
 	"hump/internal/source/postgres/wal"
@@ -31,13 +32,15 @@ type pipeline struct {
 	health    *health.Health
 	publisher stream.Publisher
 	metrics   *metrics.Metrics
+	sinks     sink.Sink
 }
 
-func New(health *health.Health, publisher stream.Publisher, metrics *metrics.Metrics) Pipeline {
+func New(health *health.Health, publisher stream.Publisher, metrics *metrics.Metrics, sinks sink.Sink) Pipeline {
 	return &pipeline{
 		health:    health,
 		publisher: publisher,
 		metrics:   metrics,
+		sinks:     sinks,
 	}
 }
 
@@ -64,7 +67,7 @@ func (p *pipeline) Start(ctx context.Context, databaseUrl string, cfg config.Con
 		return fmt.Errorf("failed to get database summary: %w", err)
 	}
 
-	proc := process_operation.NewUseCase(introspector, p.publisher, p.metrics)
+	proc := process_operation.NewUseCase(introspector, p.sinks, p.publisher, p.metrics)
 
 	w, err := wal.New(ctx, connector, publicationName, slotName, p.health, p.metrics, proc.Process)
 	if err != nil {

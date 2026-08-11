@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"hump/internal/types/config"
+	"hump/internal/port/sink"
 	"hump/internal/types/errs"
-	"hump/internal/types/sink"
 	"hump/pkg/template"
 
 	"github.com/goccy/go-yaml"
@@ -25,7 +24,7 @@ func mustTpl(t *testing.T, src string) *template.Template {
 }
 
 // parseSink parses a single-sink config and returns the resulting sink.Sink.
-func parseSink(t *testing.T, sinkYAML string) sink.Sink {
+func parseSink(t *testing.T, sinkYAML string) sink.Definition {
 	t.Helper()
 	src := "tables:\n  - schema: public\n    table: users\n    sinks:\n      - " +
 		strings.ReplaceAll(sinkYAML, "\n", "\n        ") + "\n"
@@ -53,43 +52,43 @@ func TestSink_TypeAndDisplayName(t *testing.T) {
 	}{
 		{
 			name:        "http",
-			populated:   &config.HTTPSink{URL: url()},
-			nilRecv:     (*config.HTTPSink)(nil),
+			populated:   &sink.HTTPSink{URL: url()},
+			nilRecv:     (*sink.HTTPSink)(nil),
 			wantType:    sink.SinkTypeHTTP,
 			wantDisplay: "http(endpoint)",
 		},
 		{
 			name:        "kafka",
-			populated:   &config.KafkaSink{URL: url()},
-			nilRecv:     (*config.KafkaSink)(nil),
+			populated:   &sink.KafkaSink{URL: url()},
+			nilRecv:     (*sink.KafkaSink)(nil),
 			wantType:    sink.SinkTypeKafka,
 			wantDisplay: "kafka(endpoint)",
 		},
 		{
 			name:        "nats-core",
-			populated:   &config.NatsCoreSink{NatsCommon: config.NatsCommon{URL: url()}},
-			nilRecv:     (*config.NatsCoreSink)(nil),
+			populated:   &sink.NatsCoreSink{NatsCommon: sink.NatsCommon{URL: url()}},
+			nilRecv:     (*sink.NatsCoreSink)(nil),
 			wantType:    sink.SinkTypeNatsCore,
 			wantDisplay: "nats-core(endpoint)",
 		},
 		{
 			name:        "nats-jetstream",
-			populated:   &config.NatsJetStreamSink{NatsCommon: config.NatsCommon{URL: url()}},
-			nilRecv:     (*config.NatsJetStreamSink)(nil),
+			populated:   &sink.NatsJetStreamSink{NatsCommon: sink.NatsCommon{URL: url()}},
+			nilRecv:     (*sink.NatsJetStreamSink)(nil),
 			wantType:    sink.SinkTypeNatsJetStream,
 			wantDisplay: "nats-jetstream(endpoint)",
 		},
 		{
 			name:        "rabbitmq",
-			populated:   &config.RabbitMQSink{RabbitMQCommon: config.RabbitMQCommon{URL: url()}},
-			nilRecv:     (*config.RabbitMQSink)(nil),
+			populated:   &sink.RabbitMQSink{RabbitMQCommon: sink.RabbitMQCommon{URL: url()}},
+			nilRecv:     (*sink.RabbitMQSink)(nil),
 			wantType:    sink.SinkTypeRabbitMQ,
 			wantDisplay: "rabbitmq(endpoint)",
 		},
 		{
 			name:        "rabbitmq-stream",
-			populated:   &config.RabbitMQStreamSink{RabbitMQCommon: config.RabbitMQCommon{URL: url()}},
-			nilRecv:     (*config.RabbitMQStreamSink)(nil),
+			populated:   &sink.RabbitMQStreamSink{RabbitMQCommon: sink.RabbitMQCommon{URL: url()}},
+			nilRecv:     (*sink.RabbitMQStreamSink)(nil),
 			wantType:    sink.SinkTypeRabbitMQStream,
 			wantDisplay: "rabbitmq-stream(endpoint)",
 		},
@@ -97,7 +96,7 @@ func TestSink_TypeAndDisplayName(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := tc.populated.(sink.Sink)
+			s := tc.populated.(sink.Definition)
 			if s.Type() != tc.wantType {
 				t.Fatalf("Type: want %q, got %q", tc.wantType, s.Type())
 			}
@@ -148,7 +147,7 @@ func TestSinkConfig_MarshalYAML_RoundTrip(t *testing.T) {
 func TestSinkConfig_MarshalYAML_EmptyOmitsAll(t *testing.T) {
 	// A zero SinkConfig has no sink/failure/retry/delivery; MarshalYAML must
 	// return an empty mapping without panicking.
-	out, err := yaml.Marshal(config.SinkConfig{})
+	out, err := yaml.Marshal(sink.Config{})
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -343,7 +342,7 @@ func TestParse_SinkInnerDecodeErrors(t *testing.T) {
 func TestParse_Kafka_TopicDefaultApplied(t *testing.T) {
 	// Omitting topic exercises the KafkaSink.setDefaults topic-default branch.
 	s := parseSink(t, "kafka:\n  url: localhost:9092")
-	k, ok := s.(*config.KafkaSink)
+	k, ok := s.(*sink.KafkaSink)
 	if !ok {
 		t.Fatalf("want *KafkaSink, got %T", s)
 	}
@@ -356,7 +355,7 @@ func TestParse_Kafka_TopicDefaultApplied(t *testing.T) {
 
 func TestParse_RabbitMQ_Defaults(t *testing.T) {
 	s := parseSink(t, "rabbitmq:\n  url: amqp://localhost")
-	r, ok := s.(*config.RabbitMQSink)
+	r, ok := s.(*sink.RabbitMQSink)
 	if !ok {
 		t.Fatalf("want *RabbitMQSink, got %T", s)
 	}
@@ -372,7 +371,7 @@ func TestParse_RabbitMQ_Defaults(t *testing.T) {
 	if r.Exchange.Durable == nil || !*r.Exchange.Durable {
 		t.Fatalf("want exchange durable=true default")
 	}
-	if r.Exchange.Mode != config.RabbitMQExchangeModeCreateWhenMissing {
+	if r.Exchange.Mode != sink.RabbitMQExchangeModeCreateWhenMissing {
 		t.Fatalf("want exchange mode=create-when-missing, got %q", r.Exchange.Mode)
 	}
 	if r.RoutingKey == nil || r.RoutingKey.Source() == "" {
@@ -381,7 +380,7 @@ func TestParse_RabbitMQ_Defaults(t *testing.T) {
 	if r.Mandatory == nil || !*r.Mandatory {
 		t.Fatalf("want mandatory=true default")
 	}
-	if r.DeliveryMode != config.RabbitMQDeliveryPersistent {
+	if r.DeliveryMode != sink.RabbitMQDeliveryPersistent {
 		t.Fatalf("want deliveryMode=persistent, got %q", r.DeliveryMode)
 	}
 	if r.Properties.MessageID == nil || r.Properties.AppID == nil || r.Properties.ContentType == nil {
@@ -418,7 +417,7 @@ func TestParse_RabbitMQ_ExplicitOverrides(t *testing.T) {
   deliveryMode: transient
   properties:
     appId: custom`)
-	r := s.(*config.RabbitMQSink)
+	r := s.(*sink.RabbitMQSink)
 	if r.Exchange.Type != "direct" {
 		t.Fatalf("want type=direct, got %q", r.Exchange.Type)
 	}
@@ -428,10 +427,10 @@ func TestParse_RabbitMQ_ExplicitOverrides(t *testing.T) {
 	if !r.Exchange.AutoDelete {
 		t.Fatalf("want autoDelete=true")
 	}
-	if r.Exchange.Mode != config.RabbitMQExchangeModePassive {
+	if r.Exchange.Mode != sink.RabbitMQExchangeModePassive {
 		t.Fatalf("want mode=passive, got %q", r.Exchange.Mode)
 	}
-	if r.DeliveryMode != config.RabbitMQDeliveryTransient {
+	if r.DeliveryMode != sink.RabbitMQDeliveryTransient {
 		t.Fatalf("want deliveryMode=transient, got %q", r.DeliveryMode)
 	}
 	if r.Mandatory == nil || *r.Mandatory {
@@ -461,7 +460,7 @@ func TestParse_RabbitMQ_InvalidExchangeType(t *testing.T) {
 
 func TestParse_RabbitMQStream_Defaults(t *testing.T) {
 	s := parseSink(t, "rabbitmq-stream:\n  url: rabbitmq-stream://localhost")
-	r, ok := s.(*config.RabbitMQStreamSink)
+	r, ok := s.(*sink.RabbitMQStreamSink)
 	if !ok {
 		t.Fatalf("want *RabbitMQStreamSink, got %T", s)
 	}
@@ -471,7 +470,7 @@ func TestParse_RabbitMQStream_Defaults(t *testing.T) {
 	if r.Stream.Name == nil || r.Stream.Name.Source() == "" {
 		t.Fatalf("stream name default not applied")
 	}
-	if r.Stream.Mode != config.RabbitMQStreamModeCreateWhenMissing {
+	if r.Stream.Mode != sink.RabbitMQStreamModeCreateWhenMissing {
 		t.Fatalf("want stream mode=create-when-missing, got %q", r.Stream.Mode)
 	}
 	if r.Stream.MaxAge != 24*time.Hour {
@@ -497,8 +496,8 @@ func TestParse_RabbitMQStream_ExplicitOverrides(t *testing.T) {
     maxAge: 1h
     maxLengthBytes: 1024
     maxSegmentSizeBytes: 512`)
-	r := s.(*config.RabbitMQStreamSink)
-	if r.Stream.Mode != config.RabbitMQStreamModePassive {
+	r := s.(*sink.RabbitMQStreamSink)
+	if r.Stream.Mode != sink.RabbitMQStreamModePassive {
 		t.Fatalf("want mode=passive, got %q", r.Stream.Mode)
 	}
 	if r.Stream.MaxAge != time.Hour {

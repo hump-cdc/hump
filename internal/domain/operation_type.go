@@ -3,8 +3,8 @@ package domain
 type OperationType string
 
 const (
-	OperationInsert   OperationType = "insert"
-	OperationUpdate   OperationType = "update"
-	OperationDelete   OperationType = "delete"
-	OperationTruncate OperationType = "truncate"
+	OperationTypeInsert   OperationType = "insert"
+	OperationTypeUpdate   OperationType = "update"
+	OperationTypeDelete   OperationType = "delete"
+	OperationTypeTruncate OperationType = "truncate"
 )

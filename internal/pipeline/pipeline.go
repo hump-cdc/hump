@@ -12,7 +12,7 @@ import (
 	"hump/internal/source/postgres/wal"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/internal/types/stream"
 	"hump/pkg/telemetry/log"
 )

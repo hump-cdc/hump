@@ -43,7 +43,7 @@ func TestFanOut(t *testing.T) {
 	_, a := s.Subscribe()
 	_, b := s.Subscribe()
 
-	want := stream.Event{Schema: "public", Table: "users", Operation: domain.OperationInsert}
+	want := stream.Event{Schema: "public", Table: "users", Operation: domain.OperationTypeInsert}
 	s.Publish(want)
 
 	if got, ok := recv(t, a); !ok || got.(stream.Event).Table != want.Table {

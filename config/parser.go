@@ -1,7 +1,7 @@
 package config
 
 import (
-	"hump/internal/types/config"
+	pkgconfig "hump/pkg/config"
 
 	"github.com/goccy/go-yaml"
 )
@@ -10,23 +10,23 @@ import (
 // non-nil, is a goccy yaml.Error whose Error()/FormatError output already
 // includes line:column and a source snippet, or an error wrapping
 // [errs.ErrCrossValidate] describing inter-sink configuration divergences.
-func Parse(source string) (config.Configuration, error) {
+func Parse(source string) (Configuration, error) {
 	expaned, err := expand(source)
 	if err != nil {
-		return config.Configuration{}, err
+		return Configuration{}, err
 	}
 
-	var cfg config.Configuration
+	var cfg Configuration
 	if err := yaml.UnmarshalWithOptions(
 		[]byte(expaned), &cfg,
 		yaml.Strict(),
-		yaml.Validator(config.Validate),
+		yaml.Validator(pkgconfig.Validate),
 	); err != nil {
-		return config.Configuration{}, err
+		return Configuration{}, err
 	}
 
-	if err := config.CrossValidate(cfg.Tables); err != nil {
-		return config.Configuration{}, err
+	if err := CrossValidate(cfg.Tables); err != nil {
+		return Configuration{}, err
 	}
 
 	return cfg, nil

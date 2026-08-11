@@ -482,7 +482,7 @@ func assertTruncateRabbitMQStream(ctx context.Context, t *testing.T, reader *rmq
 // connectRabbitMQStream opens a stream environment, declares each stream, and
 // attaches a push consumer per stream starting at the next offset. Streams are
 // declared with the same retention defaults the sink applies
-// (internal/types/config/config_sink_rabbitmq_stream.go: 24h / 2 GiB / 500 MiB)
+// (internal/port/sink/config_rabbitmq_stream.go: 24h / 2 GiB / 500 MiB)
 // so the sink's create-when-missing declare stays idempotent rather than
 // failing with a precondition mismatch. The Next() offset means only messages
 // published after the consumer attaches are delivered, so persisted messages

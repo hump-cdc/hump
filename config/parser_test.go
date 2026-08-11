@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/types/config"
 	"hump/internal/types/errs"
 	"hump/pkg/retry"
 )
@@ -281,7 +281,7 @@ func TestParse_ReplicaDefaultsToFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if cfg.Tables[0].Replica != config.ReplicaIdentityFull {
+	if cfg.Tables[0].Replica != domain.ReplicaIdentityFull {
 		t.Fatalf("want replica=full by default, got %q", cfg.Tables[0].Replica)
 	}
 }
@@ -299,7 +299,7 @@ func TestParse_ReplicaUnmanaged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if cfg.Tables[0].Replica != config.ReplicaIdentityUnmanaged {
+	if cfg.Tables[0].Replica != domain.ReplicaIdentityUnmanaged {
 		t.Fatalf("want replica=unmanaged, got %q", cfg.Tables[0].Replica)
 	}
 }

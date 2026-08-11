@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/internal/web"
 	"hump/pkg/app/options"
 

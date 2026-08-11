@@ -4,7 +4,7 @@ import (
 	"context"
 	"hump/internal/source/postgres"
 	"hump/internal/source/postgres/connection"
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/pkg/app/options"
 	"hump/pkg/version"
 	"net/http"

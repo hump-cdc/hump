@@ -6,7 +6,7 @@ import (
 )
 
 // payload is the decoded default CDC payload produced by
-// internal/types/config/templ/payload.tmpl. Before/After/Source are zero when
+// internal/port/sink/templ/payload.tmpl. Before/After/Source are zero when
 // absent: Before is sent for update/delete, After for insert/update.
 type payload struct {
 	Before map[string]any `json:"before"`

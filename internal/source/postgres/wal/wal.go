@@ -273,7 +273,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationInsert, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeInsert, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -293,7 +293,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationUpdate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeUpdate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -313,7 +313,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationDelete, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeDelete, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
 		if err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 				return fmt.Errorf("unknown relation ID: %d: %w", relationId, errs.ErrWal)
 			}
 
-			dbName, schema, table, e := w.process(ctx, timestamp, domain.OperationTruncate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, nil, nil)
+			dbName, schema, table, e := w.process(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, nil, nil)
 			if e != nil {
 				resultErrs = append(resultErrs, e)
 			} else {

@@ -9,7 +9,7 @@ import (
 	"hump/internal/source/postgres/introspection"
 	"hump/internal/source/postgres/replication"
 	"hump/internal/source/postgres/schema"
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/internal/types/introspector"
 )
 

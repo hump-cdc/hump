@@ -1,4 +1,4 @@
-package config
+package domain
 
 type ReplicaIdentity string
 

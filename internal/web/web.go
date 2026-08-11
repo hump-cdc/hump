@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/internal/types/stream"
 	"hump/internal/web/middleware"
 	"hump/internal/web/streamer"

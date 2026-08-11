@@ -3,7 +3,7 @@ package introspection
 import (
 	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/types/config"
+	"hump/config"
 	"hump/internal/types/introspector"
 	"maps"
 )
@@ -45,7 +45,7 @@ func RegistryFromConfig(cfg config.Configuration) *TableRegistry {
 		tables[name] = t.Sinks
 		ref := introspector.TableRef{Schema: schemaName, Name: name}
 		result.tables = append(result.tables, ref)
-		if t.Replica == config.ReplicaIdentityFull {
+		if t.Replica == domain.ReplicaIdentityFull {
 			result.replicaFull = append(result.replicaFull, ref)
 		}
 	}

@@ -6,9 +6,9 @@ package catalog
 import (
 	"context"
 
+	"hump/internal/adapter/postgres/connection"
+	"hump/internal/adapter/postgres/schema"
 	"hump/internal/domain"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/source/postgres/schema"
 	"hump/internal/types/introspector"
 )
 

@@ -12,7 +12,8 @@ import (
 	"hump/internal/types/stream"
 )
 
-type Sink struct{}
+type Sink struct {
+}
 
 func New() *Sink {
 	return &Sink{}

@@ -25,9 +25,11 @@ func Parse(source string) (Configuration, error) {
 		return Configuration{}, err
 	}
 
-	if err := CrossValidate(cfg.Tables); err != nil {
+	if err := crossValidate(cfg.Tables); err != nil {
 		return Configuration{}, err
 	}
+
+	cfg.buildRegistry()
 
 	return cfg, nil
 }

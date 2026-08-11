@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"hump/internal/source/postgres/catalog"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/source/postgres/schema"
+	"hump/internal/adapter/postgres/catalog"
+	"hump/internal/adapter/postgres/connection"
+	"hump/internal/adapter/postgres/schema"
 	"hump/internal/types/introspector"
 )
 

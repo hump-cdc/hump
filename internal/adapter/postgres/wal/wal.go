@@ -17,12 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"hump/internal/adapter/postgres/connection"
+	"hump/internal/adapter/postgres/introspection"
 	"hump/internal/domain"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/telemetry/health"
-	"hump/internal/telemetry/metrics"
+	"hump/internal/port/database"
 	"hump/internal/types/errs"
-	"hump/internal/types/wal"
 	"hump/pkg/telemetry/log"
 )
 
@@ -45,10 +44,12 @@ type Wal struct {
 	messageContext *messageContext
 
 	lastCommitTime time.Time
-	health         *health.Health
-	metrics        *metrics.Metrics
 
-	process wal.ProcessHandler
+	introspector *introspection.Introspector
+	// health         *health.Health
+	// metrics        *metrics.Metrics
+
+	// process wal.ProcessHandler
 }
 
 var logger = log.Scope("WAL")
@@ -66,9 +67,11 @@ func New(
 	connector *connection.Connector,
 	publicationName string,
 	slotName string,
-	health *health.Health,
-	metrics *metrics.Metrics,
-	process wal.ProcessHandler) (*Wal, error) {
+	introspector *introspection.Introspector,
+	// health *health.Health,
+	// metrics *metrics.Metrics,
+	// process wal.ProcessHandler
+) (*Wal, error) {
 	connection, dbName, err := connector.CreateReplicationConnection(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to postgres: %w", errors.Join(err, errs.ErrWal))
@@ -84,11 +87,12 @@ func New(
 			fmt.Sprintf("publication_names '%s'", publicationName),
 			"messages 'true'",
 		},
-		messageContext: &messageContext{messages: domain.Headers{}},
+		messageContext: &messageContext{messages: map[string]string{}},
 		lastCommitTime: time.Time{},
-		health:         health,
-		metrics:        metrics,
-		process:        process,
+		introspector:   introspector,
+		// health:         health,
+		// metrics:        metrics,
+		// process: process,
 	}, nil
 }
 
@@ -97,7 +101,7 @@ func New(
 // relation cache, dispatches decoded rows to the process handler, and sends
 // standby status updates on every standbyTimeout tick. The last known WAL
 // position is flushed before returning on any error path.
-func (w *Wal) Start(ctx context.Context) error {
+func (w *Wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 
 	err := pglogrepl.StartReplication(ctx, w.connection, w.slotName, walPosition, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments})
@@ -105,7 +109,7 @@ func (w *Wal) Start(ctx context.Context) error {
 		return fmt.Errorf("StartReplication failed: %w", errors.Join(err, errs.ErrWal))
 	}
 
-	w.health.WalSender.Update(true, nil)
+	// TODO: w.health.WalSender.Update(true, nil)
 	logger.Info("Logical replication started on slot", "slot", w.slotName)
 
 	standbyDeadline := time.Now().Add(standbyTimeout)
@@ -136,22 +140,22 @@ func (w *Wal) Start(ctx context.Context) error {
 			}
 
 			err = fmt.Errorf("receive message failed: %w", errors.Join(err, errs.ErrWal))
-			w.health.WalSender.Update(false, err)
+			// TODO: w.health.WalSender.Update(false, err)
 			w.flush(ctx, walPosition)
 			return err
 		}
 
 		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
 			err := fmt.Errorf("received Postgres WAL error: %+v: %w", errMsg, errs.ErrWal)
-			w.health.WalSender.Update(false, err)
+			// TODO: w.health.WalSender.Update(false, err)
 			w.flush(ctx, walPosition)
 			return err
 		}
 
 		if w.lastCommitTime.IsZero() {
-			w.metrics.LagCommit(0)
+			// TODO: w.metrics.LagCommit(0)
 		} else {
-			w.metrics.LagCommit(float64(time.Since(w.lastCommitTime).Seconds()))
+			// TODO: w.metrics.LagCommit(float64(time.Since(w.lastCommitTime).Seconds()))
 		}
 
 		msg, ok := rawMsg.(*pgproto3.CopyData)
@@ -165,12 +169,12 @@ func (w *Wal) Start(ctx context.Context) error {
 			pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
 			if err != nil {
 				err = fmt.Errorf("ParsePrimaryKeepaliveMessage failed: %w", errors.Join(err, errs.ErrWal))
-				w.health.WalSender.Update(false, err)
+				// TODO: w.health.WalSender.Update(false, err)
 				w.flush(ctx, walPosition)
 				return err
 			}
 
-			w.metrics.LagSender(time.Since(pkm.ServerTime).Seconds())
+			// TODO: w.metrics.LagSender(time.Since(pkm.ServerTime).Seconds())
 
 			if pkm.ReplyRequested {
 				standbyDeadline = time.Time{}
@@ -180,22 +184,22 @@ func (w *Wal) Start(ctx context.Context) error {
 			xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 			if err != nil {
 				err = fmt.Errorf("ParseXLogData failed: %w", errors.Join(err, errs.ErrWal))
-				w.health.WalSender.Update(false, err)
+				// TODO: w.health.WalSender.Update(false, err)
 				w.flush(ctx, walPosition)
 				return err
 			}
 
-			err = w.processMessage(ctx, xld.WALData, xld.ServerTime)
+			err = w.processMessage(ctx, xld.WALData, xld.ServerTime, handler)
 			if err == nil {
 				recordEnd := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 				if recordEnd > walPosition {
 					walPosition = recordEnd
 				}
 
-				w.metrics.LagSender(time.Since(xld.ServerTime).Seconds())
+				// TODO: w.metrics.LagSender(time.Since(xld.ServerTime).Seconds())
 			} else {
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, errs.ErrWal))
-				w.health.WalSender.Update(false, err)
+				// TODO: w.health.WalSender.Update(false, err)
 				w.flush(ctx, walPosition)
 				return err
 			}
@@ -204,10 +208,10 @@ func (w *Wal) Start(ctx context.Context) error {
 
 }
 
-// Close marks the WAL sender as unhealthy and closes the underlying
+// Stop marks the WAL sender as unhealthy and closes the underlying
 // replication connection. It is safe to call once Start has returned.
-func (w *Wal) Close(ctx context.Context) error {
-	w.health.WalSender.Update(false, errors.New("wal sender connection closed"))
+func (w *Wal) Stop(ctx context.Context) error {
+	// TODO: w.health.WalSender.Update(false, errors.New("wal sender connection closed"))
 	return w.connection.Close(ctx)
 }
 
@@ -221,7 +225,7 @@ func (w *Wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 
 	if err != nil {
 		err = fmt.Errorf("send status failed: %w", errors.Join(err, errs.ErrWal))
-		w.health.WalSender.Update(false, err)
+		// TODO: w.health.WalSender.Update(false, err)
 	}
 
 	return err
@@ -232,7 +236,7 @@ func (w *Wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 // track transaction boundaries and commit-lag metrics, LogicalDecodingMessageV2
 // is buffered as transactional context, and row-change messages are decoded
 // and forwarded to the process handler.
-func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time) error {
+func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, handler database.ProcessMessageHandler) error {
 	message, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
 		return fmt.Errorf("Parse logical replication message: %w", err)
@@ -244,24 +248,24 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 
 	case *pglogrepl.BeginMessage:
 		w.lastCommitTime = message.CommitTime
-		w.metrics.LagCommit(time.Since(w.lastCommitTime).Seconds())
+		// TODO: w.metrics.LagCommit(time.Since(w.lastCommitTime).Seconds())
 
 	case *pglogrepl.CommitMessage:
 		w.lastCommitTime = time.Time{}
-		w.metrics.LagCommit(0)
+		// TODO: w.metrics.LagCommit(0)
 
-		w.messageContext.Flush()
+		w.messageContext.flush()
 
 	case *pglogrepl.LogicalDecodingMessageV2:
 		if !message.Transactional || len(message.Prefix) == 0 || len(message.Content) == 0 {
 			return nil
 		}
 
-		w.messageContext.Append(message.Prefix, string(message.Content))
+		w.messageContext.append(message.Prefix, string(message.Content))
 
 	case *pglogrepl.InsertMessageV2:
 
-		start := time.Now()
+		// TODO: start := time.Now()
 		relation, ok := w.relations[message.RelationID]
 		if !ok {
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, errs.ErrWal)
@@ -272,16 +276,21 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("decode insert tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
 
-		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeInsert, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		headers := w.messageContext.dump()
+		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName))
+		if err != nil {
+			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), err)
+		}
+
+		err = handler(ctx, timestamp, domain.OperationTypeInsert, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {
 			return err
 		}
 
-		w.metrics.ProcessedRowsInsertDuration(time.Since(start).Seconds(), dbName, schema, table)
+		// TODO: w.metrics.ProcessedRowsInsertDuration(time.Since(start).Seconds(), dbName, schema, table)
 
 	case *pglogrepl.UpdateMessageV2:
-		start := time.Now()
+		// TODO: start := time.Now()
 		relation, ok := w.relations[message.RelationID]
 		if !ok {
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, errs.ErrWal)
@@ -292,16 +301,21 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("decode update tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
 
-		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeUpdate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		headers := w.messageContext.dump()
+		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName))
+		if err != nil {
+			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), err)
+		}
+
+		err = handler(ctx, timestamp, domain.OperationTypeUpdate, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {
 			return err
 		}
 
-		w.metrics.ProcessedRowsUpdateDuration(time.Since(start).Seconds(), dbName, schema, table)
+		// TODO: w.metrics.ProcessedRowsUpdateDuration(time.Since(start).Seconds(), dbName, schema, table)
 
 	case *pglogrepl.DeleteMessageV2:
-		start := time.Now()
+		// TODO: start := time.Now()
 		relation, ok := w.relations[message.RelationID]
 		if !ok {
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, errs.ErrWal)
@@ -312,29 +326,39 @@ func (w *Wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("decode delete tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
 
-		headers := w.messageContext.Dump()
-		dbName, schema, table, err := w.process(ctx, timestamp, domain.OperationTypeDelete, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, prev, next)
+		headers := w.messageContext.dump()
+		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName))
+		if err != nil {
+			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), err)
+		}
+
+		err = handler(ctx, timestamp, domain.OperationTypeDelete, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {
 			return err
 		}
 
-		w.metrics.ProcessedRowsDeleteDuration(time.Since(start).Seconds(), dbName, schema, table)
+		// TODO: w.metrics.ProcessedRowsDeleteDuration(time.Since(start).Seconds(), dbName, schema, table)
 
 	case *pglogrepl.TruncateMessageV2:
 		resultErrs := make([]error, 0, len(message.RelationIDs))
-		headers := w.messageContext.Dump()
+		headers := w.messageContext.dump()
 		for _, relationId := range message.RelationIDs {
-			start := time.Now()
+			// TODO: start := time.Now()
 			relation, ok := w.relations[relationId]
 			if !ok {
 				return fmt.Errorf("unknown relation ID: %d: %w", relationId, errs.ErrWal)
 			}
 
-			dbName, schema, table, e := w.process(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), headers, nil, nil)
+			ref, _, err := w.introspector.ResolveTableConfiguration(ctx, domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName))
+			if err != nil {
+				return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", domain.TableSchema(relation.Namespace), domain.TableName(relation.RelationName), err)
+			}
+
+			e := handler(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, ref.Schema, ref.Name, headers, nil, nil)
 			if e != nil {
 				resultErrs = append(resultErrs, e)
 			} else {
-				w.metrics.ProcessedRowsTruncateDuration(time.Since(start).Seconds(), dbName, schema, table)
+				// TODO: w.metrics.ProcessedRowsTruncateDuration(time.Since(start).Seconds(), dbName, schema, table)
 			}
 		}
 

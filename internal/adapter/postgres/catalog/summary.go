@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"hump/internal/source/postgres/connection"
+	"hump/internal/adapter/postgres/connection"
 	"hump/internal/types/errs"
 	"hump/internal/types/introspector"
 	"hump/pkg/telemetry/log"

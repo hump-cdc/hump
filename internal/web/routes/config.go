@@ -2,15 +2,17 @@ package routes
 
 import (
 	"context"
-	"hump/internal/source/postgres"
-	"hump/internal/source/postgres/connection"
 	"hump/config"
+	"hump/internal/adapter/postgres"
+	"hump/internal/adapter/postgres/connection"
+	"hump/internal/domain"
 	"hump/pkg/app/options"
 	"hump/pkg/version"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
 	"hump/internal/port/sink"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 // ConfigSink identifies one sink endpoint: its type together with the connection
@@ -23,10 +25,10 @@ type ConfigSink struct {
 }
 
 type ConfigTable struct {
-	Schema  string       `json:"schema"  doc:"Table schema"`
-	Name    string       `json:"name"    doc:"Table name"`
-	Replica string       `json:"replica" doc:"Replica identity managed by hump"`
-	Sinks   []ConfigSink `json:"sinks"   doc:"Sinks connected to the table"`
+	Schema  domain.TableSchema `json:"schema"  doc:"Table schema"`
+	Name    domain.TableName   `json:"name"    doc:"Table name"`
+	Replica string             `json:"replica" doc:"Replica identity managed by hump"`
+	Sinks   []ConfigSink       `json:"sinks"   doc:"Sinks connected to the table"`
 }
 
 type ConfigResponse struct {

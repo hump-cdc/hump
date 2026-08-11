@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"hump/internal/source/postgres/connection"
+	"hump/internal/adapter/postgres/connection"
 )
 
 //go:embed sql/slot.sql

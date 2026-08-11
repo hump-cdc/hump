@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"hump/internal/source/postgres/connection"
+	"hump/internal/adapter/postgres/connection"
 	"hump/internal/types/errs"
 )
 

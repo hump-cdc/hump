@@ -10,7 +10,6 @@ import (
 
 	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/source/postgres/introspection"
 	"hump/internal/telemetry/metrics"
 	"hump/internal/types/stream"
 	"hump/pkg/limit"
@@ -19,31 +18,33 @@ import (
 	"hump/pkg/version"
 )
 
-// UseCase dispatches a single WAL change to every sink configured for the
-// originating table, applying per-target retry and concurrency control.
-type UseCase struct {
-	introspector *introspection.Introspector
-	sinks        sink.Sink
-	publisher    stream.Publisher
-	metrics      *metrics.Metrics
-	limiter      *limit.Limit
-	seq          atomic.Uint64
+type SinkConfigurationResolver interface {
+	Resolve(schema domain.TableSchema, table domain.TableName) []sink.Config
 }
 
-func NewUseCase(introspector *introspection.Introspector, sinks sink.Sink, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
+type UseCase struct {
+	sinkConfigurationResolver SinkConfigurationResolver
+	sinks                     sink.Sink
+	publisher                 stream.Publisher
+	metrics                   *metrics.Metrics
+	limiter                   *limit.Limit
+	seq                       atomic.Uint64
+}
+
+func NewUseCase(sinkConfigurationResolver SinkConfigurationResolver, sinks sink.Sink, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
 	return &UseCase{
-		introspector: introspector,
-		sinks:        sinks,
-		publisher:    publisher,
-		metrics:      metrics,
-		limiter:      limit.New(metrics),
+		sinkConfigurationResolver: sinkConfigurationResolver,
+		sinks:                     sinks,
+		publisher:                 publisher,
+		metrics:                   metrics,
+		limiter:                   limit.New(metrics),
 	}
 }
 
 // Process resolves the configured sinks for the (schema, table) pair and
 // delivers the WAL operation to each of them in parallel, returning only after
 // every fan-out goroutine has finished.
-func (p *UseCase) Process(
+func (uc *UseCase) Process(
 	ctx context.Context,
 
 	timestamp time.Time,
@@ -56,7 +57,7 @@ func (p *UseCase) Process(
 	headers domain.Headers,
 	prev domain.DbRecord,
 	next domain.DbRecord,
-) (domain.DbName, domain.TableSchema, domain.TableName, error) {
+) error {
 	traceparent := headers["traceparent"]
 	logger := log.Scope("processor").WithTraceparent(traceparent)
 
@@ -70,15 +71,13 @@ func (p *UseCase) Process(
 		"next", next,
 	)
 
-	ref, targets, err := p.introspector.ResolveTableConfiguration(ctx, schema, table)
-	if err != nil {
-		return dbName, "", "", fmt.Errorf("failed to resolve table configuration for %s.%s: %w", schema, table, err)
+	targets := uc.sinkConfigurationResolver.Resolve(schema, table)
+	if targets == nil {
+		return nil
 	}
 
-	resolvedSchema, resolvedTable := ref.Schema, ref.Name
-
 	var wg sync.WaitGroup
-	r := retry.New(&wg, traceparent, p.limiter, p.metrics)
+	r := retry.New(&wg, traceparent, uc.limiter, uc.metrics)
 
 	for _, target := range targets {
 		operationContext := sink.SinkContext{
@@ -91,8 +90,8 @@ func (p *UseCase) Process(
 			Operation: operation,
 
 			Database: dbName,
-			Schema:   resolvedSchema,
-			Table:    resolvedTable,
+			Schema:   schema,
+			Table:    table,
 
 			Headers: headers,
 
@@ -113,13 +112,13 @@ func (p *UseCase) Process(
 		// operation event and any retry events after each publish attempt.
 		var pub stream.Publisher
 		var streamEvent stream.Event
-		if p.publisher != nil && p.publisher.HasSubscribers() {
-			pub = p.publisher
+		if uc.publisher != nil && uc.publisher.HasSubscribers() {
+			pub = uc.publisher
 			streamEvent = stream.Event{
-				ID:        strconv.FormatUint(p.seq.Add(1), 10),
+				ID:        strconv.FormatUint(uc.seq.Add(1), 10),
 				Timestamp: timestamp,
-				Schema:    resolvedSchema,
-				Table:     resolvedTable,
+				Schema:    schema,
+				Table:     table,
 				Operation: operation,
 				SinkType:  string(target.Sink.Type()),
 				Host:      metaHost,
@@ -134,7 +133,7 @@ func (p *UseCase) Process(
 			operationContext.SinkType, operationContext.SinkName,
 			concurrencyKey, metaHost, metaTarget, streamEvent, pub,
 			func(ctx context.Context, streamEvent *stream.Event) error {
-				return p.sinks.Process(ctx, target.Sink, &operationContext, streamEvent)
+				return uc.sinks.Process(ctx, target.Sink, &operationContext, streamEvent)
 			})
 	}
 	wg.Wait()
@@ -163,5 +162,5 @@ func (p *UseCase) Process(
 
 	}
 
-	return dbName, resolvedSchema, resolvedTable, r.Error()
+	return r.Error()
 }

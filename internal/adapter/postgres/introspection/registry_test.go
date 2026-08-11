@@ -3,14 +3,14 @@ package introspection
 import (
 	"testing"
 
-	"hump/internal/domain"
 	"hump/config"
+	"hump/internal/domain"
 	"hump/internal/types/introspector"
 )
 
 func TestRegistryFromConfig_ReplicaIdentityFullTables(t *testing.T) {
 	cfg := config.Configuration{
-		Tables: []config.Tables{
+		Tables: []config.Table{
 			{Schema: "public", Name: "users", Replica: domain.ReplicaIdentityFull},
 			{Schema: "public", Name: "events", Replica: domain.ReplicaIdentityUnmanaged},
 			{Schema: "public", Name: "orders", Replica: domain.ReplicaIdentityFull},

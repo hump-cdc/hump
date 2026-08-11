@@ -8,10 +8,10 @@ import (
 	"context"
 	"sync"
 
+	"hump/internal/adapter/postgres/catalog"
+	"hump/internal/adapter/postgres/connection"
 	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/source/postgres/catalog"
-	"hump/internal/source/postgres/connection"
 	"hump/internal/types/introspector"
 )
 

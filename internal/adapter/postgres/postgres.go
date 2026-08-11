@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"hump/internal/source/postgres/catalog"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/source/postgres/introspection"
-	"hump/internal/source/postgres/replication"
-	"hump/internal/source/postgres/schema"
 	"hump/config"
+	"hump/internal/adapter/postgres/catalog"
+	"hump/internal/adapter/postgres/connection"
+	"hump/internal/adapter/postgres/introspection"
+	"hump/internal/adapter/postgres/replication"
+	"hump/internal/adapter/postgres/schema"
 	"hump/internal/types/introspector"
 )
 

@@ -9,15 +9,20 @@ import (
 
 type ProcessHandler func(
 	ctx context.Context,
+
 	timestamp time.Time,
+
 	operation domain.OperationType,
+
 	dbName domain.DbName,
 	schema domain.TableSchema,
 	table domain.TableName,
+
 	headers domain.Headers,
+
 	prev domain.DbRecord,
 	next domain.DbRecord,
-) (domain.DbName, domain.TableSchema, domain.TableName, error)
+) error
 
 type Wal interface {
 	Start(ctx context.Context) error

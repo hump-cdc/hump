@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	cfg "hump/config"
-	sinkadapter "hump/internal/adapter/sink"
-	"hump/internal/pipeline"
-	"hump/internal/port/sink"
-	"hump/internal/source/postgres"
-	"hump/internal/source/postgres/connection"
+	postgresAdapter "hump/internal/adapter/postgres"
+	sinkAdapter "hump/internal/adapter/sink"
+	processOperationFeature "hump/internal/application/process_operation"
+	"hump/internal/controller"
+	databasePort "hump/internal/port/database"
+	sinkPort "hump/internal/port/sink"
 	"hump/internal/telemetry"
 	"hump/internal/telemetry/health"
 	"hump/internal/telemetry/metrics"
@@ -43,14 +44,19 @@ func main() {
 	r, release := app.New(context.Background())
 	defer release()
 
+	// Configuration
+	configuration, err := cfg.Parse(opts.Config)
+	if err != nil {
+		logger.Error(err.Error(), "error", err)
+		os.Exit(1)
+		return
+	}
+
+	// Adapters
+	var db databasePort.Database = postgresAdapter.NewDatabase(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
+	var sink sinkPort.Sink = sinkAdapter.New()
+
 	if !opts.Cleanup {
-		// Configuration
-		configuration, err := cfg.Parse(opts.Config)
-		if err != nil {
-			logger.Error(err.Error(), "error", err)
-			os.Exit(1)
-			return
-		}
 		cfgResult, _ := yaml.Marshal(&configuration)
 		logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
 
@@ -63,7 +69,7 @@ func main() {
 		}
 
 		// Services
-		health, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
+		_, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
 		metrics, metricsHandler := metrics.New("hump")
 
 		// Shared operations stream fanned out to web SSE clients.
@@ -110,26 +116,26 @@ func main() {
 		r.Run(
 			// WAL
 			func(ctx context.Context) error {
-				p := pipeline.New(health, operations, metrics, sinkadapter.New())
-				return p.Start(ctx, opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
+				process := processOperationFeature.NewUseCase(&configuration, sink, operations, metrics)
+				controller := controller.NewProcessController(db, processOperationFeature.NewController(process))
+
+				return controller.Listen(ctx)
 			},
 		)
 	} else {
 		r.Run(
 			// Cleanup: drop publication + slot, then stop the runner.
 			func(ctx context.Context) error {
-				connector := connection.New(opts.DatabaseUrl)
-				if err := postgres.Cleanup(ctx, connector, opts.PublicationName, opts.ReplicationSlotName); err != nil {
+				if err := db.Cleanup(ctx); err != nil {
 					return err
 				}
 
-				logger.Info("Cleanup complete", "publication", opts.PublicationName, "slot", opts.ReplicationSlotName)
 				return errs.ErrShutdown
 			},
 		)
 	}
 
-	err := r.Wait()
+	err = r.Wait()
 	if err != nil {
 		logger.Error(err.Error(), "error", err)
 		os.Exit(1)
@@ -138,7 +144,7 @@ func main() {
 	}
 }
 
-func formatSinks(sinks []sink.Config) string {
+func formatSinks(sinks []sinkPort.Config) string {
 	parts := make([]string, 0, len(sinks))
 	for _, s := range sinks {
 		parts = append(parts, s.Sink.DisplayName())

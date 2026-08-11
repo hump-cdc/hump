@@ -1,83 +1,66 @@
 package pipeline
 
-import (
-	"context"
-	"fmt"
-	"time"
+// var logger = log.Scope("pipeline")
 
-	"hump/internal/application/process_operation"
-	"hump/internal/port/sink"
-	"hump/internal/source/postgres"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/source/postgres/wal"
-	"hump/internal/telemetry/health"
-	"hump/internal/telemetry/metrics"
-	"hump/config"
-	"hump/internal/types/stream"
-	"hump/pkg/telemetry/log"
-)
+// // Pipeline orchestrates change-data-capture from a Postgres logical replication
+// // slot to the configured downstream sinks.
+// type Pipeline interface {
+// 	// Start parses the configuration, connects to Postgres using databaseUrl,
+// 	// and begins streaming WAL changes for the given publication and slot until
+// 	// ctx is cancelled or an unrecoverable error occurs.
+// 	Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error
+// }
 
-var logger = log.Scope("pipeline")
+// type pipeline struct {
+// 	health    *health.Health
+// 	publisher stream.Publisher
+// 	metrics   *metrics.Metrics
+// 	sinks     sink.Sink
+// }
 
-// Pipeline orchestrates change-data-capture from a Postgres logical replication
-// slot to the configured downstream sinks.
-type Pipeline interface {
-	// Start parses the configuration, connects to Postgres using databaseUrl,
-	// and begins streaming WAL changes for the given publication and slot until
-	// ctx is cancelled or an unrecoverable error occurs.
-	Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error
-}
+// func New(health *health.Health, publisher stream.Publisher, metrics *metrics.Metrics, sinks sink.Sink) Pipeline {
+// 	return &pipeline{
+// 		health:    health,
+// 		publisher: publisher,
+// 		metrics:   metrics,
+// 		sinks:     sinks,
+// 	}
+// }
 
-type pipeline struct {
-	health    *health.Health
-	publisher stream.Publisher
-	metrics   *metrics.Metrics
-	sinks     sink.Sink
-}
+// // Start runs the pipeline.
+// func (p *pipeline) Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error {
 
-func New(health *health.Health, publisher stream.Publisher, metrics *metrics.Metrics, sinks sink.Sink) Pipeline {
-	return &pipeline{
-		health:    health,
-		publisher: publisher,
-		metrics:   metrics,
-		sinks:     sinks,
-	}
-}
+// 	connector := connection.New(databaseUrl)
 
-// Start runs the pipeline.
-func (p *pipeline) Start(ctx context.Context, databaseUrl string, cfg config.Configuration, publicationName string, slotName string) error {
+// 	registry, introspector, err := postgres.Configure(ctx, connector, cfg, publicationName, slotName)
+// 	if err != nil {
+// 		return fmt.Errorf("unable to configure to database: %w", err)
+// 	}
 
-	connector := connection.New(databaseUrl)
+// 	conn, err := connector.CreateConnection(ctx)
+// 	if err != nil {
+// 		return fmt.Errorf("unable to connect to database: %w", err)
+// 	}
+// 	defer conn.Close(ctx)
 
-	registry, introspector, err := postgres.Configure(ctx, connector, cfg, publicationName, slotName)
-	if err != nil {
-		return fmt.Errorf("unable to configure to database: %w", err)
-	}
+// 	p.health.Postgres.Update(true, nil)
 
-	conn, err := connector.CreateConnection(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to connect to database: %w", err)
-	}
-	defer conn.Close(ctx)
+// 	err = postgres.PrintSummary(ctx, conn, registry.List())
+// 	if err != nil {
+// 		return fmt.Errorf("failed to get database summary: %w", err)
+// 	}
 
-	p.health.Postgres.Update(true, nil)
+// 	proc := process_operation.NewUseCase(introspector, p.sinks, p.publisher, p.metrics)
 
-	err = postgres.PrintSummary(ctx, conn, registry.List())
-	if err != nil {
-		return fmt.Errorf("failed to get database summary: %w", err)
-	}
+// 	w, err := wal.New(ctx, connector, publicationName, slotName, p.health, p.metrics, proc.Process)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to initialize WAL processing: %w", err)
+// 	}
 
-	proc := process_operation.NewUseCase(introspector, p.sinks, p.publisher, p.metrics)
+// 	err = w.Start(ctx)
+// 	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 5*time.Second)
+// 	defer cancel()
+// 	defer w.Stop(closeCtx)
 
-	w, err := wal.New(ctx, connector, publicationName, slotName, p.health, p.metrics, proc.Process)
-	if err != nil {
-		return fmt.Errorf("failed to initialize WAL processing: %w", err)
-	}
-
-	err = w.Start(ctx)
-	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 5*time.Second)
-	defer cancel()
-	defer w.Close(closeCtx)
-
-	return err
-}
+// 	return err
+// }

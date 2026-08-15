@@ -37,12 +37,13 @@ func newMetrics(dbName string, factory promauto.Factory) *metrics {
 	}
 }
 
-// reportWalLag updates the replication lag metric with the difference between
+// updateReplicationLag updates the replication lag metric with the difference between
 // the last processed WAL position and the server's reported WAL end position.
 func (m *metrics) updateReplicationLag(processed pglogrepl.LSN, server pglogrepl.LSN) {
-	diff := server - processed
-	if diff > 0 {
-		m.replicationLag.Set(float64(diff))
+	// LSN is unsigned, so the positions are compared before subtracting: a
+	// processed position at or past the server's means no lag, not a wrapped one.
+	if server > processed {
+		m.replicationLag.Set(float64(server - processed))
 	} else {
 		m.replicationLag.Set(0)
 	}

@@ -155,7 +155,6 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			if err != nil {
 				err = fmt.Errorf("ParsePrimaryKeepaliveMessage failed: %w", errors.Join(err, database.ErrWal))
 				w.flush(ctx, walPosition)
-				w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
 				w.health.MarkUnhealthy(err)
 				return err
 			}
@@ -169,7 +168,6 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			if err != nil {
 				err = fmt.Errorf("ParseXLogData failed: %w", errors.Join(err, database.ErrWal))
 				w.flush(ctx, walPosition)
-				w.metrics.updateReplicationLag(walPosition, xld.ServerWALEnd)
 				w.health.MarkUnhealthy(err)
 				return err
 			}

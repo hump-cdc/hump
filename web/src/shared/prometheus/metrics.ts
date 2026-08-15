@@ -6,7 +6,7 @@
 export const FAMILY = {
     commitLag: 'hump_lag_commit_seconds',
     senderLag: 'hump_lag_sender_seconds',
-    rows: 'hump_processed_rows_duration_count',
+    rows: 'hump_processed_rows_duration_seconds_count',
     asyncQueue: 'hump_async_queue_total',
     sinkMessages: 'hump_sink_messages_total',
     sinkDuration: 'hump_sink_duration_seconds_bucket',

@@ -26,8 +26,21 @@ func newMetrics(dbName string, factory promauto.Factory) *metrics {
 			ConstLabels: prometheus.Labels{"db": dbName},
 		}),
 		rowDurations: factory.NewHistogramVec(prometheus.HistogramOpts{
-			Name:        "processed_rows_duration",
-			Help:        "Time spent processing a single row (change event) through the pipeline, in seconds, partitioned by operation, source database, schema, and table.",
+			Name: "processed_rows_duration_seconds",
+			Help: "Time spent processing a single row (change event) through the pipeline, in seconds, partitioned by operation, source database, schema, and table.",
+			Buckets: []float64{
+				100e-6, // 0.1ms
+				500e-6, // 0.5ms
+				1e-3,   // 1ms
+				10e-3,  // 10ms
+				100e-3, // 100ms
+				250e-3, // 250ms
+				500e-3, // 500ms
+				1,      // 1s
+				3,      // 3s
+				5,      // 5s
+				10,     // 10s
+			},
 			ConstLabels: prometheus.Labels{"db": dbName},
 		}, []string{"operation", "schema", "table"}),
 		rowInsertDurations:   make(map[domain.TableIdentifier]prometheus.Observer),

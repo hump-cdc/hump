@@ -1,7 +1,7 @@
 // Package stream defines the operation event streamed to web clients over SSE
 // and the publisher interface used to emit those events. It is a leaf package so
 // the sink handlers can publish without importing internal/web.
-package stream
+package streamer
 
 import (
 	"time"

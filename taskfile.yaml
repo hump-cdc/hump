@@ -1,0 +1,10 @@
+version: '3'
+
+tasks:
+    build:
+        dir: '{{.USER_WORKING_DIR}}'
+        cmds:
+        - echo "Root {{.ROOT_DIR}}"
+        - echo "Current {{.TASKFILE_DIR}}"
+        - echo "Working {{.USER_WORKING_DIR}}"
+        - "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi && cd web && bun run build && cd .. && go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump"

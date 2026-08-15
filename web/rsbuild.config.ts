@@ -42,7 +42,7 @@ export default defineConfig({
         },
     },
     output: {
-        distPath: { root: '../internal/web/assets' },
+        distPath: { root: '../internal/controller/webui' },
         cleanDistPath: true,
         legalComments: 'none',
     },

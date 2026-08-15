@@ -15,9 +15,6 @@ import (
 	"hump/internal/controller"
 	databasePort "hump/internal/port/database"
 	sinkPort "hump/internal/port/sink"
-	"hump/internal/types/stream"
-	"hump/internal/web"
-	"hump/internal/web/streamer"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
 	"hump/pkg/telemetry/health"
@@ -93,9 +90,9 @@ func main() {
 			r.Run(
 				// Web UI
 				func(ctx context.Context) error {
-					operations := streamer.New[stream.Message]()
-					w := web.New(opts, configuration, pg, operations, metricHandler)
-					return w.Serve(ctx, *opts.WebPort)
+					// configController := getconfig.NewController(opts, configuration, pg)
+					server := controller.NewWebUIController()
+					return server.Serve(ctx, *opts.WebPort)
 				})
 		}
 

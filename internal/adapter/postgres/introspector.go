@@ -27,11 +27,14 @@ var introspectorHasTimescaleSql string
 // changes (e.g., new partitions) and ensures replica identity is set for
 // replicated tables.
 type introspector struct {
-	connection            *connection
-	registry              *introspectorRegistry
-	mu                    sync.Mutex
-	initialized           bool                                // initialized reports whether the first full introspection has run.
-	ignoredTables         map[domain.TableIdentifier]struct{} // ignoredTables holds tables a re-introspection still failed to resolve; later lookups for them skip introspection entirely.
+	connection  *connection
+	registry    *introspectorRegistry
+	mu          sync.Mutex
+	initialized bool // initialized reports whether the first full introspection has run.
+	// ignoredTables holds tables a re-introspection still failed to resolve;
+	// later lookups for them skip introspection entirely. Entries are never
+	// removed, so a table stays ignored for the lifetime of the introspector.
+	ignoredTables         map[domain.TableIdentifier]struct{}
 	ensureReplicaIdentity func(ctx context.Context, conn *connection, tables []domain.TableIdentifier) error
 	// newTypeMap builds the pgtype map that encodes array bind parameters. A
 	// fresh map per call keeps its encode-plan cache free of concurrent writes;

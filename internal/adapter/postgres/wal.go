@@ -474,6 +474,10 @@ type postgresMessageContext struct {
 	messages map[string]string
 }
 
+// emptyMessages is the shared result of dump() when nothing is buffered. It
+// must never be written to: every caller holding it shares the same map.
+var emptyMessages = map[string]string{}
+
 // append stores a message under the given name, overwriting any prior value.
 func (c *postgresMessageContext) append(name, value string) {
 	c.mu.Lock()
@@ -493,10 +497,15 @@ func (c *postgresMessageContext) flush() map[string]string {
 	return messages
 }
 
-// dump returns a copy of the buffered messages without clearing the store.
+// dump returns a copy of the buffered messages without clearing the store, or
+// a shared empty map when nothing is buffered. The result is read-only.
 func (c *postgresMessageContext) dump() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if len(c.messages) == 0 {
+		return emptyMessages
+	}
 
 	messages := make(map[string]string, len(c.messages))
 	maps.Copy(messages, c.messages)

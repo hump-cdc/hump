@@ -841,6 +841,50 @@ func TestMessageContextDumpCopiesBufferedMessages(t *testing.T) {
 	}
 }
 
+func TestMessageContextDumpReturnsEmptyMapWhenEmpty(t *testing.T) {
+	messageContext := &postgresMessageContext{messages: map[string]string{}}
+
+	got := messageContext.dump()
+	if got == nil {
+		t.Fatal("dump() = nil, want a non-nil empty map")
+	}
+
+	if len(got) != 0 {
+		t.Errorf("dump() = %v, want none buffered", got)
+	}
+
+	if again := messageContext.dump(); len(again) != 0 {
+		t.Errorf("dump() = %v, want none buffered on a repeated call", again)
+	}
+}
+
+func BenchmarkMessageContextDump(b *testing.B) {
+	benchmarks := []struct {
+		name     string
+		messages map[string]string
+	}{
+		{"empty", map[string]string{}},
+		{"one entry", map[string]string{"trace": "abc"}},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			messageContext := &postgresMessageContext{messages: maps.Clone(bm.messages)}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for range b.N {
+				sinkMessages = messageContext.dump()
+			}
+		})
+	}
+}
+
+// sinkMessages keeps the benchmarked dump() result reachable so the compiler
+// cannot elide the call.
+var sinkMessages map[string]string
+
 // handlerCall is one dispatch the process handler received.
 type handlerCall struct {
 	timestamp time.Time

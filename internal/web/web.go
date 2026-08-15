@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"hump/config"
+	"hump/internal/adapter/postgres"
 	"hump/internal/types/stream"
 	"hump/internal/web/middleware"
 	"hump/internal/web/streamer"
@@ -31,15 +32,17 @@ var assetsFS embed.FS
 type Web struct {
 	opts           options.Options
 	cfg            config.Configuration
+	db             *postgres.Postgres
 	streamer       *streamer.FanOutStreamer[stream.Message]
 	metricsHandler http.Handler
 }
 
 // New constructs a Web UI server.
-func New(opts options.Options, cfg config.Configuration, streamer *streamer.FanOutStreamer[stream.Message], metricsHandler http.Handler) *Web {
+func New(opts options.Options, cfg config.Configuration, db *postgres.Postgres, streamer *streamer.FanOutStreamer[stream.Message], metricsHandler http.Handler) *Web {
 	return &Web{
 		opts:           opts,
 		cfg:            cfg,
+		db:             db,
 		streamer:       streamer,
 		metricsHandler: metricsHandler,
 	}

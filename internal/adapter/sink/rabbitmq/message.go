@@ -6,6 +6,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	sink "hump/internal/port/sink"
 	"hump/pkg/template"
@@ -38,7 +39,7 @@ type rabbitMessage struct {
 // and returns the assembled [rabbitMessage]. Empty-rendered headers are
 // dropped (matches the Kafka/NATS sinks). DeliveryMode defaults to persistent;
 // Priority is parsed from the rendered string and range-checked.
-func buildMessage(cfg sink.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitMessage, error) {
+func buildMessage(cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitMessage, error) {
 	exchange, err := cfg.Exchange.Name.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render exchange.name: %w", err)
@@ -85,17 +86,17 @@ func buildMessage(cfg sink.RabbitMQSink, operationContext *sink.SinkContext) (*r
 // deliveryModeByte returns the AMQP wire-byte for the configured mode. An
 // empty mode (caller bypassed setDefaults) maps to Persistent — same default
 // as the YAML loader.
-func deliveryModeByte(mode sink.RabbitMQDeliveryMode) uint8 {
-	if mode == sink.RabbitMQDeliveryTransient {
+func deliveryModeByte(mode sinkcfg.RabbitMQDeliveryMode) uint8 {
+	if mode == sinkcfg.RabbitMQDeliveryTransient {
 		return amqp.Transient
 	}
 	return amqp.Persistent
 }
 
-// renderProperties renders each [sink.RabbitMQProperties] template and
+// renderProperties renders each [sinkcfg.RabbitMQProperties] template and
 // assigns the non-empty results to the matching [amqp.Publishing] field.
 // Priority is parsed to uint8 and rejected if out of range.
-func renderProperties(p *amqp.Publishing, props sink.RabbitMQProperties, opCtx *sink.SinkContext) error {
+func renderProperties(p *amqp.Publishing, props sinkcfg.RabbitMQProperties, opCtx *sink.SinkContext) error {
 	var err error
 
 	if p.MessageId, err = props.MessageID.Render(opCtx); err != nil {

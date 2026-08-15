@@ -9,9 +9,6 @@ import (
 type SinkContext struct {
 	Version string
 
-	SinkType string
-	SinkName string
-
 	Timestamp time.Time
 	Operation domain.OperationType
 

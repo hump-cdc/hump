@@ -1,7 +1,7 @@
 package config
 
 import (
-	pkgconfig "hump/pkg/config"
+	"hump/config/decoder"
 
 	"github.com/goccy/go-yaml"
 )
@@ -20,7 +20,7 @@ func Parse(source string) (Configuration, error) {
 	if err := yaml.UnmarshalWithOptions(
 		[]byte(expaned), &cfg,
 		yaml.Strict(),
-		yaml.Validator(pkgconfig.Validate),
+		yaml.Validator(decoder.Validate),
 	); err != nil {
 		return Configuration{}, err
 	}

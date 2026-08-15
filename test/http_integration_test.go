@@ -46,10 +46,6 @@ sinks:
               max: 2s
               multiplier: 2
               jitter: none
-      delivery:
-          mode: async
-          maxConcurrent: 64
-          concurrencyKey: '{{.Table}}'
 
 tables:
     - tables:

@@ -2,7 +2,6 @@ package sink
 
 import (
 	"context"
-	"hump/internal/types/stream"
 )
 
 type Definition interface {
@@ -12,5 +11,5 @@ type Definition interface {
 }
 
 type Sink interface {
-	Process(ctx context.Context, config Definition, operationContext *SinkContext, streamEvent *stream.Event) error
+	Process(ctx context.Context, config Definition, operationContext *SinkContext) error
 }

@@ -55,7 +55,7 @@ Each item in a table's `sinks` sequence is a mapping that contains:
 - exactly one sink-type discriminator key — `kafka:`, `http:`, `nats-core:`, `nats-jetstream:`, `rabbitmq:`, or `rabbitmq-stream:` (a sink with zero or more than one is rejected); **or**
 - a `preset: <name>` reference to a top-level preset, optionally accompanied by a discriminator block that is deep-merged onto the preset.
 
-Plus, at the same level, any of the optional policy keys: `failure`, `retry`, `delivery`.
+Plus, at the same level, any of the optional policy keys: `failure`, `retry`.
 
 ```yaml
 sinks:
@@ -63,9 +63,6 @@ sinks:
       url: "localhost:9092"
       topic: users
     failure: skip
-    delivery:
-      mode: async
-      maxConcurrent: 64
     retry:
       maxAttempts: 5
       attemptTimeout: 10s
@@ -292,23 +289,9 @@ failure: crash
 
 Any other value is rejected.
 
-### Delivery policy
-
-```yaml
-delivery:
-  mode: reliable
-```
-
-```yaml
-delivery:
-  mode: async
-  maxConcurrent: 64
-```
-
-| Field           | Notes                                              |
-|-----------------|----------------------------------------------------|
-| `mode`          | `reliable` or `async`; any other value is rejected |
-| `maxConcurrent` | Integer                                            |
+Every sink is delivered attached: the LSN advances only once the sink
+completes, so the event a `crash` stops the process on is still recovered on
+restart.
 
 ### Retry policy
 
@@ -395,9 +378,6 @@ sinks:
       body: |
         {"op": "{{ .Operation }}", "id": {{ .Next.id }}}
     failure: skip
-    delivery:
-      mode: async
-      maxConcurrent: 64
   - name: nj1
     nats-jetstream:
       url: "nats://localhost:4222"

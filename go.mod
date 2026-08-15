@@ -20,6 +20,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.11.0
 	github.com/rabbitmq/rabbitmq-stream-go-client v1.8.1
 	github.com/twmb/franz-go v1.21.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.42.0
 )

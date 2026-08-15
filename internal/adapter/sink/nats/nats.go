@@ -7,8 +7,8 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
-	"hump/internal/types/stream"
 )
 
 // ProcessCore delivers a single WAL operation to a Core NATS sink by acquiring
@@ -16,7 +16,7 @@ import (
 // operationContext, and publishing it with a synchronous flush. When streamEvent is
 // non-nil the built message's rendered fields are recorded on it for the
 // operations stream.
-func ProcessCore(ctx context.Context, cfg sink.NatsCoreSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
+func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext *sink.SinkContext) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -29,11 +29,6 @@ func ProcessCore(ctx context.Context, cfg sink.NatsCoreSink, operationContext *s
 	msg, err := buildMessage(cfg.NatsCommon, operationContext)
 	if err != nil {
 		return wrapError(err)
-	}
-
-	if streamEvent != nil {
-		streamEvent.Payload = string(msg.Data)
-		streamEvent.Headers = natsHeaders(msg.Header)
 	}
 
 	if err := nc.conn.PublishMsg(msg); err != nil {
@@ -50,7 +45,7 @@ func ProcessCore(ctx context.Context, cfg sink.NatsCoreSink, operationContext *s
 // builds the message, applies the JetStream control headers, runs the
 // per-(connection, stream) reconcile guard, and publishes asserting the
 // expected stream.
-func ProcessJetStream(ctx context.Context, cfg sink.NatsJetStreamSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
+func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -71,11 +66,6 @@ func ProcessJetStream(ctx context.Context, cfg sink.NatsJetStreamSink, operation
 
 	if err := applyJetStreamHeaders(msg.Header, cfg, operationContext); err != nil {
 		return wrapError(err)
-	}
-
-	if streamEvent != nil {
-		streamEvent.Payload = string(msg.Data)
-		streamEvent.Headers = natsHeaders(msg.Header)
 	}
 
 	if _, err := nc.js.PublishMsg(ctx, msg, jetstream.WithExpectStream(cfg.Stream.Name)); err != nil {

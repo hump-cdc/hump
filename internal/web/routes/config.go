@@ -4,7 +4,6 @@ import (
 	"context"
 	"hump/config"
 	"hump/internal/adapter/postgres"
-	"hump/internal/adapter/postgres/connection"
 	"hump/internal/domain"
 	"hump/pkg/app/options"
 	"hump/pkg/version"
@@ -46,9 +45,6 @@ type ConfigResponse struct {
 
 			PublicationName     string `json:"publication" doc:"PostgreSQL publication name"`
 			ReplicationSlotName string `json:"slot"        doc:"PostgreSQL replication slot name"`
-
-			MaxReplicationSlots int `json:"maxReplicationSlots" doc:"PostgreSQL max_replication_slots setting"`
-			MaxWalSenders       int `json:"maxWalSenders"       doc:"PostgreSQL max_wal_senders setting"`
 		} `json:"database" doc:"PostgreSQL database configuration"`
 
 		Sinks  []ConfigSink  `json:"sinks"  doc:"Sinks present in the configuration"`
@@ -56,46 +52,28 @@ type ConfigResponse struct {
 	}
 }
 
-func RegisterConfig(api huma.API, opts options.Options, cfg config.Configuration) {
+func RegisterConfig(api huma.API, opts options.Options, cfg config.Configuration, db *postgres.Postgres) {
 	huma.Register(api, huma.Operation{
 		OperationID: "config.get",
 		Method:      http.MethodGet,
 		Path:        "/api/config",
 		Summary:     "Get server configuration",
 		Tags:        []string{"Config"},
-	}, handler(opts, cfg))
+	}, handler(opts, cfg, db))
 }
 
-func handler(opts options.Options, cfg config.Configuration) func(ctx context.Context, _ *struct{}) (*ConfigResponse, error) {
-	return func(ctx context.Context, _ *struct{}) (*ConfigResponse, error) {
-		endpoint, err := connection.Describe(opts.DatabaseUrl)
-		if err != nil {
-			return nil, err
-		}
-
-		conn, err := connection.New(opts.DatabaseUrl).CreateConnection(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close(ctx)
-
-		dbConfig, err := postgres.GetConfig(ctx, conn)
-		if err != nil {
-			return nil, err
-		}
-
+func handler(opts options.Options, cfg config.Configuration, db *postgres.Postgres) func(ctx context.Context, _ *struct{}) (*ConfigResponse, error) {
+	return func(_ context.Context, _ *struct{}) (*ConfigResponse, error) {
 		resp := ConfigResponse{}
 		resp.Body.App.Version = version.Version
 		resp.Body.App.Commit = version.Commit
 		resp.Body.ConfigPath = opts.ConfigPath
 		resp.Body.RawConfig = opts.Config
-		resp.Body.Database.Host = endpoint.Host
-		resp.Body.Database.Port = endpoint.Port
-		resp.Body.Database.Name = string(endpoint.Database)
-		resp.Body.Database.PublicationName = opts.PublicationName
-		resp.Body.Database.ReplicationSlotName = opts.ReplicationSlotName
-		resp.Body.Database.MaxReplicationSlots = dbConfig.MaxReplicationSlots
-		resp.Body.Database.MaxWalSenders = dbConfig.MaxWalSenders
+		resp.Body.Database.Host = db.GetDbHost()
+		resp.Body.Database.Port = db.GetDbPort()
+		resp.Body.Database.Name = db.GetDbName()
+		resp.Body.Database.PublicationName = db.GetPublicationName()
+		resp.Body.Database.ReplicationSlotName = db.GetSlotName()
 
 		resp.Body.Sinks = make([]ConfigSink, 0)
 		seenAllSinks := map[ConfigSink]struct{}{}

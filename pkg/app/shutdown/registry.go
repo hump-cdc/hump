@@ -3,7 +3,6 @@ package shutdown
 import (
 	"context"
 	"errors"
-	"hump/internal/types/errs"
 	"hump/pkg/telemetry/log"
 	"slices"
 	"sync"
@@ -75,7 +74,7 @@ func (s *registry) shutdown(timeout time.Duration) error {
 					logger.Info("Service stopped", "name", h.name, "duration", time.Since(start))
 				}
 			case <-ctx.Done():
-				fnErrors = append(fnErrors, errs.ErrShutdownTimeout)
+				fnErrors = append(fnErrors, ErrShutdownTimeout)
 				logger.Warn("Timeout to stop service", "name", h.name, "duration", time.Since(start))
 			}
 		}

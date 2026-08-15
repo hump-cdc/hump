@@ -6,7 +6,7 @@ import (
 	"net"
 	nethttp "net/http"
 
-	"hump/internal/types/errs"
+	"hump/internal/port/sink"
 	"hump/pkg/template"
 )
 
@@ -26,12 +26,12 @@ func (e *statusError) Error() string {
 	return fmt.Sprintf("http %d from %s", e.code, e.url)
 }
 
-// wrapError returns an "http" wrapped error, joining [errs.ErrSinkPermanent]
+// wrapError returns an "http" wrapped error, joining [sink.ErrSinkPermanent]
 // for non-retriable errors: template render failures (shared across sinks) and
 // the HTTP-specific failures classified by isPermanentHttpError.
 func wrapError(err error) error {
 	if errors.Is(err, template.ErrRender) || isPermanentHttpError(err) {
-		return fmt.Errorf("http: %w", errors.Join(err, errs.ErrSinkPermanent))
+		return fmt.Errorf("http: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}
 	return fmt.Errorf("http: %w", err)
 }

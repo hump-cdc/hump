@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	sink "hump/internal/port/sink"
+	sinkcfg "hump/config/sink"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -64,7 +64,7 @@ func (g *reconciler) stateFor(stream string) *streamState {
 // (connection, stream) per process for non-transient outcomes. Returns nil
 // when reconcile is not configured. Transient transport errors are returned
 // without marking the state done, so the next call retries.
-func (g *reconciler) ensureReconciled(ctx context.Context, cfg sink.NatsJetStreamSink) error {
+func (g *reconciler) ensureReconciled(ctx context.Context, cfg sinkcfg.NatsJetStreamSink) error {
 	if len(cfg.Stream.Subjects) == 0 {
 		return nil
 	}
@@ -93,7 +93,7 @@ func (g *reconciler) ensureReconciled(ctx context.Context, cfg sink.NatsJetStrea
 // unwrapped so the sink classifier treats them as retriable. API-level
 // reconcile failures are wrapped with [errReconcile] so callers can classify
 // them as permanent.
-func (g *reconciler) runReconcile(ctx context.Context, cfg sink.NatsJetStreamSink) error {
+func (g *reconciler) runReconcile(ctx context.Context, cfg sinkcfg.NatsJetStreamSink) error {
 	streamCfg := jetstream.StreamConfig{Name: cfg.Stream.Name}
 
 	if len(cfg.Stream.Subjects) > 0 {
@@ -122,7 +122,7 @@ func (g *reconciler) runReconcile(ctx context.Context, cfg sink.NatsJetStreamSin
 
 	var apiErr error
 	switch cfg.Mode {
-	case sink.JetStreamReconcileCreateWhenMissing:
+	case sinkcfg.JetStreamReconcileCreateWhenMissing:
 		_, err := g.js.Stream(ctx, cfg.Stream.Name)
 		if err == nil {
 			return nil

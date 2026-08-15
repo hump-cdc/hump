@@ -3,6 +3,7 @@ package rabbitmq_stream
 import (
 	"fmt"
 
+	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	sink "hump/internal/port/sink"
 )
@@ -10,7 +11,7 @@ import (
 // renderAll renders the templated stream name, payload, and headers from cfg
 // against operationContext. Returns each rendered value separately so the
 // caller can use them with the stream client's typed APIs.
-func renderAll(cfg sink.RabbitMQStreamSink, operationContext *sink.SinkContext) (streamName, payload string, headers domain.Headers, err error) {
+func renderAll(cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext) (streamName, payload string, headers domain.Headers, err error) {
 	streamName, err = cfg.Stream.Name.Render(operationContext)
 	if err != nil {
 		err = fmt.Errorf("render stream.name: %w", err)

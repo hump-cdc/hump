@@ -1,0 +1,743 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"hump/internal/domain"
+	"hump/internal/port/database"
+)
+
+func TestNewBootstrapperBorrowsConnection(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if bootstrapper.connection == nil {
+		t.Fatal("newBootstrapper() left the connection nil")
+	}
+}
+
+func TestEnsurePublicationExists(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(true,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1")),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "users"},
+		{Schema: "public", Name: "metrics"},
+	}
+
+	if err := bootstrapper.EnsurePublicationExists(context.Background(), "hump_pub", tables); err != nil {
+		t.Fatalf("EnsurePublicationExists() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 3 {
+		t.Fatalf("statements = %d, want 3: %q", len(statements), statements)
+	}
+
+	publication := statements[2]
+	want := `TABLE "public"."metrics", "public"."users", TABLES IN SCHEMA "_timescaledb_internal"`
+	if !strings.Contains(publication, `ALTER PUBLICATION "hump_pub" SET `+want) {
+		t.Errorf("publication statement = %q, want the ALTER to set %q", publication, want)
+	}
+	if !strings.Contains(publication, `CREATE PUBLICATION "hump_pub" FOR `+want) {
+		t.Errorf("publication statement = %q, want the CREATE to declare %q", publication, want)
+	}
+	if !strings.Contains(publication, `pubname = 'hump_pub'`) {
+		t.Errorf("publication statement = %q, want the name as a literal in the existence check", publication)
+	}
+}
+
+func TestEnsurePublicationExistsSkipsUnnamedChunkSchema(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(true,
+		layoutRow("public", "metrics", tableTypeHypertable, []byte(""), []byte("_hyper_1_1")),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "metrics"}}
+
+	if err := bootstrapper.EnsurePublicationExists(context.Background(), "hump_pub", tables); err != nil {
+		t.Fatalf("EnsurePublicationExists() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 3 {
+		t.Fatalf("statements = %d, want 3: %q", len(statements), statements)
+	}
+	if strings.Contains(statements[2], "TABLES IN SCHEMA") {
+		t.Errorf("publication statement = %q, want no schema clause for a chunk schema with no name", statements[2])
+	}
+	if !strings.Contains(statements[2], `TABLE "public"."metrics"`) {
+		t.Errorf("publication statement = %q, want the hypertable itself still listed", statements[2])
+	}
+}
+
+func TestEnsurePublicationExistsPropagatesLookupError(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsurePublicationExists(context.Background(), "hump_pub", nil)
+	if !errors.Is(err, database.ErrNoTablesConfigured) {
+		t.Fatalf("EnsurePublicationExists() error = %v, want database.ErrNoTablesConfigured", err)
+	}
+}
+
+func TestEnsurePublicationExistsWrapsServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(sql string) queryResult {
+		switch {
+		case strings.Contains(sql, "pg_extension"):
+			return singleValue("f")
+		case strings.Contains(sql, "unnest("):
+			return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
+		default:
+			return serverError("42501", "permission denied")
+		}
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	err := bootstrapper.EnsurePublicationExists(context.Background(), "hump_pub", tables)
+	if err == nil {
+		t.Fatal("EnsurePublicationExists() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), `ensure publication "hump_pub"`) {
+		t.Errorf("error = %v, want it to name the publication", err)
+	}
+}
+
+func TestEnsurePublicationRemoved(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if err := bootstrapper.EnsurePublicationRemoved(context.Background(), `we"ird`); err != nil {
+		t.Fatalf("EnsurePublicationRemoved() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 1 {
+		t.Fatalf("statements = %d, want 1: %q", len(statements), statements)
+	}
+	if !strings.Contains(statements[0], `DROP PUBLICATION IF EXISTS "we""ird"`) {
+		t.Errorf("statement = %q, want the publication name quoted as an identifier", statements[0])
+	}
+}
+
+func TestEnsurePublicationRemovedWrapsServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsurePublicationRemoved(context.Background(), "hump_pub")
+	if err == nil {
+		t.Fatal("EnsurePublicationRemoved() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), `remove publication "hump_pub"`) {
+		t.Errorf("error = %v, want it to name the publication", err)
+	}
+}
+
+func TestEnsureReplicationSlotExists(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if err := bootstrapper.EnsureReplicationSlotExists(context.Background(), "hump's slot"); err != nil {
+		t.Fatalf("EnsureReplicationSlotExists() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 1 {
+		t.Fatalf("statements = %d, want 1: %q", len(statements), statements)
+	}
+	if !strings.Contains(statements[0], "pg_create_logical_replication_slot") {
+		t.Errorf("statement = %q, want the slot creation block", statements[0])
+	}
+	if !strings.Contains(statements[0], `'hump''s slot'`) {
+		t.Errorf("statement = %q, want the slot name quoted as a literal", statements[0])
+	}
+}
+
+func TestEnsureReplicationSlotExistsWrapsServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("55006", "slot is active") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsureReplicationSlotExists(context.Background(), "hump_slot")
+	if err == nil {
+		t.Fatal("EnsureReplicationSlotExists() error = nil, want the server error")
+	}
+
+	if !strings.Contains(err.Error(), `ensure replication slot "hump_slot"`) {
+		t.Errorf("error = %v, want it to name the slot", err)
+	}
+
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "55006" {
+		t.Errorf("error = %v, want a wrapped *pgconn.PgError with SQLSTATE 55006", err)
+	}
+}
+
+func TestEnsureReplicationSlotRemoved(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if err := bootstrapper.EnsureReplicationSlotRemoved(context.Background(), "hump_slot"); err != nil {
+		t.Fatalf("EnsureReplicationSlotRemoved() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 1 {
+		t.Fatalf("statements = %d, want 1: %q", len(statements), statements)
+	}
+	if !strings.Contains(statements[0], "pg_drop_replication_slot") {
+		t.Errorf("statement = %q, want the slot removal block", statements[0])
+	}
+	if !strings.Contains(statements[0], `'hump_slot'`) {
+		t.Errorf("statement = %q, want the slot name quoted as a literal", statements[0])
+	}
+}
+
+func TestEnsureReplicationSlotRemovedWrapsServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("55006", "slot is active") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsureReplicationSlotRemoved(context.Background(), "hump_slot")
+	if err == nil {
+		t.Fatal("EnsureReplicationSlotRemoved() error = nil, want the server error")
+	}
+
+	if !strings.Contains(err.Error(), `remove replication slot "hump_slot"`) {
+		t.Errorf("error = %v, want it to name the slot", err)
+	}
+
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "55006" {
+		t.Errorf("error = %v, want a wrapped *pgconn.PgError with SQLSTATE 55006", err)
+	}
+}
+
+func TestEnsureReplicaIdentityFullCoversTablesAndPartitions(t *testing.T) {
+	cases := []struct {
+		name string
+		rows [][][]byte
+		want []string
+	}{
+		{
+			name: "regular table",
+			rows: [][][]byte{
+				layoutRow("public", "users", tableTypeRegular, nil, nil),
+			},
+			want: []string{`"public"."users"`},
+		},
+		{
+			name: "partitioned table and its partitions",
+			rows: [][][]byte{
+				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+				layoutRow("public", "events", tableTypePartitioned, []byte("archive"), []byte("events_2025")),
+			},
+			want: []string{`"archive"."events_2025"`, `"public"."events"`, `"public"."events_2024"`},
+		},
+		{
+			name: "duplicate partitions are altered once",
+			rows: [][][]byte{
+				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+			},
+			want: []string{`"public"."events"`, `"public"."events_2024"`},
+		},
+		{
+			name: "hypertable chunks are left alone",
+			rows: [][][]byte{
+				layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1")),
+			},
+			want: []string{`"public"."metrics"`},
+		},
+		{
+			name: "partitions missing a schema or a name are skipped",
+			rows: [][][]byte{
+				layoutRow("public", "events", tableTypePartitioned, []byte(""), []byte("orphan")),
+				layoutRow("public", "events", tableTypePartitioned, []byte("public"), nil),
+			},
+			want: []string{`"public"."events"`},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(tableLayoutResponder(true, tt.rows...))
+			bootstrapper := newTestBootstrapper(t, server)
+
+			tables := []domain.TableIdentifier{
+				{Schema: domain.TableSchema(tt.rows[0][0]), Name: domain.TableName(tt.rows[0][1])},
+			}
+
+			if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables); err != nil {
+				t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
+			}
+
+			// The qualified table of every ALTER TABLE ... REPLICA IDENTITY FULL,
+			// sorted so a map-ordered run compares consistently.
+			alterPattern := regexp.MustCompile(`ALTER TABLE (.+) REPLICA IDENTITY FULL`)
+
+			var got []string
+			for _, statement := range server.recorded() {
+				if match := alterPattern.FindStringSubmatch(statement); match != nil {
+					got = append(got, match[1])
+				}
+			}
+			sort.Strings(got)
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("altered tables = %q, want %q", got, tt.want)
+			}
+			for i, want := range tt.want {
+				if got[i] != want {
+					t.Errorf("altered table %d = %q, want %q", i, got[i], want)
+				}
+			}
+		})
+	}
+}
+
+func TestEnsureReplicaIdentityFullQuotesTheTable(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("pub'lic", "us\"ers", tableTypeRegular, nil, nil),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "pub'lic", Name: "us\"ers"}}
+
+	if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables); err != nil {
+		t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 3 {
+		t.Fatalf("statements = %d, want 3: %q", len(statements), statements)
+	}
+
+	alter := statements[2]
+	if !strings.Contains(alter, `ALTER TABLE "pub'lic"."us""ers" REPLICA IDENTITY FULL`) {
+		t.Errorf("statement = %q, want the table quoted as an identifier", alter)
+	}
+	if !strings.Contains(alter, `= 'pub''lic.us"ers'`) {
+		t.Errorf("statement = %q, want the qualified name quoted as a literal", alter)
+	}
+}
+
+func TestEnsureReplicaIdentityFullPropagatesLookupError(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), nil)
+	if !errors.Is(err, database.ErrNoTablesConfigured) {
+		t.Fatalf("EnsureReplicaIdentityFull() error = %v, want database.ErrNoTablesConfigured", err)
+	}
+}
+
+func TestEnsureReplicaIdentityFullWrapsServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(sql string) queryResult {
+		switch {
+		case strings.Contains(sql, "pg_extension"):
+			return singleValue("f")
+		case strings.Contains(sql, "unnest("):
+			return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
+		default:
+			return serverError("42501", "permission denied")
+		}
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables)
+	if err == nil {
+		t.Fatal("EnsureReplicaIdentityFull() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), "set replica identity full on public.users") {
+		t.Errorf("error = %v, want it to name the table", err)
+	}
+}
+
+func TestTablesWithPartitionsRejectsEmptyTableList(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), nil)
+	if !errors.Is(err, database.ErrNoTablesConfigured) {
+		t.Fatalf("getTablesWithPartitions() error = %v, want database.ErrNoTablesConfigured", err)
+	}
+
+	if statements := server.recorded(); len(statements) != 0 {
+		t.Errorf("statements = %q, want none: an empty list must not reach the server", statements)
+	}
+}
+
+func TestTablesWithPartitionsBindsTablesAsArrays(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+		layoutRow("other", "events", tableTypeRegular, nil, nil),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "users"},
+		{Schema: "other", Name: "events"},
+	}
+
+	if _, err := bootstrapper.getTablesWithPartitions(context.Background(), tables); err != nil {
+		t.Fatalf("getTablesWithPartitions() error = %v", err)
+	}
+
+	params := server.boundParams()
+	if len(params) != 1 {
+		t.Fatalf("binds = %d, want 1", len(params))
+	}
+	if len(params[0]) != 2 {
+		t.Fatalf("bound parameters = %d, want 2", len(params[0]))
+	}
+	if got := string(params[0][0]); got != "{public,other}" {
+		t.Errorf("schemas parameter = %q, want %q", got, "{public,other}")
+	}
+	if got := string(params[0][1]); got != "{users,events}" {
+		t.Errorf("names parameter = %q, want %q", got, "{users,events}")
+	}
+}
+
+func TestTablesWithPartitionsSelectsQueryByTimescaleDB(t *testing.T) {
+	cases := []struct {
+		name      string
+		timescale bool
+		want      string
+	}{
+		{name: "without timescaledb", timescale: false, want: bootstrapperMetadataTablesNoTimescaleSql},
+		{name: "with timescaledb", timescale: true, want: bootstrapperMetadataTablesTimescaleSql},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(tableLayoutResponder(tt.timescale,
+				layoutRow("public", "users", tableTypeRegular, nil, nil),
+			))
+			bootstrapper := newTestBootstrapper(t, server)
+
+			tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+			if _, err := bootstrapper.getTablesWithPartitions(context.Background(), tables); err != nil {
+				t.Fatalf("getTablesWithPartitions() error = %v", err)
+			}
+
+			statements := server.recorded()
+			if len(statements) != 2 {
+				t.Fatalf("statements = %d, want 2: %q", len(statements), statements)
+			}
+			if statements[1] != tt.want {
+				t.Errorf("layout query = %q, want the other variant", statements[1])
+			}
+		})
+	}
+}
+
+func TestTablesWithPartitionsGroupsPartitionsByTable(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(true,
+		layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+		layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2025")),
+		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), nil),
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "events"},
+		{Schema: "public", Name: "metrics"},
+		{Schema: "public", Name: "users"},
+	}
+
+	info, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err != nil {
+		t.Fatalf("getTablesWithPartitions() error = %v", err)
+	}
+
+	events := info[domain.TableIdentifier{Schema: "public", Name: "events"}]
+	if events.Type != tableTypePartitioned {
+		t.Errorf("events type = %v, want %v", events.Type, tableTypePartitioned)
+	}
+	wantPartitions := []domain.TableIdentifier{
+		{Schema: "public", Name: "events_2024"},
+		{Schema: "public", Name: "events_2025"},
+	}
+	if len(events.Partitions) != len(wantPartitions) {
+		t.Fatalf("events partitions = %+v, want %+v", events.Partitions, wantPartitions)
+	}
+	for i, want := range wantPartitions {
+		if events.Partitions[i] != want {
+			t.Errorf("events partition %d = %+v, want %+v", i, events.Partitions[i], want)
+		}
+	}
+
+	metrics := info[domain.TableIdentifier{Schema: "public", Name: "metrics"}]
+	if len(metrics.Partitions) != 1 || metrics.Partitions[0].Schema != "_timescaledb_internal" {
+		t.Fatalf("metrics partitions = %+v, want one in _timescaledb_internal", metrics.Partitions)
+	}
+	if metrics.Partitions[0].Name != "" {
+		t.Errorf("metrics partition name = %q, want empty: the column was NULL", metrics.Partitions[0].Name)
+	}
+
+	if partitions := info[domain.TableIdentifier{Schema: "public", Name: "users"}].Partitions; partitions != nil {
+		t.Errorf("users partitions = %+v, want none", partitions)
+	}
+}
+
+func TestTablesWithPartitionsReportsMissingTables(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "users"},
+		{Schema: "public", Name: "gone"},
+		{Schema: "audit", Name: "trail"},
+	}
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if !errors.Is(err, database.ErrTablesNotFound) {
+		t.Fatalf("getTablesWithPartitions() error = %v, want database.ErrTablesNotFound", err)
+	}
+
+	if !strings.Contains(err.Error(), "public.gone, audit.trail") {
+		t.Errorf("error = %v, want it to list every missing table", err)
+	}
+}
+
+func TestTablesWithPartitionsRejectsShortRows(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(sql string) queryResult {
+		if strings.Contains(sql, "pg_extension") {
+			return singleValue("f")
+		}
+
+		return tableLayout([][]byte{[]byte("public"), []byte("users"), []byte("regular")})
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err == nil {
+		t.Fatal("getTablesWithPartitions() error = nil, want the column count error")
+	}
+	if !strings.Contains(err.Error(), "expected 5 columns, got 3") {
+		t.Errorf("error = %v, want it to report the column count", err)
+	}
+}
+
+func TestTablesWithPartitionsWrapsQueryError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(sql string) queryResult {
+		if strings.Contains(sql, "pg_extension") {
+			return singleValue("f")
+		}
+
+		return serverError("42P01", "relation does not exist")
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err == nil {
+		t.Fatal("getTablesWithPartitions() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), "get tables with partitions") {
+		t.Errorf("error = %v, want it wrapped by the lookup", err)
+	}
+}
+
+func TestTablesWithPartitionsPropagatesTimescaleProbeError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err == nil {
+		t.Fatal("getTablesWithPartitions() error = nil, want the probe error")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("error = %v, want the probe error", err)
+	}
+
+	if statements := server.recorded(); len(statements) != 1 {
+		t.Errorf("statements = %d, want 1: the layout query must not run", len(statements))
+	}
+}
+
+func TestTablesWithPartitionsKeepsEmptyPartitionSchema(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "events", tableTypePartitioned, []byte(""), []byte("events_2024")),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "events"}}
+
+	info, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err != nil {
+		t.Fatalf("getTablesWithPartitions() error = %v", err)
+	}
+
+	partitions := info[domain.TableIdentifier{Schema: "public", Name: "events"}].Partitions
+	want := domain.TableIdentifier{Schema: "", Name: "events_2024"}
+	if len(partitions) != 1 || partitions[0] != want {
+		t.Fatalf("partitions = %+v, want %+v: an empty schema is not a NULL one", partitions, want)
+	}
+}
+
+func TestTablesWithPartitionsWrapsEncodeError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+	))
+	bootstrapper := newTestBootstrapper(t, server)
+	bootstrapper.newTypeMap = newUnencodableTypeMap
+
+	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
+
+	_, err := bootstrapper.getTablesWithPartitions(context.Background(), tables)
+	if err == nil {
+		t.Fatal("getTablesWithPartitions() error = nil, want the encode error")
+	}
+	if !strings.Contains(err.Error(), "encode schemas array") {
+		t.Errorf("error = %v, want it to name the array that failed", err)
+	}
+
+	if statements := server.recorded(); len(statements) != 1 {
+		t.Errorf("statements = %d, want 1: the layout query must not run", len(statements))
+	}
+}
+
+func TestBootstrapperHasTimescaleDB(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "installed", value: "t", want: true},
+		{name: "absent", value: "f", want: false},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(func(string) queryResult { return singleValue(tt.value) })
+			bootstrapper := newTestBootstrapper(t, server)
+
+			got, err := bootstrapper.hasTimescaleDB(context.Background())
+			if err != nil {
+				t.Fatalf("hasTimescaleDB() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("hasTimescaleDB() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBootstrapperHasTimescaleDBRejectsEmptyResult(t *testing.T) {
+	cases := []struct {
+		name   string
+		result queryResult
+	}{
+		{name: "no results", result: queryResult{empty: true}},
+		{name: "no rows", result: queryResult{columns: 1}},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(func(string) queryResult { return tt.result })
+			bootstrapper := newTestBootstrapper(t, server)
+
+			_, err := bootstrapper.hasTimescaleDB(context.Background())
+			if !errors.Is(err, database.ErrDbSetup) {
+				t.Fatalf("hasTimescaleDB() error = %v, want ErrDbSetup", err)
+			}
+		})
+	}
+}
+
+func TestBootstrapperHasTimescaleDBPropagatesServerError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if _, err := bootstrapper.hasTimescaleDB(context.Background()); err == nil {
+		t.Fatal("hasTimescaleDB() error = nil, want the server error")
+	}
+}
+
+func TestQuoteLiteral(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain", in: "hump_slot", want: `'hump_slot'`},
+		{name: "empty", in: "", want: `''`},
+		{name: "embedded quote", in: "o'brien", want: `'o''brien'`},
+		{name: "only quotes", in: `''`, want: `''''''`},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &bootstrapper{}
+
+			if got := b.quoteLiteral(tt.in); got != tt.want {
+				t.Errorf("quoteLiteral(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQuoteIdentifier(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain", in: "users", want: `"users"`},
+		{name: "empty", in: "", want: `""`},
+		{name: "embedded quote", in: `we"ird`, want: `"we""ird"`},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &bootstrapper{}
+
+			if got := b.quoteIdentifier(tt.in); got != tt.want {
+				t.Errorf("quoteIdentifier(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

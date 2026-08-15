@@ -11,8 +11,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
-	"hump/internal/types/errs"
 	"hump/pkg/app/shutdown"
 )
 
@@ -46,7 +46,7 @@ var (
 
 // getClient returns a cached [natsConn] for the rendered NATS connection
 // described by cfg, creating one on first use.
-func getClient(cfg sink.NatsCommon, operationContext *sink.SinkContext) (*natsConn, error) {
+func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*natsConn, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -148,7 +148,7 @@ type natsAuth struct {
 // resolveAuth renders the configured auth group and returns the rendered field
 // values used to derive the cache key plus the [nats.Option] that applies the
 // credentials at connect time.
-func resolveAuth(cfg sink.NatsCommon, opCtx *sink.SinkContext) (natsAuth, error) {
+func resolveAuth(cfg sinkcfg.NatsCommon, opCtx *sink.SinkContext) (natsAuth, error) {
 	if cfg.Credentials != nil && cfg.Credentials.Source() != "" {
 		credentials, err := cfg.Credentials.Render(opCtx)
 		if err != nil {
@@ -157,17 +157,17 @@ func resolveAuth(cfg sink.NatsCommon, opCtx *sink.SinkContext) (natsAuth, error)
 
 		jwt, err := nkeys.ParseDecoratedJWT([]byte(credentials))
 		if err != nil {
-			return natsAuth{}, fmt.Errorf("credentials jwt: %w: %w", errs.ErrSinkPermanent, err)
+			return natsAuth{}, fmt.Errorf("credentials jwt: %w: %w", sink.ErrSinkPermanent, err)
 		}
 
 		nkey, err := nkeys.ParseDecoratedNKey([]byte(credentials))
 		if err != nil {
-			return natsAuth{}, fmt.Errorf("credentials nkey: %w: %w", errs.ErrSinkPermanent, err)
+			return natsAuth{}, fmt.Errorf("credentials nkey: %w: %w", sink.ErrSinkPermanent, err)
 		}
 
 		seed, err := nkey.Seed()
 		if err != nil {
-			return natsAuth{}, fmt.Errorf("credentials seed: %w: %w", errs.ErrSinkPermanent, err)
+			return natsAuth{}, fmt.Errorf("credentials seed: %w: %w", sink.ErrSinkPermanent, err)
 		}
 
 		return natsAuth{credentials: credentials, option: nats.UserJWTAndSeed(jwt, string(seed))}, nil
@@ -181,12 +181,12 @@ func resolveAuth(cfg sink.NatsCommon, opCtx *sink.SinkContext) (natsAuth, error)
 
 		kp, err := nkeys.FromSeed([]byte(seed))
 		if err != nil {
-			return natsAuth{}, fmt.Errorf("nkeySeed parse: %w: %w", errs.ErrSinkPermanent, err)
+			return natsAuth{}, fmt.Errorf("nkeySeed parse: %w: %w", sink.ErrSinkPermanent, err)
 		}
 
 		pub, err := kp.PublicKey()
 		if err != nil {
-			return natsAuth{}, fmt.Errorf("nkeySeed pubkey: %w: %w", errs.ErrSinkPermanent, err)
+			return natsAuth{}, fmt.Errorf("nkeySeed pubkey: %w: %w", sink.ErrSinkPermanent, err)
 		}
 
 		sigCB := func(nonce []byte) ([]byte, error) {

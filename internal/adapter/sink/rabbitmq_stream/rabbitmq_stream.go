@@ -6,8 +6,8 @@ import (
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
-	"hump/internal/types/stream"
 )
 
 // Process delivers a single WAL operation to a RabbitMQ Streams sink. It
@@ -16,7 +16,7 @@ import (
 // under the producer's serialization mutex and waits for the publisher
 // confirmation. When streamEvent is non-nil the rendered message's fields are recorded
 // on it for the operations stream.
-func Process(ctx context.Context, cfg sink.RabbitMQStreamSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
+func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -24,11 +24,6 @@ func Process(ctx context.Context, cfg sink.RabbitMQStreamSink, operationContext 
 	streamName, payload, headers, err := renderAll(cfg, operationContext)
 	if err != nil {
 		return wrapError(err)
-	}
-
-	if streamEvent != nil {
-		streamEvent.Payload = payload
-		streamEvent.Headers = headers
 	}
 
 	rp, err := getProducer(ctx, cfg, operationContext, streamName)

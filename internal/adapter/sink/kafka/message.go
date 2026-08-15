@@ -5,12 +5,13 @@ import (
 	"hump/internal/domain"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 )
 
 // buildMessage renders the configured topic, partition key, payload, and
 // headers against operationContext and returns the resulting [kgo.Record].
-func buildMessage(config sink.KafkaSink, operationContext *sink.SinkContext) (*kgo.Record, error) {
+func buildMessage(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) (*kgo.Record, error) {
 	topic, err := config.Topic.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render topic: %w", err)

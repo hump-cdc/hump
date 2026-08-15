@@ -8,22 +8,21 @@ import (
 	"strings"
 
 	cfg "hump/config"
+	sinkcfg "hump/config/sink"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
 	processOperationFeature "hump/internal/application/process_operation"
 	"hump/internal/controller"
 	databasePort "hump/internal/port/database"
 	sinkPort "hump/internal/port/sink"
-	"hump/internal/telemetry"
-	"hump/internal/telemetry/health"
-	"hump/internal/telemetry/metrics"
-	"hump/internal/types/errs"
 	"hump/internal/types/stream"
 	"hump/internal/web"
 	"hump/internal/web/streamer"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
+	"hump/pkg/telemetry/health"
 	"hump/pkg/telemetry/log"
+	"hump/pkg/telemetry/metric"
 
 	"github.com/goccy/go-yaml"
 )
@@ -52,10 +51,21 @@ func main() {
 		return
 	}
 
+	// Telemetry
+	health, err := health.New("hump")
+	if err != nil {
+		logger.Error("Unable to init health probes", "error", err)
+		os.Exit(1)
+		return
+	}
+	metrics, metricHandler := metric.New("hump")
+
 	// Adapters
-	var db databasePort.Database = postgresAdapter.NewDatabase(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
+	pg := postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
+	var db databasePort.Database = pg
 	var sink sinkPort.Sink = sinkAdapter.New()
 
+	// Application
 	if !opts.Cleanup {
 		cfgResult, _ := yaml.Marshal(&configuration)
 		logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
@@ -68,56 +78,32 @@ func main() {
 			)
 		}
 
-		// Services
-		_, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
-		metrics, metricsHandler := metrics.New("hump")
-
-		// Shared operations stream fanned out to web SSE clients.
-		operations := streamer.New[stream.Message]()
-
-		// TODO: remove
-		// r.Run(func(ctx context.Context) error {
-		// 	ticker := time.NewTicker(5 * time.Second)
-		// 	defer ticker.Stop()
-
-		// 	reporter := newMetricsReporter(metrics)
-
-		// 	for {
-		// 		select {
-		// 		case <-ctx.Done():
-		// 			return nil
-		// 		case <-ticker.C:
-		// 			if err := reporter.report(); err != nil {
-		// 				logger.Warn(err.Error(), "error", err)
-		// 			}
-		// 		}
-		// 	}
-		// })
-
 		// Run
 		if opts.TelemetryPort != nil {
 			r.Run(
 				// Telemetry
 				func(ctx context.Context) error {
-					t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
+					t := controller.NewTelemetryController(health.Handler(), metricHandler)
 					return t.Serve(*opts.TelemetryPort)
 				})
 		}
 
+		// Web UI
 		if opts.WebPort != nil {
 			r.Run(
 				// Web UI
 				func(ctx context.Context) error {
-					w := web.New(opts, configuration, operations, metricsHandler)
+					operations := streamer.New[stream.Message]()
+					w := web.New(opts, configuration, pg, operations, metricHandler)
 					return w.Serve(ctx, *opts.WebPort)
 				})
 		}
 
+		// WAL
 		r.Run(
-			// WAL
 			func(ctx context.Context) error {
-				process := processOperationFeature.NewUseCase(&configuration, sink, operations, metrics)
-				controller := controller.NewProcessController(db, processOperationFeature.NewController(process))
+				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics)
+				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
 
 				return controller.Listen(ctx)
 			},
@@ -130,7 +116,7 @@ func main() {
 					return err
 				}
 
-				return errs.ErrShutdown
+				return app.ErrShutdown
 			},
 		)
 	}
@@ -144,7 +130,7 @@ func main() {
 	}
 }
 
-func formatSinks(sinks []sinkPort.Config) string {
+func formatSinks(sinks []sinkcfg.Config) string {
 	parts := make([]string, 0, len(sinks))
 	for _, s := range sinks {
 		parts = append(parts, s.Sink.DisplayName())

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 )
@@ -96,7 +97,7 @@ func getEnvironment(url string) (*envEntry, error) {
 // it runs the stream reconciler, creates the producer, and registers a
 // shutdown hook plus a close-watcher goroutine that evicts the cache entry
 // when the producer closes unexpectedly.
-func getProducer(ctx context.Context, cfg sink.RabbitMQStreamSink, operationContext *sink.SinkContext, streamName string) (*rabbitProducer, error) {
+func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext, streamName string) (*rabbitProducer, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)

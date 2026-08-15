@@ -7,7 +7,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"hump/internal/types/errs"
+	"hump/internal/port/sink"
 	"hump/pkg/template"
 )
 
@@ -15,7 +15,7 @@ import (
 var (
 	// errReconnecting is returned by [Process] when the cached connection is
 	// dropped and the supervisor goroutine has not yet re-established it.
-	// Explicitly transient — must NOT be joined with [errs.ErrSinkPermanent].
+	// Explicitly transient — must NOT be joined with [sink.ErrSinkPermanent].
 	errReconnecting = errors.New("connection not ready: reconnecting")
 
 	// errExchangeMissing is reported by the reconciler in `passive` mode when
@@ -36,7 +36,7 @@ var (
 	errPublishNacked = errors.New("publish nacked by broker")
 )
 
-// wrapError returns a "rabbitmq" wrapped error, joining [errs.ErrSinkPermanent]
+// wrapError returns a "rabbitmq" wrapped error, joining [sink.ErrSinkPermanent]
 // for non-retriable errors: template render failures (shared across sinks) and
 // the AMQP-specific failures classified by isPermanentRabbitError.
 //
@@ -48,7 +48,7 @@ func wrapError(err error) error {
 	}
 
 	if errors.Is(err, template.ErrRender) || isPermanentRabbitError(err) {
-		return fmt.Errorf("rabbitmq: %w", errors.Join(err, errs.ErrSinkPermanent))
+		return fmt.Errorf("rabbitmq: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}
 	return fmt.Errorf("rabbitmq: %w", err)
 }

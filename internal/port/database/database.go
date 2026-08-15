@@ -8,6 +8,8 @@ import (
 
 type Database interface {
 	GetDbName() string
+	GetDbHost() string
+	GetDbPort() uint16
 	GetPublicationName() string
 	GetSlotName() string
 	Listen(ctx context.Context, handler ProcessMessageHandler) error

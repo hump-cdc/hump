@@ -4,6 +4,7 @@ import (
 	"fmt"
 	nethttp "net/http"
 
+	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	sink "hump/internal/port/sink"
 	"hump/pkg/version"
@@ -17,7 +18,7 @@ type message struct {
 
 // buildMessage renders the URL, method, and body templates against
 // operationContext and returns the resulting [message].
-func buildMessage(config sink.HTTPSink, operationContext *sink.SinkContext) (*message, error) {
+func buildMessage(config sinkcfg.HTTPSink, operationContext *sink.SinkContext) (*message, error) {
 	url, err := config.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -56,7 +57,7 @@ func requestHeaders(header nethttp.Header) domain.Headers {
 
 // fillHeaders sets the User-Agent to "hump/<version>" and applies each
 // configured header template against operationContext.
-func fillHeaders(req *nethttp.Request, config sink.HTTPSink, operationContext *sink.SinkContext) error {
+func fillHeaders(req *nethttp.Request, config sinkcfg.HTTPSink, operationContext *sink.SinkContext) error {
 	req.Header.Set("User-Agent", "hump/"+version.Version)
 
 	for name, tmpl := range config.Headers {

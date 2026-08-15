@@ -7,7 +7,7 @@ import (
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
-	"hump/internal/types/errs"
+	"hump/internal/port/sink"
 	"hump/pkg/template"
 )
 
@@ -28,7 +28,7 @@ var (
 )
 
 // wrapError returns a "rabbitmq-stream" wrapped error, joining
-// [errs.ErrSinkPermanent] for non-retriable errors: template render failures
+// [sink.ErrSinkPermanent] for non-retriable errors: template render failures
 // (shared across sinks) and the stream-specific failures classified by
 // isPermanentStreamError.
 func wrapError(err error) error {
@@ -37,7 +37,7 @@ func wrapError(err error) error {
 	}
 
 	if errors.Is(err, template.ErrRender) || isPermanentStreamError(err) {
-		return fmt.Errorf("rabbitmq-stream: %w", errors.Join(err, errs.ErrSinkPermanent))
+		return fmt.Errorf("rabbitmq-stream: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}
 	return fmt.Errorf("rabbitmq-stream: %w", err)
 }

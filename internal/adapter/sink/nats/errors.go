@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"hump/internal/types/errs"
+	"hump/internal/port/sink"
 	"hump/pkg/template"
 )
 
@@ -22,12 +22,12 @@ var (
 	errReconcile      = errors.New("reconcile")
 )
 
-// wrapError returns a "nats" wrapped error, joining [errs.ErrSinkPermanent]
+// wrapError returns a "nats" wrapped error, joining [sink.ErrSinkPermanent]
 // for non-retriable errors: template render failures (shared across sinks) and
 // the NATS-specific failures classified by isPermanentNatsError.
 func wrapError(err error) error {
 	if errors.Is(err, template.ErrRender) || isPermanentNatsError(err) {
-		return fmt.Errorf("nats: %w", errors.Join(err, errs.ErrSinkPermanent))
+		return fmt.Errorf("nats: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}
 	return fmt.Errorf("nats: %w", err)
 }

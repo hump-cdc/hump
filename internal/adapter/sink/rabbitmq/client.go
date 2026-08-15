@@ -9,6 +9,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/version"
@@ -61,7 +62,7 @@ var (
 // getClient returns a cached [rabbitConn] for the rendered URL described by
 // cfg, dialing on first use and registering a [shutdown.OnShutdown] hook so
 // the connection is drained at process exit.
-func getClient(cfg sink.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitConn, error) {
+func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitConn, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)

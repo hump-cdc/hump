@@ -12,6 +12,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 )
@@ -38,7 +39,7 @@ var (
 // described by config, creating one on first use. The returned client is
 // shared across callers with identical url parameters and is closed on
 // process shutdown via [shutdown.OnShutdown].
-func getClient(config sink.KafkaSink, operationContext *sink.SinkContext) (*kgo.Client, error) {
+func getClient(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) (*kgo.Client, error) {
 	url, err := config.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)

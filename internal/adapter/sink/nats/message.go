@@ -8,6 +8,7 @@ import (
 	"hump/internal/domain"
 
 	"github.com/nats-io/nats.go"
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 )
 
@@ -21,7 +22,7 @@ const (
 // operationContext and returns the resulting [nats.Msg]. The rendered subject
 // is validated. JetStream-specific control headers are applied separately by
 // the JetStream publish path.
-func buildMessage(cfg sink.NatsCommon, operationContext *sink.SinkContext) (*nats.Msg, error) {
+func buildMessage(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*nats.Msg, error) {
 	subject, err := cfg.Subject.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render subject: %w", err)
@@ -98,7 +99,7 @@ func validateSubject(subject string) error {
 // merges them into header. Empty rendered values cause the corresponding
 // header to be omitted. Nats-Expected-Stream is always set from the static
 // stream name and overwrites any user-declared entry.
-func applyJetStreamHeaders(header nats.Header, cfg sink.NatsJetStreamSink, operationContext *sink.SinkContext) error {
+func applyJetStreamHeaders(header nats.Header, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext) error {
 	if cfg.MsgID != nil {
 		msgID, err := cfg.MsgID.Render(operationContext)
 		if err != nil {

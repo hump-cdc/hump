@@ -16,7 +16,7 @@ import (
 const outEnv = "OPENAPI_OUT"
 
 func main() {
-	api, err := web.New(options.Options{}, config.Configuration{}, nil, nil).Api(chi.NewMux())
+	api, err := web.New(options.Options{}, config.Configuration{}, nil, nil, nil).Api(chi.NewMux())
 	if err != nil {
 		log.Fatalf("setup api: %v", err)
 	}

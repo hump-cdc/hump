@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	sink "hump/internal/port/sink"
+	sinkcfg "hump/config/sink"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -73,7 +73,7 @@ func (r *exchangeReconciler) invalidate() {
 // per (connection, name) per process for non-transient outcomes. Transient
 // transport errors are returned without marking the state done so the next
 // call retries after the supervisor reconnects.
-func (r *exchangeReconciler) ensureDeclared(ctx context.Context, exchangeCfg sink.RabbitMQExchange, name string) error {
+func (r *exchangeReconciler) ensureDeclared(ctx context.Context, exchangeCfg sinkcfg.RabbitMQExchange, name string) error {
 	state := r.stateFor(name)
 
 	state.mu.Lock()
@@ -98,7 +98,7 @@ func (r *exchangeReconciler) ensureDeclared(ctx context.Context, exchangeCfg sin
 // mode a 404 from the passive probe falls through to ExchangeDeclare with
 // the configured parameters. A 406 from either path is treated as a
 // permanent precondition mismatch.
-func (r *exchangeReconciler) runDeclare(ctx context.Context, exchangeCfg sink.RabbitMQExchange, name string) error {
+func (r *exchangeReconciler) runDeclare(ctx context.Context, exchangeCfg sinkcfg.RabbitMQExchange, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (r *exchangeReconciler) runDeclare(ctx context.Context, exchangeCfg sink.Ra
 	}
 
 	switch exchangeCfg.Mode {
-	case sink.RabbitMQExchangeModePassive:
+	case sinkcfg.RabbitMQExchangeModePassive:
 		err := ch.ExchangeDeclarePassive(name, exchangeCfg.Type, durable, exchangeCfg.AutoDelete, false, false, args)
 		if err == nil {
 			logger.Info("RabbitMQ exchange verified", "exchange", name, "mode", string(exchangeCfg.Mode))

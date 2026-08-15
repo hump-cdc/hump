@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"hump/config/errs"
+	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/types/errs"
-	"hump/pkg/retry"
+	"hump/pkg/resilience"
 )
 
 func TestParse_KafkaSink(t *testing.T) {
@@ -44,7 +45,7 @@ func TestParse_KafkaSink(t *testing.T) {
 	if sc.Sink.Type() != sink.SinkTypeKafka {
 		t.Fatalf("want sink type kafka, got %q", sc.Sink.Type())
 	}
-	k, ok := sc.Sink.(*sink.KafkaSink)
+	k, ok := sc.Sink.(*sinkcfg.KafkaSink)
 	if !ok {
 		t.Fatalf("want *KafkaSink, got %T", sc.Sink)
 	}
@@ -78,7 +79,7 @@ func TestParse_HTTPSink(t *testing.T) {
 	if sc.Sink.Type() != sink.SinkTypeHTTP {
 		t.Fatalf("want sink type http, got %q", sc.Sink.Type())
 	}
-	h, ok := sc.Sink.(*sink.HTTPSink)
+	h, ok := sc.Sink.(*sinkcfg.HTTPSink)
 	if !ok {
 		t.Fatalf("want *HTTPSink, got %T", sc.Sink)
 	}
@@ -108,7 +109,7 @@ func TestParse_DefaultsApplied(t *testing.T) {
 	if sc.Failure == nil {
 		t.Fatalf("Failure not initialized to default")
 	}
-	if sc.Failure.Mode != retry.FailureModeCrash {
+	if sc.Failure.Mode != resilience.FailureModeCrash {
 		t.Fatalf("want failure mode=crash, got %q", sc.Failure.Mode)
 	}
 
@@ -121,7 +122,7 @@ func TestParse_DefaultsApplied(t *testing.T) {
 	if sc.Retry.AttemptTimeout != 10*time.Second {
 		t.Fatalf("want retry AttemptTimeout=10s, got %s", sc.Retry.AttemptTimeout)
 	}
-	if sc.Retry.Backoff.Type != retry.BackoffTypeExponential {
+	if sc.Retry.Backoff.Type != resilience.BackoffTypeExponential {
 		t.Fatalf("want backoff type=exponential, got %q", sc.Retry.Backoff.Type)
 	}
 	if sc.Retry.Backoff.Initial != 1*time.Second {
@@ -133,25 +134,12 @@ func TestParse_DefaultsApplied(t *testing.T) {
 	if sc.Retry.Backoff.Multiplier != 2 {
 		t.Fatalf("want backoff multiplier=2, got %v", sc.Retry.Backoff.Multiplier)
 	}
-	if sc.Retry.Backoff.Jitter != retry.JitterModeFull {
+	if sc.Retry.Backoff.Jitter != resilience.JitterModeFull {
 		t.Fatalf("want backoff jitter=full, got %q", sc.Retry.Backoff.Jitter)
-	}
-
-	if sc.Delivery == nil {
-		t.Fatalf("Delivery not initialized to default")
-	}
-	if sc.Delivery.Mode != retry.DeliveryModeReliable {
-		t.Fatalf("want delivery mode=reliable, got %q", sc.Delivery.Mode)
-	}
-	if sc.Delivery.MaxConcurrent != 64 {
-		t.Fatalf("want delivery maxConcurrent=64, got %d", sc.Delivery.MaxConcurrent)
-	}
-	if sc.Delivery.ConcurrencyKey == nil {
-		t.Fatalf("delivery ConcurrencyKey not initialized")
 	}
 }
 
-func TestParse_ExplicitFailureRetryDelivery(t *testing.T) {
+func TestParse_ExplicitFailureRetry(t *testing.T) {
 	src := `tables:
   - schema: public
     table: users
@@ -167,9 +155,6 @@ func TestParse_ExplicitFailureRetryDelivery(t *testing.T) {
             initial: 500ms
             max: 5s
             increment: 250ms
-        delivery:
-          mode: async
-          maxConcurrent: 8
 `
 	cfg, err := Parse(src)
 	if err != nil {
@@ -177,7 +162,7 @@ func TestParse_ExplicitFailureRetryDelivery(t *testing.T) {
 	}
 
 	sc := cfg.Tables[0].Sinks[0]
-	if sc.Failure.Mode != retry.FailureModeSkip {
+	if sc.Failure.Mode != resilience.FailureModeSkip {
 		t.Fatalf("want failure mode=skip, got %q", sc.Failure.Mode)
 	}
 	if sc.Retry.MaxAttempts != 3 {
@@ -186,17 +171,11 @@ func TestParse_ExplicitFailureRetryDelivery(t *testing.T) {
 	if sc.Retry.AttemptTimeout != 2*time.Second {
 		t.Fatalf("want retry AttemptTimeout=2s, got %s", sc.Retry.AttemptTimeout)
 	}
-	if sc.Retry.Backoff.Type != retry.BackoffTypeLinear {
+	if sc.Retry.Backoff.Type != resilience.BackoffTypeLinear {
 		t.Fatalf("want backoff type=linear, got %q", sc.Retry.Backoff.Type)
 	}
 	if sc.Retry.Backoff.Increment != 250*time.Millisecond {
 		t.Fatalf("want backoff increment=250ms, got %s", sc.Retry.Backoff.Increment)
-	}
-	if sc.Delivery.Mode != retry.DeliveryModeAsync {
-		t.Fatalf("want delivery mode=async, got %q", sc.Delivery.Mode)
-	}
-	if sc.Delivery.MaxConcurrent != 8 {
-		t.Fatalf("want delivery maxConcurrent=8, got %d", sc.Delivery.MaxConcurrent)
 	}
 }
 
@@ -223,7 +202,7 @@ tables:
 		t.Fatalf("unexpected shape: %+v", cfg)
 	}
 	sc := cfg.Tables[0].Sinks[0]
-	k, ok := sc.Sink.(*sink.KafkaSink)
+	k, ok := sc.Sink.(*sinkcfg.KafkaSink)
 	if !ok {
 		t.Fatalf("want kafka sink, got %T", sc.Sink)
 	}
@@ -233,7 +212,7 @@ tables:
 	if k.Topic.Source() != "orig" {
 		t.Fatalf("want topic from preset=orig, got %q", k.Topic.Source())
 	}
-	if sc.Failure.Mode != retry.FailureModeSkip {
+	if sc.Failure.Mode != resilience.FailureModeSkip {
 		t.Fatalf("sibling failure override should be applied, got %q", sc.Failure.Mode)
 	}
 }
@@ -257,8 +236,8 @@ func TestParse_NestedTablesAreFlattened(t *testing.T) {
 	if len(cfg.Tables) != 2 {
 		t.Fatalf("want 2 flattened tables, got %d", len(cfg.Tables))
 	}
-	names := []string{cfg.Tables[0].Name, cfg.Tables[1].Name}
-	want := []string{"users", "orders"}
+	names := []domain.TableName{cfg.Tables[0].Name, cfg.Tables[1].Name}
+	want := []domain.TableName{"users", "orders"}
 	for i, w := range want {
 		if names[i] != w {
 			t.Fatalf("flattened table[%d]: want %q, got %q", i, w, names[i])
@@ -542,7 +521,7 @@ func TestParse_NATSCore_Defaults(t *testing.T) {
 	if sc.Sink.Type() != sink.SinkTypeNatsCore {
 		t.Fatalf("want sink type nats-core, got %q", sc.Sink.Type())
 	}
-	n, ok := sc.Sink.(*sink.NatsCoreSink)
+	n, ok := sc.Sink.(*sinkcfg.NatsCoreSink)
 	if !ok {
 		t.Fatalf("want *NatsCoreSink, got %T", sc.Sink)
 	}
@@ -596,14 +575,14 @@ func TestParse_NATSJetStream_Basic(t *testing.T) {
 	if sc.Sink.Type() != sink.SinkTypeNatsJetStream {
 		t.Fatalf("want sink type nats-jetstream, got %q", sc.Sink.Type())
 	}
-	n, ok := sc.Sink.(*sink.NatsJetStreamSink)
+	n, ok := sc.Sink.(*sinkcfg.NatsJetStreamSink)
 	if !ok {
 		t.Fatalf("want *NatsJetStreamSink, got %T", sc.Sink)
 	}
 	if n.Stream.Name != "FOO" {
 		t.Fatalf("want Stream.Name=FOO, got %q", n.Stream.Name)
 	}
-	if n.Mode != sink.JetStreamReconcileCreateOrUpdate {
+	if n.Mode != sinkcfg.JetStreamReconcileCreateOrUpdate {
 		t.Fatalf("want Mode=create-or-update (default), got %q", n.Mode)
 	}
 }
@@ -640,7 +619,7 @@ func TestParse_NATSJetStream_RetentionWithoutSubjectsAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsJetStreamSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsJetStreamSink)
 	if !ok {
 		t.Fatalf("want *NatsJetStreamSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -669,7 +648,7 @@ func TestParse_NATSJetStream_SubjectsUnderStreamAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsJetStreamSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsJetStreamSink)
 	if !ok {
 		t.Fatalf("want *NatsJetStreamSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -691,7 +670,7 @@ func TestParse_NATSCore_AuthCredentialsAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsCoreSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsCoreSink)
 	if !ok {
 		t.Fatalf("want *NatsCoreSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -713,7 +692,7 @@ func TestParse_NATSCore_AuthNKeySeedAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsCoreSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsCoreSink)
 	if !ok {
 		t.Fatalf("want *NatsCoreSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -736,7 +715,7 @@ func TestParse_NATSCore_AuthUserPassAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsCoreSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsCoreSink)
 	if !ok {
 		t.Fatalf("want *NatsCoreSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -761,7 +740,7 @@ func TestParse_NATSCore_AuthTokenAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsCoreSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsCoreSink)
 	if !ok {
 		t.Fatalf("want *NatsCoreSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
@@ -844,11 +823,11 @@ func TestParse_NATSJetStream_ReconcileModeCreateWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sink.NatsJetStreamSink)
+	n, ok := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsJetStreamSink)
 	if !ok {
 		t.Fatalf("want *NatsJetStreamSink, got %T", cfg.Tables[0].Sinks[0].Sink)
 	}
-	if n.Mode != sink.JetStreamReconcileCreateWhenMissing {
+	if n.Mode != sinkcfg.JetStreamReconcileCreateWhenMissing {
 		t.Fatalf("want Mode=create-when-missing, got %q", n.Mode)
 	}
 }

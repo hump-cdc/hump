@@ -4,8 +4,8 @@ package rabbitmq
 import (
 	"context"
 
+	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
-	"hump/internal/types/stream"
 )
 
 // Process delivers a single WAL operation to a classic RabbitMQ AMQP sink.
@@ -15,7 +15,7 @@ import (
 // basic.return if the broker cannot route the mandatory message). When streamEvent is
 // non-nil the rendered message's fields are recorded on it for the operations
 // stream.
-func Process(ctx context.Context, cfg sink.RabbitMQSink, operationContext *sink.SinkContext, streamEvent *stream.Event) error {
+func Process(ctx context.Context, cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -36,12 +36,6 @@ func Process(ctx context.Context, cfg sink.RabbitMQSink, operationContext *sink.
 	msg, err := buildMessage(cfg, operationContext)
 	if err != nil {
 		return wrapError(err)
-	}
-
-	if streamEvent != nil {
-		streamEvent.Payload = string(msg.Publishing.Body)
-		streamEvent.Headers = tableHeaders(msg.Publishing.Headers)
-		streamEvent.Metadata = map[string]string{"routingKey": msg.RoutingKey}
 	}
 
 	if err := rc.reconciler.ensureDeclared(ctx, cfg.Exchange, msg.Exchange); err != nil {

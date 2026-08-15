@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	sink "hump/internal/port/sink"
+	sinkcfg "hump/config/sink"
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 )
@@ -53,7 +53,7 @@ func (r *reconciler) invalidate() {
 
 // ensure runs the configured reconcile mode against name. Transient errors
 // are returned without marking the state done.
-func (r *reconciler) ensure(ctx context.Context, env *stream.Environment, cfg sink.RabbitMQStreamSink, name string) error {
+func (r *reconciler) ensure(ctx context.Context, env *stream.Environment, cfg sinkcfg.RabbitMQStreamSink, name string) error {
 	state := r.stateFor(name)
 
 	state.mu.Lock()
@@ -78,13 +78,13 @@ func (r *reconciler) ensure(ctx context.Context, env *stream.Environment, cfg si
 // `create-when-missing` the broker silently accepts an already-existing
 // declaration (the client swallows StreamAlreadyExists), so the call is
 // idempotent. A PreconditionFailed wraps to [errStreamMismatch].
-func (r *reconciler) runDeclare(ctx context.Context, env *stream.Environment, cfg sink.RabbitMQStreamSink, name string) error {
+func (r *reconciler) runDeclare(ctx context.Context, env *stream.Environment, cfg sinkcfg.RabbitMQStreamSink, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	switch cfg.Stream.Mode {
-	case sink.RabbitMQStreamModePassive:
+	case sinkcfg.RabbitMQStreamModePassive:
 		exists, err := env.StreamExists(name)
 		if err != nil {
 			return err

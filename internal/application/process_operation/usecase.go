@@ -2,48 +2,88 @@ package process_operation
 
 import (
 	"context"
-	"fmt"
-	"strconv"
-	"sync"
-	"sync/atomic"
 	"time"
 
+	"hump/config"
 	"hump/internal/domain"
 	"hump/internal/port/sink"
-	"hump/internal/telemetry/metrics"
-	"hump/internal/types/stream"
-	"hump/pkg/limit"
-	"hump/pkg/retry"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/app/shutdown"
 	"hump/pkg/version"
+	workerpool "hump/pkg/worker_pool"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-type SinkConfigurationResolver interface {
-	Resolve(schema domain.TableSchema, table domain.TableName) []sink.Config
+type Configuration interface {
+	ResolveAll() []config.Table
 }
 
 type UseCase struct {
-	sinkConfigurationResolver SinkConfigurationResolver
-	sinks                     sink.Sink
-	publisher                 stream.Publisher
-	metrics                   *metrics.Metrics
-	limiter                   *limit.Limit
-	seq                       atomic.Uint64
+	bindings map[domain.TableIdentifier][]*binding
+	wp       *workerpool.WorkerPool[*sink.SinkContext]
 }
 
-func NewUseCase(sinkConfigurationResolver SinkConfigurationResolver, sinks sink.Sink, publisher stream.Publisher, metrics *metrics.Metrics) *UseCase {
+func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory) *UseCase {
+	workerCount := 0
+
+	// Metrics
+	sinkMessagesCounter := metricsFactory.NewCounterVec(prometheus.CounterOpts{
+		Name: "sink_messages_total",
+		Help: "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/HTTP method).",
+	}, []string{"status", "type", "host", "target"})
+
+	sinkDurationHistogram := metricsFactory.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "sink_duration_seconds",
+		Help: "Time spent dispatching a single message to a sink, in seconds, labeled by sink type, connection host, and rendered target (topic/subject/exchange/stream/HTTP method). Measures end-to-end write latency including any retries within a single attempt.",
+	}, []string{"type", "host", "target"})
+
+	// Build binding mappings per (schema, table) pair
+	bindings := make(map[domain.TableIdentifier][]*binding)
+	for _, table := range cfg.ResolveAll() {
+		t := domain.TableIdentifier{Schema: table.Schema, Name: table.Name}
+
+		tableBindings := make([]*binding, 0, len(table.Sinks))
+		for _, sinkCfg := range table.Sinks {
+			b := newBinding(sinkCfg, table.Schema, table.Name, sinksPort, sinkMessagesCounter, sinkDurationHistogram)
+			tableBindings = append(tableBindings, b)
+		}
+
+		bindings[t] = append(bindings[t], tableBindings...)
+
+		if len(bindings[t]) > workerCount {
+			workerCount = len(bindings[t])
+		}
+	}
+
+	// Setup the worker pool with the number of workers equal to the maximum number of sinks
+	wp := workerpool.New[*sink.SinkContext](
+		workerpool.WithWorkers(workerCount),
+		workerpool.WithQueueSize(workerCount),
+		workerpool.WithErrorBufferSize(1024),
+		workerpool.WithBackpressurePolicy(workerpool.BackpressureBlock),
+	)
+
+	go func() {
+		// Print worker errors to the logger.
+		// This goroutine will run until the worker pool is shut down.
+		for err := range wp.Errors() {
+			logger.Error("Worker error", "error", err)
+		}
+	}()
+
+	shutdown.OnShutdown("process_operation", func(ctx context.Context) error {
+		return wp.Shutdown()
+	})
+
 	return &UseCase{
-		sinkConfigurationResolver: sinkConfigurationResolver,
-		sinks:                     sinks,
-		publisher:                 publisher,
-		metrics:                   metrics,
-		limiter:                   limit.New(metrics),
+		bindings: bindings,
+		wp:       wp,
 	}
 }
 
 // Process resolves the configured sinks for the (schema, table) pair and
-// delivers the WAL operation to each of them in parallel, returning only after
-// every fan-out goroutine has finished.
+// delivers the WAL operation to each of them in parallel.
 func (uc *UseCase) Process(
 	ctx context.Context,
 
@@ -59,108 +99,56 @@ func (uc *UseCase) Process(
 	next domain.DbRecord,
 ) error {
 	traceparent := headers["traceparent"]
-	logger := log.Scope("processor").WithTraceparent(traceparent)
+	logger := logger.WithTraceparent(traceparent)
 
 	logger.Debug("Processing",
-		"operation", operation,
-		"database", dbName,
-		"schema", schema,
-		"table", table,
-		"operation", operation,
-		"prev", prev,
-		"next", next,
+		"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
 	)
 
-	targets := uc.sinkConfigurationResolver.Resolve(schema, table)
-	if targets == nil {
-		return nil
+	operationContext := &sink.SinkContext{
+		Version: version.Version,
+
+		Timestamp: timestamp,
+		Operation: operation,
+
+		Database: dbName,
+		Schema:   schema,
+		Table:    table,
+
+		Headers: headers,
+
+		Prev: prev,
+		Next: next,
 	}
 
-	var wg sync.WaitGroup
-	r := retry.New(&wg, traceparent, uc.limiter, uc.metrics)
+	bindings := uc.bindings[domain.TableIdentifier{Schema: schema, Name: table}]
+	var submitErr error
 
-	for _, target := range targets {
-		operationContext := sink.SinkContext{
-			Version: version.Version,
-
-			SinkType: string(target.Sink.Type()),
-			SinkName: target.Sink.DisplayName(),
-
-			Timestamp: timestamp,
-			Operation: operation,
-
-			Database: dbName,
-			Schema:   schema,
-			Table:    table,
-
-			Headers: headers,
-
-			Prev: prev,
-			Next: next,
+	uc.wp.BeginBatch()
+	for _, binding := range bindings {
+		if err := uc.wp.Submit(ctx, binding.fn, operationContext); err != nil {
+			logger.Error("Failed to submit task to worker pool",
+				"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next, "errror", err,
+			)
+			submitErr = err
 		}
-
-		concurrencyKey, _ := target.Delivery.ConcurrencyKey.Render(operationContext)
-		if len(concurrencyKey) == 0 {
-			concurrencyKey = fmt.Sprintf("%s(%s)", operationContext.SinkType, operationContext.SinkName)
-		}
-
-		metaHost, metaTarget := target.Sink.Metadata(operationContext)
-
-		// Only stream (and pay the per-sink render cost) when a web client is
-		// actually subscribed to the operations stream. When streaming, the base
-		// event carries a per-operation correlation id; the retry layer emits the
-		// operation event and any retry events after each publish attempt.
-		var pub stream.Publisher
-		var streamEvent stream.Event
-		if uc.publisher != nil && uc.publisher.HasSubscribers() {
-			pub = uc.publisher
-			streamEvent = stream.Event{
-				ID:        strconv.FormatUint(uc.seq.Add(1), 10),
-				Timestamp: timestamp,
-				Schema:    schema,
-				Table:     table,
-				Operation: operation,
-				SinkType:  string(target.Sink.Type()),
-				Host:      metaHost,
-				Target:    metaTarget,
-			}
-		}
-
-		wg.Add(1)
-		go r.Process(
-			ctx,
-			target.Failure, target.Retry, target.Delivery,
-			operationContext.SinkType, operationContext.SinkName,
-			concurrencyKey, metaHost, metaTarget, streamEvent, pub,
-			func(ctx context.Context, streamEvent *stream.Event) error {
-				return uc.sinks.Process(ctx, target.Sink, &operationContext, streamEvent)
-			})
 	}
-	wg.Wait()
+	err := uc.wp.FlushBatch()
 
-	if r.Error() == nil {
+	if submitErr != nil {
+		return submitErr
+	}
+
+	if err == nil {
 		logger.Debug("Processed",
-			"operation", operation,
-			"database", dbName,
-			"schema", schema,
-			"table", table,
-			"operation", operation,
-			"prev", prev,
-			"next", next,
+			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
 		)
 	} else {
 		logger.Error("Failed to process",
-			"operation", operation,
-			"database", dbName,
-			"schema", schema,
-			"table", table,
-			"operation", operation,
-			"prev", prev,
-			"next", next,
-			"errror", r.Error(),
+			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
+			"errror", err,
 		)
-
 	}
 
-	return r.Error()
+	return err
 }

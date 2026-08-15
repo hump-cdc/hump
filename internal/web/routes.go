@@ -7,7 +7,7 @@ import (
 )
 
 func (w *Web) routes(api huma.API) {
-	routes.RegisterConfig(api, w.opts, w.cfg)
+	routes.RegisterConfig(api, w.opts, w.cfg, w.db)
 	routes.RegisterMetrics(api, w.metricsHandler)
 	routes.RegisterOperations(api, w.streamer)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"hump/config"
@@ -333,6 +334,18 @@ func TestListenStreamsChangesUntilContextIsCancelled(t *testing.T) {
 	if failures := healthWal.failures(); len(failures) == 0 || !errors.Is(failures[len(failures)-1], database.ErrWalClosed) {
 		t.Errorf("healthWal failures = %v, want the last one to be ErrWalClosed", failures)
 	}
+}
+
+func TestListenReusesMetricsAcrossCalls(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(configureResponder(layoutRow("public", "users", tableTypeRegular, nil, nil)))
+
+	p := newRegisteringTestPostgres(t, server, configuredTable("public", "users"))
+
+	// The collectors are registered on a real registry, so a second Listen that
+	// rebuilt them instead of reusing the ones from New would panic here.
+	listenOnce(t, p, server, 1)
+	listenOnce(t, p, server, 2)
 }
 
 // queryResult is the fake server's scripted answer to one statement.
@@ -862,6 +875,63 @@ func newTestPostgres(t *testing.T, s *fakeServer, tables ...config.Table) (*Post
 	cfg := config.Configuration{Tables: tables}
 
 	return New(fakeServerUrl(s), cfg, "hump_pub", "hump_slot", healthPostgres, healthWal, promauto.With(nil)), healthPostgres, healthWal
+}
+
+// newRegisteringTestPostgres returns an adapter whose metrics land on a private
+// registry, so a duplicate registration panics rather than being swallowed by
+// the nil registerer the other helpers use.
+func newRegisteringTestPostgres(t *testing.T, s *fakeServer, tables ...config.Table) *Postgres {
+	t.Helper()
+
+	cfg := config.Configuration{Tables: tables}
+
+	return New(fakeServerUrl(s), cfg, "hump_pub", "hump_slot", newFakeHealth(), newFakeHealth(), promauto.With(prometheus.NewRegistry()))
+}
+
+// listenOnce runs one Listen cycle against s, cancelling it once the WAL
+// session has opened, and fails the test if it does not open within five seconds.
+func listenOnce(t *testing.T, p *Postgres, s *fakeServer, want int) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- p.Listen(ctx, failingHandler(t))
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for replicationStarts(s) < want {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for START_REPLICATION #%d", want)
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+
+	select {
+	case err := <-errs:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Listen() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Listen to return")
+	}
+}
+
+// replicationStarts counts the START_REPLICATION statements s has been asked to run.
+func replicationStarts(s *fakeServer) int {
+	count := 0
+	for _, statement := range s.recorded() {
+		if strings.HasPrefix(statement, "START_REPLICATION") {
+			count++
+		}
+	}
+
+	return count
 }
 
 // newTestBootstrapper returns a bootstrapper talking to s over a real socket, with

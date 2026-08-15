@@ -33,21 +33,26 @@ type Postgres struct {
 	slotName        string
 	healthPostgres  Health
 	healthWal       Health
-	metricsFactory  promauto.Factory
+	metrics         *metrics
 }
 
 // New returns a Postgres adapter replicating cfg's tables through the given
 // publication and slot.
 func New(databaseUrl string, cfg config.Configuration, publicationName string, slotName string, healthPostgres Health, healthWal Health, metricsFactory promauto.Factory) *Postgres {
-	return &Postgres{
+	p := &Postgres{
 		databaseUrl:     databaseUrl,
 		cfg:             cfg,
 		publicationName: publicationName,
 		slotName:        slotName,
 		healthPostgres:  healthPostgres,
 		healthWal:       healthWal,
-		metricsFactory:  metricsFactory,
 	}
+
+	// The collectors register on the factory, which panics on a duplicate, so
+	// they are built once here rather than per Listen.
+	p.metrics = newMetrics(p.GetDbName(), metricsFactory)
+
+	return p
 }
 
 // GetDbName returns the database name parsed from the connection string, or an
@@ -116,7 +121,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	}
 	defer replicationConnection.Close(ctx)
 
-	w, err := newWal(ctx, replicationConnection, p.publicationName, p.slotName, introspector, p.healthWal, p.metricsFactory)
+	w, err := newWal(ctx, replicationConnection, p.publicationName, p.slotName, introspector, p.healthWal, p.metrics)
 	if err != nil {
 		return fmt.Errorf("failed to initialize WAL processing: %w", err)
 	}

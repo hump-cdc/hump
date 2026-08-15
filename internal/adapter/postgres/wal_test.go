@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"hump/config"
@@ -49,7 +48,7 @@ func TestNewWalFailsWhenSessionCannotBeAcquired(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 
-	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, newFakeHealth(), promauto.With(nil))
+	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, newFakeHealth(), newTestMetrics())
 	if err == nil || !errors.Is(err, database.ErrWal) {
 		t.Fatalf("newWal() error = %v, want it to wrap ErrWal", err)
 	}
@@ -987,7 +986,7 @@ func newTestWal(t *testing.T, s *fakeServer, tables ...config.Table) (*wal, *fak
 		messageContext: &postgresMessageContext{messages: map[string]string{}},
 		introspector:   newTestIntrospector(t, s, tables, nil),
 		health:         health,
-		metrics:        newMetrics("db", promauto.With(nil)),
+		metrics:        newTestMetrics(),
 	}, health
 }
 
@@ -998,7 +997,7 @@ func newReplicationWal(t *testing.T, s *fakeServer, conn *connection, tables ...
 
 	health := newFakeHealth()
 
-	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), health, promauto.With(nil))
+	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), health, newTestMetrics())
 	if err != nil {
 		t.Fatalf("newWal() error = %v", err)
 	}

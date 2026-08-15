@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"hump/internal/domain"
 	"hump/internal/port/database"
@@ -56,7 +55,8 @@ const standbyTimeout = time.Second * 10
 
 // newWal opens the replication session on conn for the given publication and
 // slot and returns a wal ready to be started. conn must have been created with
-// withReplication(true); wal takes ownership of it and closes it in Stop.
+// withReplication(true); wal takes ownership of it and closes it in Stop. m is
+// owned by the caller and shared across sessions.
 func newWal(
 	ctx context.Context,
 	conn *connection,
@@ -64,7 +64,7 @@ func newWal(
 	slotName string,
 	introspector *introspector,
 	health Health,
-	metricsFactory promauto.Factory,
+	m *metrics,
 ) (*wal, error) {
 	session, err := conn.Raw(ctx)
 	if err != nil {
@@ -83,7 +83,7 @@ func newWal(
 		messageContext:  &postgresMessageContext{messages: map[string]string{}},
 		introspector:    introspector,
 		health:          health,
-		metrics:         newMetrics(string(dbName), metricsFactory),
+		metrics:         m,
 	}, nil
 }
 

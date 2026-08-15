@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"hump/config"
 	"hump/internal/domain"
@@ -154,6 +155,48 @@ func TestStartAdvancesWalPositionAcrossChanges(t *testing.T) {
 
 	if got := health.healthyCount(); got != 1 {
 		t.Errorf("MarkHealthy() called %d times, want 1", got)
+	}
+}
+
+func TestStartUpdatesReplicationLagOnKeepalive(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errs := runStart(ctx, w, failingHandler(t))
+
+	server.stream(keepalive(0x1000, true))
+	server.waitForStandbyUpdates(t, 1)
+
+	cancel()
+	awaitStart(t, errs)
+
+	if got := testutil.ToFloat64(w.metrics.replicationLag); got != 0x1000 {
+		t.Errorf("replicationLag = %v, want %v: a keepalive is the only lag update an idle stream gets", got, float64(0x1000))
+	}
+}
+
+func TestStartKeepsReplicationLagOnStreamFailure(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errs := runStart(ctx, w, failingHandler(t))
+
+	server.stream(keepalive(0x1000, true))
+	server.waitForStandbyUpdates(t, 1)
+
+	server.stream(copyFrame(pglogrepl.PrimaryKeepaliveMessageByteID, 0, 0))
+	if err := awaitStart(t, errs); err == nil {
+		t.Fatal("Start() error = nil, want the malformed keepalive to stop the stream")
+	}
+
+	if got := testutil.ToFloat64(w.metrics.replicationLag); got != 0x1000 {
+		t.Errorf("replicationLag = %v, want %v: an unparseable message carries no WAL position to report", got, float64(0x1000))
 	}
 }
 

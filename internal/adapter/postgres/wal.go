@@ -159,6 +159,10 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return err
 			}
 
+			// On an idle stream keepalives carry the only fresh ServerWALEnd, so
+			// without this the gauge would stay stuck at the last decoded change.
+			w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
+
 			if pkm.ReplyRequested {
 				standbyDeadline = time.Time{}
 			}

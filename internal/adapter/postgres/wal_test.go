@@ -659,9 +659,9 @@ func TestProcessMessageSkipsIgnoredTables(t *testing.T) {
 		name    string
 		message []byte
 	}{
-		{"insert", insertMessage(2, textColumn("7"))},
-		{"update", updateMessage(2, nil, []tupleColumn{textColumn("7")})},
-		{"delete", deleteMessage(2, textColumn("7"))},
+		{"insert", insertMessage(2, textColumn("seven"))},
+		{"update", updateMessage(2, nil, []tupleColumn{textColumn("seven")})},
+		{"delete", deleteMessage(2, textColumn("seven"))},
 		{"truncate", truncateMessage(2)},
 	}
 

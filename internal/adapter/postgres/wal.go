@@ -256,12 +256,6 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
 		}
 
-		prev, next, err := w.decodeRow(nil, message.Tuple, relation)
-		if err != nil {
-			return fmt.Errorf("decode insert tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
 		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
@@ -270,6 +264,13 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		if err != nil {
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
+
+		prev, next, err := w.decodeRow(nil, message.Tuple, relation)
+		if err != nil {
+			return fmt.Errorf("decode insert tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
+		}
+
+		headers := w.messageContext.dump()
 
 		err = handler(ctx, timestamp, domain.OperationTypeInsert, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {
@@ -286,12 +287,6 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
 		}
 
-		prev, next, err := w.decodeRow(message.OldTuple, message.NewTuple, relation)
-		if err != nil {
-			return fmt.Errorf("decode update tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
 		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
@@ -300,6 +295,13 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		if err != nil {
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
+
+		prev, next, err := w.decodeRow(message.OldTuple, message.NewTuple, relation)
+		if err != nil {
+			return fmt.Errorf("decode update tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
+		}
+
+		headers := w.messageContext.dump()
 
 		err = handler(ctx, timestamp, domain.OperationTypeUpdate, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {
@@ -316,12 +318,6 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
 		}
 
-		prev, next, err := w.decodeRow(message.OldTuple, nil, relation)
-		if err != nil {
-			return fmt.Errorf("decode delete tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
 		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
@@ -330,6 +326,13 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		if err != nil {
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
+
+		prev, next, err := w.decodeRow(message.OldTuple, nil, relation)
+		if err != nil {
+			return fmt.Errorf("decode delete tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
+		}
+
+		headers := w.messageContext.dump()
 
 		err = handler(ctx, timestamp, domain.OperationTypeDelete, w.dbName, ref.Schema, ref.Name, headers, prev, next)
 		if err != nil {

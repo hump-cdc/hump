@@ -48,6 +48,8 @@ func TestIntrospectorRegistryResolve(t *testing.T) {
 	r := newIntrospectorRegistry(cfg)
 	r.UpdatePartitions(map[domain.TableIdentifier]domain.TableIdentifier{
 		{Schema: "public", Name: "events_2024"}: {Schema: "public", Name: "events"},
+		{Schema: "public", Name: "orphan_2024"}: {Schema: "public", Name: "orphan"},
+		{Schema: "public", Name: "loop"}:        {Schema: "public", Name: "loop"},
 	})
 
 	cases := []struct {
@@ -67,6 +69,19 @@ func TestIntrospectorRegistryResolve(t *testing.T) {
 			table: domain.TableIdentifier{Schema: "public", Name: "events_2024"},
 			want:  domain.TableIdentifier{Schema: "public", Name: "events"},
 			sinks: 1,
+		},
+		{
+			name:  "partition whose parent is not configured",
+			table: domain.TableIdentifier{Schema: "public", Name: "orphan_2024"},
+			want:  domain.TableIdentifier{},
+			sinks: 0,
+		},
+		{
+			// a self-referential entry used to recurse forever
+			name:  "partition mapped to itself",
+			table: domain.TableIdentifier{Schema: "public", Name: "loop"},
+			want:  domain.TableIdentifier{},
+			sinks: 0,
 		},
 		{
 			name:  "unknown table",

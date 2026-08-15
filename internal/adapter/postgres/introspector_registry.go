@@ -54,15 +54,20 @@ func (r *introspectorRegistry) ReplicaIdentityFullTables() []domain.TableIdentif
 }
 
 // Resolve looks up the sinks for table, falling back to the partition→parent
-// mapping when table is not configured directly. The returned TableIdentifier is
-// the parent for a partition, table itself for a direct hit, or zero on a miss.
+// mapping when table is not configured directly. Resolution is one level deep —
+// introspectTables only ever records a configured table as a parent. The returned
+// TableIdentifier is the parent for a partition, table itself for a direct hit,
+// or zero on a miss.
 func (r *introspectorRegistry) Resolve(table domain.TableIdentifier) (domain.TableIdentifier, []sinkcfg.Config) {
 	if sinks, ok := r.registry[table]; ok {
 		return table, sinks
 	}
 	if parent, ok := r.resolveByPartition(table); ok {
-		return r.Resolve(parent)
+		if sinks, ok := r.registry[parent]; ok {
+			return parent, sinks
+		}
 	}
+
 	return domain.TableIdentifier{}, nil
 }
 

@@ -159,9 +159,12 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return err
 			}
 
-			// On an idle stream keepalives carry the only fresh ServerWALEnd, so
-			// without this the gauge would stay stuck at the last decoded change.
-			w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
+			// Keepalives carry the only fresh ServerWALEnd an idle stream gets, but
+			// until the first record is decoded there is no processed position to
+			// measure against and the raw server LSN would be reported as the lag.
+			if walPosition != 0 {
+				w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
+			}
 
 			if pkm.ReplyRequested {
 				standbyDeadline = time.Time{}
@@ -203,7 +206,9 @@ func (w *wal) Stop(ctx context.Context) error {
 }
 
 // flush sends a standby status update reporting position as both the write
-// and flush LSN, letting the upstream server advance its slot.
+// and flush LSN, letting the upstream server advance its slot. A zero position
+// is sent too: PostgreSQL ignores it for the slot but counts it as the reply
+// wal_sender_timeout waits for.
 func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 	err := pglogrepl.SendStandbyStatusUpdate(ctx, w.session,
 		pglogrepl.StandbyStatusUpdate{

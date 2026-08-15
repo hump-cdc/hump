@@ -4,12 +4,11 @@ import (
 	"maps"
 
 	"hump/config"
-	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 )
 
-// introspectorRegistry maps a table to its configured sinks and resolves
-// partition tables back to their parent table configuration.
+// introspectorRegistry holds the configured tables and resolves partition
+// tables back to their parent table configuration.
 type introspectorRegistry struct {
 	// tables lists every configured table, in configuration order.
 	tables []domain.TableIdentifier
@@ -17,21 +16,21 @@ type introspectorRegistry struct {
 	replicaFull []domain.TableIdentifier
 	// partitions maps a partition to its parent; refreshed by UpdatePartitions.
 	partitions map[domain.TableIdentifier]domain.TableIdentifier
-	// registry maps a configured table to the sinks it feeds.
-	registry map[domain.TableIdentifier][]sinkcfg.Config
+	// configured is the set of tables named in the configuration.
+	configured map[domain.TableIdentifier]struct{}
 }
 
 // newIntrospectorRegistry builds a registry from a parsed config.Configuration.
 func newIntrospectorRegistry(cfg config.Configuration) *introspectorRegistry {
 	result := &introspectorRegistry{
-		registry:   make(map[domain.TableIdentifier][]sinkcfg.Config),
+		configured: make(map[domain.TableIdentifier]struct{}),
 		partitions: make(map[domain.TableIdentifier]domain.TableIdentifier),
 	}
 
 	for _, t := range cfg.Tables {
 		ref := domain.TableIdentifier{Schema: t.Schema, Name: t.Name}
 
-		result.registry[ref] = t.Sinks
+		result.configured[ref] = struct{}{}
 		result.tables = append(result.tables, ref)
 		if t.Replica == domain.ReplicaIdentityFull {
 			result.replicaFull = append(result.replicaFull, ref)
@@ -53,22 +52,20 @@ func (r *introspectorRegistry) ReplicaIdentityFullTables() []domain.TableIdentif
 	return r.replicaFull
 }
 
-// Resolve looks up the sinks for table, falling back to the partition→parent
-// mapping when table is not configured directly. Resolution is one level deep —
-// introspectTables only ever records a configured table as a parent. The returned
-// TableIdentifier is the parent for a partition, table itself for a direct hit,
-// or zero on a miss.
-func (r *introspectorRegistry) Resolve(table domain.TableIdentifier) (domain.TableIdentifier, []sinkcfg.Config) {
-	if sinks, ok := r.registry[table]; ok {
-		return table, sinks
+// Resolve returns the configured table that owns table — table itself on a direct
+// hit, its parent when table is a tracked partition — or false when neither is
+// configured. Resolution is one level deep: only configured tables are recorded as parents.
+func (r *introspectorRegistry) Resolve(table domain.TableIdentifier) (domain.TableIdentifier, bool) {
+	if _, ok := r.configured[table]; ok {
+		return table, true
 	}
 	if parent, ok := r.resolveByPartition(table); ok {
-		if sinks, ok := r.registry[parent]; ok {
-			return parent, sinks
+		if _, ok := r.configured[parent]; ok {
+			return parent, true
 		}
 	}
 
-	return domain.TableIdentifier{}, nil
+	return domain.TableIdentifier{}, false
 }
 
 // Partitions returns the partition→parent mapping.

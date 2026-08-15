@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	"hump/internal/port/database"
 )
@@ -70,41 +69,40 @@ func (i *introspector) Invalidate(ctx context.Context, table *domain.TableIdenti
 }
 
 // ResolveTableConfiguration returns the resolved table — the parent when table
-// is a partition — and its configured sinks. A miss costs one re-introspection;
-// if that still misses, the table is ignored from then on and every lookup for
-// it returns ErrTableIgnored.
-func (i *introspector) ResolveTableConfiguration(ctx context.Context, table domain.TableIdentifier) (domain.TableIdentifier, []sinkcfg.Config, error) {
+// is a partition. A miss costs one re-introspection; if that still misses, the
+// table is ignored from then on and every lookup for it returns ErrTableIgnored.
+func (i *introspector) ResolveTableConfiguration(ctx context.Context, table domain.TableIdentifier) (domain.TableIdentifier, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
 	// populate the registry on first call
 	if !i.initialized {
 		if err := i.invalidate(ctx, i.connection, nil); err != nil {
-			return domain.TableIdentifier{}, nil, err
+			return domain.TableIdentifier{}, err
 		}
 	}
 
-	if ref, sinks := i.registry.Resolve(table); sinks != nil {
-		return ref, sinks, nil
+	if ref, ok := i.registry.Resolve(table); ok {
+		return ref, nil
 	}
 
 	// a previous re-introspection already failed to find it
 	if _, ignored := i.ignoredTables[table]; ignored {
-		return domain.TableIdentifier{}, nil, ErrTableIgnored
+		return domain.TableIdentifier{}, ErrTableIgnored
 	}
 
 	// retry once, in case table is a partition created after startup
 	if err := i.invalidate(ctx, i.connection, &table); err != nil {
-		return domain.TableIdentifier{}, nil, err
+		return domain.TableIdentifier{}, err
 	}
 
-	ref, sinks := i.registry.Resolve(table)
-	if sinks == nil {
+	ref, ok := i.registry.Resolve(table)
+	if !ok {
 		i.ignoredTables[table] = struct{}{}
-		return domain.TableIdentifier{}, nil, ErrTableIgnored
+		return domain.TableIdentifier{}, ErrTableIgnored
 	}
 
-	return ref, sinks, nil
+	return ref, nil
 }
 
 // invalidate performs the introspection refresh while the caller holds

@@ -257,7 +257,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -288,7 +288,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -319,7 +319,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -353,7 +353,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			}
 
 			table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-			ref, _, err := w.introspector.ResolveTableConfiguration(ctx, table)
+			ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
 			if errors.Is(err, ErrTableIgnored) {
 				continue
 			}

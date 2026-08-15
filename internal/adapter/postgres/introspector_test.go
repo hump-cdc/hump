@@ -176,15 +176,12 @@ func TestResolveTableConfigurationIntrospectsOnFirstCall(t *testing.T) {
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
 
 	table := domain.TableIdentifier{Schema: "public", Name: "users"}
-	ref, sinks, err := introspector.ResolveTableConfiguration(context.Background(), table)
+	ref, err := introspector.ResolveTableConfiguration(context.Background(), table)
 	if err != nil {
 		t.Fatalf("ResolveTableConfiguration() error = %v", err)
 	}
 	if ref != table {
 		t.Errorf("table = %+v, want %+v", ref, table)
-	}
-	if len(sinks) != 1 {
-		t.Fatalf("sinks = %+v, want 1", sinks)
 	}
 
 	if statements := server.recorded(); len(statements) != 2 {
@@ -201,7 +198,7 @@ func TestResolveTableConfigurationIntrospectsOnce(t *testing.T) {
 
 	table := domain.TableIdentifier{Schema: "public", Name: "users"}
 	for range 3 {
-		if _, _, err := introspector.ResolveTableConfiguration(context.Background(), table); err != nil {
+		if _, err := introspector.ResolveTableConfiguration(context.Background(), table); err != nil {
 			t.Fatalf("ResolveTableConfiguration() error = %v", err)
 		}
 	}
@@ -217,12 +214,12 @@ func TestResolveTableConfigurationPropagatesInitialIntrospectionError(t *testing
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
 
 	table := domain.TableIdentifier{Schema: "public", Name: "users"}
-	ref, sinks, err := introspector.ResolveTableConfiguration(context.Background(), table)
+	ref, err := introspector.ResolveTableConfiguration(context.Background(), table)
 	if err == nil {
 		t.Fatal("ResolveTableConfiguration() error = nil, want the introspection error")
 	}
-	if ref != (domain.TableIdentifier{}) || sinks != nil {
-		t.Errorf("ResolveTableConfiguration() = (%+v, %+v), want the zero table and no sinks", ref, sinks)
+	if ref != (domain.TableIdentifier{}) {
+		t.Errorf("ResolveTableConfiguration() = %+v, want the zero table", ref)
 	}
 }
 
@@ -234,7 +231,7 @@ func TestResolveTableConfigurationResolvesKnownPartition(t *testing.T) {
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
 
 	partition := domain.TableIdentifier{Schema: "public", Name: "events_2024"}
-	ref, sinks, err := introspector.ResolveTableConfiguration(context.Background(), partition)
+	ref, err := introspector.ResolveTableConfiguration(context.Background(), partition)
 	if err != nil {
 		t.Fatalf("ResolveTableConfiguration() error = %v", err)
 	}
@@ -242,9 +239,6 @@ func TestResolveTableConfigurationResolvesKnownPartition(t *testing.T) {
 	want := domain.TableIdentifier{Schema: "public", Name: "events"}
 	if ref != want {
 		t.Errorf("table = %+v, want the parent %+v", ref, want)
-	}
-	if len(sinks) != 1 {
-		t.Errorf("sinks = %+v, want the parent's", sinks)
 	}
 
 	if statements := server.recorded(); len(statements) != 2 {
@@ -264,7 +258,7 @@ func TestResolveTableConfigurationReIntrospectsNewPartition(t *testing.T) {
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
 
 	partition := domain.TableIdentifier{Schema: "public", Name: "events_2025"}
-	ref, sinks, err := introspector.ResolveTableConfiguration(context.Background(), partition)
+	ref, err := introspector.ResolveTableConfiguration(context.Background(), partition)
 	if err != nil {
 		t.Fatalf("ResolveTableConfiguration() error = %v", err)
 	}
@@ -272,9 +266,6 @@ func TestResolveTableConfigurationReIntrospectsNewPartition(t *testing.T) {
 	want := domain.TableIdentifier{Schema: "public", Name: "events"}
 	if ref != want {
 		t.Errorf("table = %+v, want the parent %+v", ref, want)
-	}
-	if len(sinks) != 1 {
-		t.Errorf("sinks = %+v, want the parent's", sinks)
 	}
 
 	if _, ignored := introspector.ignoredTables[partition]; ignored {
@@ -290,19 +281,19 @@ func TestResolveTableConfigurationIgnoresUnknownTable(t *testing.T) {
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
 
 	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
-	ref, sinks, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
+	ref, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
 	if !errors.Is(err, ErrTableIgnored) {
 		t.Fatalf("ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
 	}
-	if ref != (domain.TableIdentifier{}) || sinks != nil {
-		t.Errorf("ResolveTableConfiguration() = (%+v, %+v), want the zero table and no sinks", ref, sinks)
+	if ref != (domain.TableIdentifier{}) {
+		t.Errorf("ResolveTableConfiguration() = %+v, want the zero table", ref)
 	}
 	if _, ignored := introspector.ignoredTables[unknown]; !ignored {
 		t.Fatal("an unresolvable table must be ignored from then on")
 	}
 
 	before := len(server.recorded())
-	if _, _, err := introspector.ResolveTableConfiguration(context.Background(), unknown); !errors.Is(err, ErrTableIgnored) {
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), unknown); !errors.Is(err, ErrTableIgnored) {
 		t.Fatalf("second ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
 	}
 	if after := len(server.recorded()); after != before {
@@ -328,7 +319,7 @@ func TestResolveTableConfigurationPropagatesRetryError(t *testing.T) {
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
 
 	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
-	_, _, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
+	_, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
 	if err == nil {
 		t.Fatal("ResolveTableConfiguration() error = nil, want the retry error")
 	}

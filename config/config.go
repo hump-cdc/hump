@@ -9,24 +9,11 @@ import (
 )
 
 type Configuration struct {
-	registry map[domain.TableIdentifier][]sinkcfg.Config `yaml:"-"`
-	Tables   []Table                                     `yaml:"tables" validate:"min=1"`
-}
-
-func (c *Configuration) buildRegistry() {
-	c.registry = make(map[domain.TableIdentifier][]sinkcfg.Config, len(c.Tables))
-
-	for _, table := range c.Tables {
-		c.registry[domain.TableIdentifier{Schema: table.Schema, Name: table.Name}] = table.Sinks
-	}
+	Tables []Table `yaml:"tables" validate:"min=1"`
 }
 
 func (c *Configuration) ResolveAll() []Table {
 	return c.Tables
-}
-
-func (c *Configuration) Resolve(id domain.TableIdentifier) []sinkcfg.Config {
-	return c.registry[id]
 }
 
 type Table struct {

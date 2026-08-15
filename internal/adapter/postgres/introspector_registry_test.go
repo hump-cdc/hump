@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"hump/config"
-	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 )
 
@@ -41,7 +40,7 @@ func TestNewIntrospectorRegistryReplicaIdentityFullTables(t *testing.T) {
 func TestIntrospectorRegistryResolve(t *testing.T) {
 	cfg := config.Configuration{
 		Tables: []config.Table{
-			{Schema: "public", Name: "events", Sinks: []sinkcfg.Config{{}}},
+			{Schema: "public", Name: "events"},
 		},
 	}
 
@@ -56,50 +55,50 @@ func TestIntrospectorRegistryResolve(t *testing.T) {
 		name  string
 		table domain.TableIdentifier
 		want  domain.TableIdentifier
-		sinks int
+		found bool
 	}{
 		{
 			name:  "configured table",
 			table: domain.TableIdentifier{Schema: "public", Name: "events"},
 			want:  domain.TableIdentifier{Schema: "public", Name: "events"},
-			sinks: 1,
+			found: true,
 		},
 		{
 			name:  "partition of a configured table",
 			table: domain.TableIdentifier{Schema: "public", Name: "events_2024"},
 			want:  domain.TableIdentifier{Schema: "public", Name: "events"},
-			sinks: 1,
+			found: true,
 		},
 		{
 			name:  "partition whose parent is not configured",
 			table: domain.TableIdentifier{Schema: "public", Name: "orphan_2024"},
 			want:  domain.TableIdentifier{},
-			sinks: 0,
+			found: false,
 		},
 		{
 			// a self-referential entry used to recurse forever
 			name:  "partition mapped to itself",
 			table: domain.TableIdentifier{Schema: "public", Name: "loop"},
 			want:  domain.TableIdentifier{},
-			sinks: 0,
+			found: false,
 		},
 		{
 			name:  "unknown table",
 			table: domain.TableIdentifier{Schema: "other", Name: "logs"},
 			want:  domain.TableIdentifier{},
-			sinks: 0,
+			found: false,
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, sinks := r.Resolve(tt.table)
+			got, found := r.Resolve(tt.table)
 
 			if got != tt.want {
 				t.Errorf("Resolve(%+v) table = %+v, want %+v", tt.table, got, tt.want)
 			}
-			if len(sinks) != tt.sinks {
-				t.Errorf("Resolve(%+v) sinks = %+v, want %d", tt.table, sinks, tt.sinks)
+			if found != tt.found {
+				t.Errorf("Resolve(%+v) found = %v, want %v", tt.table, found, tt.found)
 			}
 		})
 	}

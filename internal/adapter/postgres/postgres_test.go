@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"hump/config"
-	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	"hump/internal/port/database"
 )
@@ -962,14 +961,13 @@ func newTestIntrospector(
 	return newIntrospector(newTestConnection(t, s), registry, ensure)
 }
 
-// configuredTable builds a config.Table with one placeholder sink, which is
-// what Resolve returns on a hit.
+// configuredTable builds a config.Table that the introspector registry counts as
+// configured, with replica identity managed by hump.
 func configuredTable(schemaName domain.TableSchema, name domain.TableName) config.Table {
 	return config.Table{
 		Schema:  schemaName,
 		Name:    name,
 		Replica: domain.ReplicaIdentityFull,
-		Sinks:   []sinkcfg.Config{{}},
 	}
 }
 

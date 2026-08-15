@@ -29,7 +29,5 @@ func Parse(source string) (Configuration, error) {
 		return Configuration{}, err
 	}
 
-	cfg.buildRegistry()
-
 	return cfg, nil
 }

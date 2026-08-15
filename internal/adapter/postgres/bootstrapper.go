@@ -175,10 +175,11 @@ func (b *bootstrapper) EnsureReplicaIdentityFull(ctx context.Context, tables []d
 
 	// The embedded SQL is a no-op when the table is already FULL.
 	for _, t := range targets {
-		qualifiedLiteral := b.quoteLiteral(string(t.Schema) + "." + string(t.Name))
+		schemaLiteral := b.quoteLiteral(string(t.Schema))
+		nameLiteral := b.quoteLiteral(string(t.Name))
 		qualifiedIdentifier := b.quoteIdentifier(string(t.Schema)) + "." + b.quoteIdentifier(string(t.Name))
 
-		sql := fmt.Sprintf(bootstrapperReplicaIdentityEnsureFullSql, qualifiedLiteral, qualifiedIdentifier)
+		sql := fmt.Sprintf(bootstrapperReplicaIdentityEnsureFullSql, schemaLiteral, nameLiteral, qualifiedIdentifier)
 
 		if _, err := b.connection.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("set replica identity full on %s.%s: %w", t.Schema, t.Name, err)

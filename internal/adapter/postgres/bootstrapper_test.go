@@ -335,8 +335,11 @@ func TestEnsureReplicaIdentityFullQuotesTheTable(t *testing.T) {
 	if !strings.Contains(alter, `ALTER TABLE "pub'lic"."us""ers" REPLICA IDENTITY FULL`) {
 		t.Errorf("statement = %q, want the table quoted as an identifier", alter)
 	}
-	if !strings.Contains(alter, `= 'pub''lic.us"ers'`) {
-		t.Errorf("statement = %q, want the qualified name quoted as a literal", alter)
+	if !strings.Contains(alter, `n.nspname = 'pub''lic'`) {
+		t.Errorf("statement = %q, want the schema quoted as a separate literal", alter)
+	}
+	if !strings.Contains(alter, `c.relname = 'us"ers'`) {
+		t.Errorf("statement = %q, want the table name quoted as a separate literal", alter)
 	}
 }
 

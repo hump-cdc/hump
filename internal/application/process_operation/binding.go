@@ -46,6 +46,7 @@ func newBinding(
 	fn = resilience.WithTimeout(fn, cfg.Retry.AttemptTimeout)
 	fn = resilience.WithRetry(fn, uint(cfg.Retry.MaxAttempts), cfg.Retry.Backoff.Policy(), b)
 	fn = resilience.WithStatus(fn, b)
+	fn = resilience.WithFailureMode(fn, cfg.Failure.Mode, b)
 	b.fn = fn
 
 	return b
@@ -73,4 +74,9 @@ func (b *binding) OnRetry() {
 // OnFailure reports a delivery that exhausted its attempts.
 func (b *binding) OnFailure() {
 	b.messageCounterFailure.Add(1)
+}
+
+// OnSkip reports a failed delivery dropped by the sink's skip failure mode.
+func (b *binding) OnSkip(err error) {
+	logger.Error("Skipping failed delivery", "sink", b.sinkName, "table", b.table, "error", err)
 }

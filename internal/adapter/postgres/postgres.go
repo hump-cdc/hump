@@ -114,6 +114,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
+	defer replicationConnection.Close(ctx)
 
 	w, err := newWal(ctx, replicationConnection, p.publicationName, p.slotName, introspector, p.healthWal, p.metricsFactory)
 	if err != nil {

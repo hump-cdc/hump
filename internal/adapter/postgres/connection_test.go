@@ -647,6 +647,35 @@ func TestExecFailsWhenEverySessionDies(t *testing.T) {
 	}
 }
 
+func TestExecBacksOffBetweenDeadSessions(t *testing.T) {
+	d := newFakeDialer(t, false)
+	d.serve = func(conn net.Conn, _ int) {
+		serveSession(conn, func(*pgproto3.Backend, pgproto3.FrontendMessage) error {
+			return errors.New("connection reset")
+		})
+	}
+	conn := newFakeConnection(t, d, withMaxAttempts(2), withBaseDelay(100*time.Millisecond), withMaxDelay(time.Second))
+
+	// The fake dialer accepts at once, so connect never sleeps and run's backoff is
+	// the only delay: one 100ms wait between the two dead sessions, and none before
+	// giving up, which would add baseDelay<<1 = 200ms.
+	start := time.Now()
+	_, err := conn.Exec(context.Background(), "select 1")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Exec() error = nil, want the exhausted-attempts error")
+	}
+
+	if elapsed < 100*time.Millisecond {
+		t.Errorf("Exec() took %v, want at least one backoff (100ms) between the dead sessions", elapsed)
+	}
+
+	if elapsed >= 300*time.Millisecond {
+		t.Errorf("Exec() took %v, want under 300ms: run slept once more before giving up", elapsed)
+	}
+}
+
 func TestExecParamsBindsParameters(t *testing.T) {
 	var (
 		mu     sync.Mutex

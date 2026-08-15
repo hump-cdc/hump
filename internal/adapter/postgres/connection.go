@@ -145,8 +145,9 @@ func (c *connection) ExecParams(
 	return result, err
 }
 
-// run calls fn on an acquired session, retrying up to c.maxAttempts times when
-// the session is closed mid-call. Other errors are returned as is.
+// run calls fn on an acquired session, retrying with backoff up to c.maxAttempts
+// times when acquire fails or the session dies mid-call. Other errors are
+// returned as is.
 func (c *connection) run(ctx context.Context, fn func(*pgconn.PgConn) error) error {
 	var lastErr error
 
@@ -173,6 +174,14 @@ func (c *connection) run(ctx context.Context, fn func(*pgconn.PgConn) error) err
 			// cancelled ctx the redial is doomed and would mask err with ctx.Err().
 			if !connection.IsClosed() || ctx.Err() != nil {
 				return err
+			}
+
+			if attempt == c.maxAttempts-1 {
+				break
+			}
+
+			if backoffErr := c.backoff(ctx, attempt); backoffErr != nil {
+				return backoffErr
 			}
 
 			continue

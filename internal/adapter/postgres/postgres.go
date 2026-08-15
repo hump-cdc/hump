@@ -170,6 +170,8 @@ func (p *Postgres) configure(ctx context.Context, conn *connection) (*introspect
 	registry := newIntrospectorRegistry(p.cfg)
 	bs := newBootstrapper(conn)
 
+	// tables arrives already expanded to the configured tables and their
+	// partitions, so the bootstrapper needs no catalog lookup of its own.
 	introspector := newIntrospector(conn, registry, func(ctx context.Context, _ *connection, tables []domain.TableIdentifier) error {
 		return bs.EnsureReplicaIdentityFull(ctx, tables)
 	})

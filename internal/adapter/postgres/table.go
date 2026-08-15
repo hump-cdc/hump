@@ -1,6 +1,12 @@
 package postgres
 
-import "hump/internal/domain"
+import (
+	"fmt"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"hump/internal/domain"
+)
 
 // tableType classifies how a PostgreSQL table participates in partitioning.
 // Replication behavior (publication clauses, replica identity) varies by type.
@@ -38,3 +44,34 @@ type tableMetadata struct {
 
 // tablesMetadata maps a table to its classification and partitions.
 type tablesMetadata map[domain.TableIdentifier]*tableMetadata
+
+// tableArrayParams encodes tables as the (schemas, names) text-array bind
+// parameters every catalog query in this package filters on.
+func tableArrayParams(m *pgtype.Map, tables []domain.TableIdentifier) ([]param, error) {
+	schemas := make([]string, len(tables))
+	names := make([]string, len(tables))
+	for i, t := range tables {
+		schemas[i] = string(t.Schema)
+		names[i] = string(t.Name)
+	}
+
+	arrays := []struct {
+		name   string
+		values []string
+	}{
+		{name: "schemas", values: schemas},
+		{name: "names", values: names},
+	}
+
+	params := make([]param, 0, len(arrays))
+	for _, array := range arrays {
+		encoded, err := m.Encode(pgtype.TextArrayOID, pgtype.TextFormatCode, pgtype.FlatArray[string](array.values), nil)
+		if err != nil {
+			return nil, fmt.Errorf("encode %s array: %w", array.name, err)
+		}
+
+		params = append(params, param{Value: encoded, OID: pgtype.TextArrayOID, Format: pgtype.TextFormatCode})
+	}
+
+	return params, nil
+}

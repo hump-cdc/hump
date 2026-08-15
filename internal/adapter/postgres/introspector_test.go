@@ -47,7 +47,11 @@ func TestInvalidateRefreshesPartitions(t *testing.T) {
 	if len(*calls) != 1 {
 		t.Fatalf("ensureReplicaIdentity calls = %d, want 1", len(*calls))
 	}
-	got, want := (*calls)[0], introspector.registry.ReplicaIdentityFullTables()
+	got := (*calls)[0]
+	want := []domain.TableIdentifier{
+		{Schema: "public", Name: "events"},
+		{Schema: "public", Name: "events_2024"},
+	}
 	if len(got) != len(want) {
 		t.Fatalf("ensureReplicaIdentity tables = %+v, want %+v", got, want)
 	}
@@ -101,7 +105,7 @@ func TestInvalidateSkipsRefreshForUnknownTable(t *testing.T) {
 	}
 
 	if statements := server.recorded(); len(statements) != 2 {
-		t.Errorf("statements = %d, want 2: only the partition probe must run", len(statements))
+		t.Errorf("statements = %d, want 2: only the metadata lookup must run", len(statements))
 	}
 	if len(*calls) != 0 {
 		t.Errorf("ensureReplicaIdentity calls = %d, want 0", len(*calls))
@@ -273,6 +277,109 @@ func TestResolveTableConfigurationReIntrospectsNewPartition(t *testing.T) {
 	}
 }
 
+func TestResolveTableConfigurationCostsOneQueryPerMiss(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(stagedLayoutResponder(
+		[][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
+		[][][]byte{
+			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2025")),
+		},
+	))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
+
+	known := domain.TableIdentifier{Schema: "public", Name: "events_2024"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), known); err != nil {
+		t.Fatalf("ResolveTableConfiguration() error = %v", err)
+	}
+
+	before := len(server.recorded())
+	partition := domain.TableIdentifier{Schema: "public", Name: "events_2025"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), partition); err != nil {
+		t.Fatalf("ResolveTableConfiguration() error = %v", err)
+	}
+
+	statements := server.recorded()[before:]
+	if len(statements) != 1 {
+		t.Fatalf("statements = %q, want one metadata lookup", statements)
+	}
+	if !strings.Contains(statements[0], "unnest(") {
+		t.Errorf("statement = %q, want the table layout query", statements[0])
+	}
+}
+
+func TestResolveKnownTableConfiguration(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
+	))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
+
+	events := domain.TableIdentifier{Schema: "public", Name: "events"}
+	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
+
+	if _, err := introspector.ResolveKnownTableConfiguration(events); !errors.Is(err, errIntrospectionRequired) {
+		t.Fatalf("ResolveKnownTableConfiguration() error = %v, want errIntrospectionRequired before the first introspection", err)
+	}
+
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), events); err != nil {
+		t.Fatalf("ResolveTableConfiguration() error = %v", err)
+	}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), unknown); !errors.Is(err, ErrTableIgnored) {
+		t.Fatalf("ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
+	}
+
+	before := len(server.recorded())
+
+	cases := []struct {
+		name  string
+		table domain.TableIdentifier
+		want  domain.TableIdentifier
+		err   error
+	}{
+		{name: "configured table", table: events, want: events},
+		{name: "known partition", table: domain.TableIdentifier{Schema: "public", Name: "events_2024"}, want: events},
+		{name: "ignored table", table: unknown, err: ErrTableIgnored},
+		{name: "unseen table", table: domain.TableIdentifier{Schema: "public", Name: "events_2025"}, err: errIntrospectionRequired},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			ref, err := introspector.ResolveKnownTableConfiguration(tt.table)
+			if !errors.Is(err, tt.err) {
+				t.Fatalf("ResolveKnownTableConfiguration() error = %v, want %v", err, tt.err)
+			}
+			if ref != tt.want {
+				t.Errorf("ResolveKnownTableConfiguration() = %+v, want %+v", ref, tt.want)
+			}
+		})
+	}
+
+	if after := len(server.recorded()); after != before {
+		t.Errorf("statements grew from %d to %d, want a registry-only lookup to reach no server", before, after)
+	}
+}
+
+func TestInvalidateSkipsReplicaIdentityForUnmanagedTables(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+	))
+	ensure, calls := replicaIdentityRecorder()
+	introspector := newTestIntrospector(t, server, []config.Table{unmanagedTable("public", "users")}, ensure)
+
+	if err := introspector.Invalidate(context.Background(), nil); err != nil {
+		t.Fatalf("Invalidate() error = %v", err)
+	}
+
+	if len(*calls) != 1 {
+		t.Fatalf("ensureReplicaIdentity calls = %d, want 1", len(*calls))
+	}
+	if targets := (*calls)[0]; len(targets) != 0 {
+		t.Errorf("ensureReplicaIdentity tables = %+v, want none: hump manages no replica identity here", targets)
+	}
+}
+
 func TestResolveTableConfigurationIgnoresUnknownTable(t *testing.T) {
 	server := newFakeServer(t)
 	server.setResponder(tableLayoutResponder(false,
@@ -303,18 +410,18 @@ func TestResolveTableConfigurationIgnoresUnknownTable(t *testing.T) {
 
 func TestResolveTableConfigurationPropagatesRetryError(t *testing.T) {
 	server := newFakeServer(t)
-	var probes int
+	var layouts int
 	server.setResponder(func(sql string) queryResult {
-		if !strings.Contains(sql, "pg_extension") {
-			return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
+		if strings.Contains(sql, "pg_extension") {
+			return singleValue("f")
 		}
 
-		probes++
-		if probes > 1 {
+		layouts++
+		if layouts > 1 {
 			return serverError("42501", "permission denied")
 		}
 
-		return singleValue("f")
+		return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
 	})
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
 
@@ -594,24 +701,21 @@ func TestGetTablesMetadataWrapsEncodeError(t *testing.T) {
 }
 
 func TestIntrospectTablesIndexesPartitionsByParent(t *testing.T) {
-	server := newFakeServer(t)
-	server.setResponder(tableLayoutResponder(true,
-		layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
-		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1_chunk")),
-		layoutRow("public", "users", tableTypeRegular, nil, nil),
-	))
-	introspector := newTestIntrospector(t, server, nil, nil)
-
-	tables := []domain.TableIdentifier{
-		{Schema: "public", Name: "events"},
-		{Schema: "public", Name: "metrics"},
-		{Schema: "public", Name: "users"},
+	metadata := tablesMetadata{
+		{Schema: "public", Name: "events"}: {
+			Type:       tableTypePartitioned,
+			Partitions: []domain.TableIdentifier{{Schema: "public", Name: "events_2024"}},
+		},
+		{Schema: "public", Name: "metrics"}: {
+			Type:       tableTypeHypertable,
+			Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"}},
+		},
+		{Schema: "public", Name: "users"}: {Type: tableTypeRegular},
 	}
 
-	result, err := introspector.introspectTables(context.Background(), introspector.connection, tables)
-	if err != nil {
-		t.Fatalf("introspectTables() error = %v", err)
-	}
+	introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
+
+	result := introspector.introspectTables(metadata)
 
 	want := map[domain.TableIdentifier]domain.TableIdentifier{
 		{Schema: "public", Name: "events_2024"}:                     {Schema: "public", Name: "events"},
@@ -638,36 +742,23 @@ func TestIntrospectTablesIndexesPartitionsByParent(t *testing.T) {
 }
 
 func TestIntrospectTablesSkipsUnnamedPartitions(t *testing.T) {
-	server := newFakeServer(t)
-	server.setResponder(tableLayoutResponder(true,
-		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), nil),
-	))
-	introspector := newTestIntrospector(t, server, nil, nil)
-
-	tables := []domain.TableIdentifier{{Schema: "public", Name: "metrics"}}
-
-	result, err := introspector.introspectTables(context.Background(), introspector.connection, tables)
-	if err != nil {
-		t.Fatalf("introspectTables() error = %v", err)
+	metrics := domain.TableIdentifier{Schema: "public", Name: "metrics"}
+	metadata := tablesMetadata{
+		metrics: {
+			Type:       tableTypeHypertable,
+			Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal"}},
+		},
 	}
+
+	introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
+
+	result := introspector.introspectTables(metadata)
 
 	if len(result.Partitions) != 0 {
 		t.Errorf("Partitions = %+v, want none: a chunkless hypertable has no partition to index", result.Partitions)
 	}
-	if partitions := result.Tables[tables[0]].Partitions; partitions != nil {
+	if partitions := result.Tables[metrics].Partitions; partitions != nil {
 		t.Errorf("metrics partitions = %+v, want none", partitions)
-	}
-}
-
-func TestIntrospectTablesPropagatesMetadataError(t *testing.T) {
-	server := newFakeServer(t)
-	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
-	introspector := newTestIntrospector(t, server, nil, nil)
-
-	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
-
-	if _, err := introspector.introspectTables(context.Background(), introspector.connection, tables); err == nil {
-		t.Fatal("introspectTables() error = nil, want the metadata error")
 	}
 }
 
@@ -677,43 +768,49 @@ func TestResolveTableByPartition(t *testing.T) {
 
 	cases := []struct {
 		name      string
-		table     domain.TableIdentifier
-		rows      [][][]byte
+		metadata  tablesMetadata
 		partition domain.TableIdentifier
 		want      *domain.TableIdentifier
 	}{
 		{
-			name:      "partition matched by name",
-			table:     events,
-			rows:      [][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
+			name: "partition matched by name",
+			metadata: tablesMetadata{events: {
+				Type:       tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{{Schema: "public", Name: "events_2024"}},
+			}},
 			partition: domain.TableIdentifier{Schema: "public", Name: "events_2024"},
 			want:      &events,
 		},
 		{
-			name:      "hypertable chunk matched by schema alone",
-			table:     metrics,
-			rows:      [][][]byte{layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1_chunk"))},
+			name: "hypertable chunk matched by schema alone",
+			metadata: tablesMetadata{metrics: {
+				Type:       tableTypeHypertable,
+				Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"}},
+			}},
 			partition: domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"},
 			want:      &metrics,
 		},
 		{
-			name:      "name mismatch in the same schema",
-			table:     events,
-			rows:      [][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
+			name: "name mismatch in the same schema",
+			metadata: tablesMetadata{events: {
+				Type:       tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{{Schema: "public", Name: "events_2024"}},
+			}},
 			partition: domain.TableIdentifier{Schema: "public", Name: "events_2025"},
 			want:      nil,
 		},
 		{
-			name:      "partition in another schema",
-			table:     events,
-			rows:      [][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
+			name: "partition in another schema",
+			metadata: tablesMetadata{events: {
+				Type:       tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{{Schema: "public", Name: "events_2024"}},
+			}},
 			partition: domain.TableIdentifier{Schema: "archive", Name: "events_2024"},
 			want:      nil,
 		},
 		{
 			name:      "table without partitions",
-			table:     events,
-			rows:      [][][]byte{layoutRow("public", "events", tableTypeRegular, nil, nil)},
+			metadata:  tablesMetadata{events: {Type: tableTypeRegular}},
 			partition: domain.TableIdentifier{Schema: "public", Name: "events_2024"},
 			want:      nil,
 		},
@@ -721,16 +818,9 @@ func TestResolveTableByPartition(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			server := newFakeServer(t)
-			server.setResponder(tableLayoutResponder(true, tt.rows...))
-			introspector := newTestIntrospector(t, server, nil, nil)
+			introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
 
-			tables := []domain.TableIdentifier{tt.table}
-
-			got, err := introspector.resolveTableByPartition(context.Background(), introspector.connection, tt.partition, tables)
-			if err != nil {
-				t.Fatalf("resolveTableByPartition() error = %v", err)
-			}
+			got := introspector.resolveTableByPartition(tt.metadata, tt.partition)
 
 			switch {
 			case tt.want == nil && got != nil:
@@ -744,16 +834,125 @@ func TestResolveTableByPartition(t *testing.T) {
 	}
 }
 
-func TestResolveTableByPartitionPropagatesMetadataError(t *testing.T) {
-	server := newFakeServer(t)
-	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
-	introspector := newTestIntrospector(t, server, nil, nil)
+func TestReplicaIdentityTargetsCoversTablesAndPartitions(t *testing.T) {
+	events := domain.TableIdentifier{Schema: "public", Name: "events"}
+	metrics := domain.TableIdentifier{Schema: "public", Name: "metrics"}
+	users := domain.TableIdentifier{Schema: "public", Name: "users"}
 
-	tables := []domain.TableIdentifier{{Schema: "public", Name: "events"}}
-	partition := domain.TableIdentifier{Schema: "public", Name: "events_2024"}
+	cases := []struct {
+		name     string
+		metadata tablesMetadata
+		managed  []domain.TableIdentifier
+		want     []domain.TableIdentifier
+	}{
+		{
+			name:     "regular table",
+			metadata: tablesMetadata{users: {Type: tableTypeRegular}},
+			managed:  []domain.TableIdentifier{users},
+			want:     []domain.TableIdentifier{users},
+		},
+		{
+			name: "partitioned table and its partitions",
+			metadata: tablesMetadata{events: {
+				Type: tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{
+					{Schema: "public", Name: "events_2024"},
+					{Schema: "archive", Name: "events_2025"},
+				},
+			}},
+			managed: []domain.TableIdentifier{events},
+			want: []domain.TableIdentifier{
+				events,
+				{Schema: "public", Name: "events_2024"},
+				{Schema: "archive", Name: "events_2025"},
+			},
+		},
+		{
+			name: "duplicate partitions are listed once",
+			metadata: tablesMetadata{events: {
+				Type: tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{
+					{Schema: "public", Name: "events_2024"},
+					{Schema: "public", Name: "events_2024"},
+				},
+			}},
+			managed: []domain.TableIdentifier{events},
+			want:    []domain.TableIdentifier{events, {Schema: "public", Name: "events_2024"}},
+		},
+		{
+			name: "hypertable chunks are left alone",
+			metadata: tablesMetadata{metrics: {
+				Type:       tableTypeHypertable,
+				Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal", Name: "_hyper_1_1"}},
+			}},
+			managed: []domain.TableIdentifier{metrics},
+			want:    []domain.TableIdentifier{metrics},
+		},
+		{
+			name: "partitions missing a schema or a name are skipped",
+			metadata: tablesMetadata{events: {
+				Type: tableTypePartitioned,
+				Partitions: []domain.TableIdentifier{
+					{Name: "orphan"},
+					{Schema: "public"},
+				},
+			}},
+			managed: []domain.TableIdentifier{events},
+			want:    []domain.TableIdentifier{events},
+		},
+		{
+			name:     "unmanaged tables contribute nothing",
+			metadata: tablesMetadata{users: {Type: tableTypeRegular}, events: {Type: tableTypePartitioned}},
+			managed:  []domain.TableIdentifier{users},
+			want:     []domain.TableIdentifier{users},
+		},
+		{
+			name:     "no managed tables",
+			metadata: tablesMetadata{users: {Type: tableTypeRegular}},
+			managed:  nil,
+			want:     nil,
+		},
+	}
 
-	if _, err := introspector.resolveTableByPartition(context.Background(), introspector.connection, partition, tables); err == nil {
-		t.Fatal("resolveTableByPartition() error = nil, want the metadata error")
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
+
+			got := introspector.replicaIdentityTargets(tt.metadata, tt.managed)
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("replicaIdentityTargets() = %+v, want %+v", got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("target %d = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestReplicaIdentityTargetsFollowsConfiguredOrder(t *testing.T) {
+	managed := []domain.TableIdentifier{
+		{Schema: "public", Name: "zebras"},
+		{Schema: "public", Name: "apples"},
+		{Schema: "public", Name: "mangos"},
+	}
+	metadata := tablesMetadata{}
+	for _, table := range managed {
+		metadata[table] = &tableMetadata{Type: tableTypeRegular}
+	}
+
+	introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
+
+	for range 10 {
+		got := introspector.replicaIdentityTargets(metadata, managed)
+
+		for i := range managed {
+			if got[i] != managed[i] {
+				t.Fatalf("target %d = %+v, want %+v: the order must not depend on map iteration", i, got[i], managed[i])
+			}
+		}
 	}
 }
 
@@ -781,6 +980,26 @@ func TestIntrospectorHasTimescaleDB(t *testing.T) {
 				t.Errorf("hasTimescaleDB() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIntrospectorHasTimescaleDBProbesOnce(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return singleValue("t") })
+	introspector := newTestIntrospector(t, server, nil, nil)
+
+	for range 3 {
+		got, err := introspector.hasTimescaleDB(context.Background(), introspector.connection)
+		if err != nil {
+			t.Fatalf("hasTimescaleDB() error = %v", err)
+		}
+		if !got {
+			t.Error("hasTimescaleDB() = false, want the cached true")
+		}
+	}
+
+	if statements := server.recorded(); len(statements) != 1 {
+		t.Errorf("statements = %q, want one probe", statements)
 	}
 }
 

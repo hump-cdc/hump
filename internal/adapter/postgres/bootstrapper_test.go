@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"regexp"
-	"sort"
 	"strings"
 	"testing"
 
@@ -229,78 +228,35 @@ func TestEnsureReplicationSlotRemovedWrapsServerError(t *testing.T) {
 	}
 }
 
-func TestEnsureReplicaIdentityFullCoversTablesAndPartitions(t *testing.T) {
+func TestEnsureReplicaIdentityFullAltersOnlyStaleTables(t *testing.T) {
+	users := domain.TableIdentifier{Schema: "public", Name: "users"}
+	events := domain.TableIdentifier{Schema: "public", Name: "events"}
+
 	cases := []struct {
-		name string
-		rows [][][]byte
-		want []string
+		name  string
+		stale []domain.TableIdentifier
+		want  []string
 	}{
+		{name: "every table already full", stale: nil, want: nil},
+		{name: "one table behind", stale: []domain.TableIdentifier{users}, want: []string{`"public"."users"`}},
 		{
-			name: "regular table",
-			rows: [][][]byte{
-				layoutRow("public", "users", tableTypeRegular, nil, nil),
-			},
-			want: []string{`"public"."users"`},
-		},
-		{
-			name: "partitioned table and its partitions",
-			rows: [][][]byte{
-				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
-				layoutRow("public", "events", tableTypePartitioned, []byte("archive"), []byte("events_2025")),
-			},
-			want: []string{`"archive"."events_2025"`, `"public"."events"`, `"public"."events_2024"`},
-		},
-		{
-			name: "duplicate partitions are altered once",
-			rows: [][][]byte{
-				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
-				layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
-			},
-			want: []string{`"public"."events"`, `"public"."events_2024"`},
-		},
-		{
-			name: "hypertable chunks are left alone",
-			rows: [][][]byte{
-				layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1")),
-			},
-			want: []string{`"public"."metrics"`},
-		},
-		{
-			name: "partitions missing a schema or a name are skipped",
-			rows: [][][]byte{
-				layoutRow("public", "events", tableTypePartitioned, []byte(""), []byte("orphan")),
-				layoutRow("public", "events", tableTypePartitioned, []byte("public"), nil),
-			},
-			want: []string{`"public"."events"`},
+			name:  "several tables behind",
+			stale: []domain.TableIdentifier{users, events},
+			want:  []string{`"public"."users"`, `"public"."events"`},
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			server := newFakeServer(t)
-			server.setResponder(tableLayoutResponder(true, tt.rows...))
+			server.setResponder(func(string) queryResult { return staleReplicaIdentity(tt.stale...) })
 			bootstrapper := newTestBootstrapper(t, server)
 
-			tables := []domain.TableIdentifier{
-				{Schema: domain.TableSchema(tt.rows[0][0]), Name: domain.TableName(tt.rows[0][1])},
-			}
-
-			if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables); err != nil {
+			if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{users, events}); err != nil {
 				t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
 			}
 
-			// The qualified table of every ALTER TABLE ... REPLICA IDENTITY FULL,
-			// sorted so a map-ordered run compares consistently.
-			alterPattern := regexp.MustCompile(`ALTER TABLE (.+) REPLICA IDENTITY FULL`)
-
-			var got []string
-			for _, statement := range server.recorded() {
-				if match := alterPattern.FindStringSubmatch(statement); match != nil {
-					got = append(got, match[1])
-				}
-			}
-			sort.Strings(got)
-
+			got := alteredTables(server)
 			if len(got) != len(tt.want) {
 				t.Fatalf("altered tables = %q, want %q", got, tt.want)
 			}
@@ -309,67 +265,102 @@ func TestEnsureReplicaIdentityFullCoversTablesAndPartitions(t *testing.T) {
 					t.Errorf("altered table %d = %q, want %q", i, got[i], want)
 				}
 			}
+
+			if statements := server.recorded(); len(statements) != len(tt.want)+1 {
+				t.Errorf("statements = %d, want %d: one check plus one ALTER per stale table", len(statements), len(tt.want)+1)
+			}
 		})
 	}
 }
 
-func TestEnsureReplicaIdentityFullQuotesTheTable(t *testing.T) {
+func TestEnsureReplicaIdentityFullBindsTablesAsArrays(t *testing.T) {
 	server := newFakeServer(t)
-	server.setResponder(tableLayoutResponder(false,
-		layoutRow("pub'lic", "us\"ers", tableTypeRegular, nil, nil),
-	))
+	server.setResponder(func(string) queryResult { return staleReplicaIdentity() })
 	bootstrapper := newTestBootstrapper(t, server)
 
-	tables := []domain.TableIdentifier{{Schema: "pub'lic", Name: "us\"ers"}}
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "users"},
+		{Schema: "other", Name: "events"},
+	}
 
 	if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables); err != nil {
 		t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
 	}
 
-	statements := server.recorded()
-	if len(statements) != 3 {
-		t.Fatalf("statements = %d, want 3: %q", len(statements), statements)
+	params := server.boundParams()
+	if len(params) != 1 {
+		t.Fatalf("bound parameter sets = %d, want 1", len(params))
 	}
-
-	alter := statements[2]
-	if !strings.Contains(alter, `ALTER TABLE "pub'lic"."us""ers" REPLICA IDENTITY FULL`) {
-		t.Errorf("statement = %q, want the table quoted as an identifier", alter)
+	if got, want := string(params[0][0]), "{public,other}"; got != want {
+		t.Errorf("schemas = %q, want %q", got, want)
 	}
-	if !strings.Contains(alter, `n.nspname = 'pub''lic'`) {
-		t.Errorf("statement = %q, want the schema quoted as a separate literal", alter)
-	}
-	if !strings.Contains(alter, `c.relname = 'us"ers'`) {
-		t.Errorf("statement = %q, want the table name quoted as a separate literal", alter)
+	if got, want := string(params[0][1]), "{users,events}"; got != want {
+		t.Errorf("names = %q, want %q", got, want)
 	}
 }
 
-func TestEnsureReplicaIdentityFullPropagatesLookupError(t *testing.T) {
+func TestEnsureReplicaIdentityFullQuotesTheTable(t *testing.T) {
+	table := domain.TableIdentifier{Schema: "pub'lic", Name: "us\"ers"}
+
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return staleReplicaIdentity(table) })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{table}); err != nil {
+		t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 2 {
+		t.Fatalf("statements = %d, want 2: %q", len(statements), statements)
+	}
+
+	if alter := statements[1]; !strings.Contains(alter, `ALTER TABLE "pub'lic"."us""ers" REPLICA IDENTITY FULL`) {
+		t.Errorf("statement = %q, want the table quoted as an identifier", alter)
+	}
+}
+
+func TestEnsureReplicaIdentityFullSkipsAnEmptyTableList(t *testing.T) {
 	server := newFakeServer(t)
 	bootstrapper := newTestBootstrapper(t, server)
 
-	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), nil)
-	if !errors.Is(err, database.ErrNoTablesConfigured) {
-		t.Fatalf("EnsureReplicaIdentityFull() error = %v, want database.ErrNoTablesConfigured", err)
+	if err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), nil); err != nil {
+		t.Fatalf("EnsureReplicaIdentityFull() error = %v", err)
+	}
+
+	if statements := server.recorded(); len(statements) != 0 {
+		t.Errorf("statements = %q, want none: an empty list must not reach the server", statements)
+	}
+}
+
+func TestEnsureReplicaIdentityFullPropagatesCheckError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{{Schema: "public", Name: "users"}})
+	if err == nil {
+		t.Fatal("EnsureReplicaIdentityFull() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), "get stale replica identity tables") {
+		t.Errorf("error = %v, want it to name the check", err)
 	}
 }
 
 func TestEnsureReplicaIdentityFullWrapsServerError(t *testing.T) {
+	users := domain.TableIdentifier{Schema: "public", Name: "users"}
+
 	server := newFakeServer(t)
 	server.setResponder(func(sql string) queryResult {
-		switch {
-		case strings.Contains(sql, "pg_extension"):
-			return singleValue("f")
-		case strings.Contains(sql, "unnest("):
-			return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
-		default:
-			return serverError("42501", "permission denied")
+		if strings.Contains(sql, "relreplident") {
+			return staleReplicaIdentity(users)
 		}
+
+		return serverError("42501", "permission denied")
 	})
 	bootstrapper := newTestBootstrapper(t, server)
 
-	tables := []domain.TableIdentifier{{Schema: "public", Name: "users"}}
-
-	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), tables)
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{users})
 	if err == nil {
 		t.Fatal("EnsureReplicaIdentityFull() error = nil, want the server error")
 	}
@@ -743,4 +734,19 @@ func TestQuoteIdentifier(t *testing.T) {
 			}
 		})
 	}
+}
+
+// alteredTables returns the qualified table of every ALTER TABLE ... REPLICA
+// IDENTITY FULL the server was asked to run, in order.
+func alteredTables(s *fakeServer) []string {
+	alterPattern := regexp.MustCompile(`ALTER TABLE (.+) REPLICA IDENTITY FULL`)
+
+	var altered []string
+	for _, statement := range s.recorded() {
+		if match := alterPattern.FindStringSubmatch(statement); match != nil {
+			altered = append(altered, match[1])
+		}
+	}
+
+	return altered
 }

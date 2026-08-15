@@ -44,6 +44,11 @@ type wal struct {
 
 	introspector *introspector
 
+	// standbyInterval is the wait between standby status updates. It is
+	// standbyTimeout outside tests, which shorten it; a zero value would panic
+	// the keepAlive ticker and spin the receive loop.
+	standbyInterval time.Duration
+
 	health  Health
 	metrics *metrics
 }
@@ -82,6 +87,7 @@ func newWal(
 		pluginArguments: []string{"proto_version '2'", fmt.Sprintf("publication_names '%s'", publicationName), "messages 'true'"},
 		messageContext:  &postgresMessageContext{messages: map[string]string{}},
 		introspector:    introspector,
+		standbyInterval: standbyTimeout,
 		health:          health,
 		metrics:         m,
 	}, nil
@@ -103,7 +109,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	w.health.MarkHealthy()
 	logger.Info("Logical replication started on slot", "slot", w.slotName)
 
-	standbyDeadline := time.Now().Add(standbyTimeout)
+	standbyDeadline := time.Now().Add(w.standbyInterval)
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
@@ -114,7 +120,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return err
 			}
 
-			standbyDeadline = time.Now().Add(standbyTimeout)
+			standbyDeadline = time.Now().Add(w.standbyInterval)
 		}
 
 		if err = ctx.Err(); err != nil {
@@ -179,7 +185,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return err
 			}
 
-			err = w.processMessage(ctx, xld.WALData, xld.ServerTime, handler)
+			err = w.processMessage(ctx, xld.WALData, xld.ServerTime, walPosition, handler)
 			if err == nil {
 				recordEnd := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 				if recordEnd > walPosition {
@@ -224,12 +230,61 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 	return err
 }
 
+// resolveTable resolves table to the configured table that owns it. A lookup the
+// registry cannot answer goes to the database, which can block for a long time,
+// so the stream is kept alive for the duration.
+func (w *wal) resolveTable(ctx context.Context, table domain.TableIdentifier, position pglogrepl.LSN) (domain.TableIdentifier, error) {
+	ref, err := w.introspector.ResolveKnownTableConfiguration(table)
+	if !errors.Is(err, errIntrospectionRequired) {
+		return ref, err
+	}
+
+	stop := w.keepAlive(ctx, position)
+	defer stop()
+
+	return w.introspector.ResolveTableConfiguration(ctx, table)
+}
+
+// keepAlive sends standby status updates for position every standbyInterval
+// until the returned stop is called, which waits for the sender to finish. It
+// exists so a blocking introspection — catalog round trips, connection retries,
+// an ALTER waiting on AccessExclusiveLock — cannot let the upstream walsender
+// time the session out. Its caller is parked inside the introspector and touches
+// w.session nowhere else, so the socket keeps a single writer throughout.
+func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func()) {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+
+		ticker := time.NewTicker(w.standbyInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// A failure here already marks the sender unhealthy; the receive
+				// loop reports it once it regains control.
+				_ = w.flush(ctx, position)
+			}
+		}
+	}()
+
+	return func() {
+		close(done)
+		<-finished
+	}
+}
+
 // processMessage parses a single pgoutput v2 message and dispatches it:
 // RelationMessageV2 updates the relation cache, BeginMessage/CommitMessage
 // track transaction boundaries and commit-lag metrics, LogicalDecodingMessageV2
 // is buffered as transactional context, and row-change messages are decoded
 // and forwarded to the process handler.
-func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, handler database.ProcessMessageHandler) error {
+func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
 	message, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
 		return fmt.Errorf("Parse logical replication message: %w", err)
@@ -257,7 +312,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.resolveTable(ctx, table, position)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -288,7 +343,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.resolveTable(ctx, table, position)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -319,7 +374,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
+		ref, err := w.resolveTable(ctx, table, position)
 		if errors.Is(err, ErrTableIgnored) {
 			return nil
 		}
@@ -353,7 +408,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			}
 
 			table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-			ref, err := w.introspector.ResolveTableConfiguration(ctx, table)
+			ref, err := w.resolveTable(ctx, table, position)
 			if errors.Is(err, ErrTableIgnored) {
 				continue
 			}

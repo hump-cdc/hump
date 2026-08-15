@@ -26,8 +26,11 @@ var bootstrapperReplicationSlotEnsureExistsSql string
 //go:embed sql/bootstrapper_replication_slot_ensure_removed.sql
 var bootstrapperReplicationSlotEnsureRemovedSql string
 
-//go:embed sql/bootstrapper_replica_identity_ensure_full.sql
-var bootstrapperReplicaIdentityEnsureFullSql string
+//go:embed sql/bootstrapper_replica_identity_stale.sql
+var bootstrapperReplicaIdentityStaleSql string
+
+//go:embed sql/bootstrapper_replica_identity_set_full.sql
+var bootstrapperReplicaIdentitySetFullSql string
 
 //go:embed sql/bootstrapper_metadata_tables_timescale.sql
 var bootstrapperMetadataTablesTimescaleSql string
@@ -141,52 +144,65 @@ func (b *bootstrapper) EnsureReplicationSlotRemoved(ctx context.Context, slotNam
 	return nil
 }
 
-// EnsureReplicaIdentityFull sets REPLICA IDENTITY FULL on every configured
-// table and its partitions, skipping tables already at FULL. TimescaleDB chunks
-// are left alone: they inherit from the hypertable and cannot be altered directly.
+// EnsureReplicaIdentityFull sets REPLICA IDENTITY FULL on the tables that are not
+// already at it. tables is the expanded target set — configured tables together
+// with their partitions, TimescaleDB chunks excluded, as resolved by the caller
+// from one catalog snapshot.
 func (b *bootstrapper) EnsureReplicaIdentityFull(ctx context.Context, tables []domain.TableIdentifier) error {
-	info, err := b.getTablesWithPartitions(ctx, tables)
+	stale, err := b.getStaleReplicaIdentityTables(ctx, tables)
 	if err != nil {
 		return err
 	}
 
-	seen := make(map[domain.TableIdentifier]struct{})
-	var targets []domain.TableIdentifier
-	add := func(table domain.TableIdentifier) {
-		if _, ok := seen[table]; ok {
-			return
-		}
-		seen[table] = struct{}{}
-		targets = append(targets, table)
-	}
-
-	for table, t := range info {
-		add(table)
-		if t.Type == tableTypeHypertable {
-			continue
-		}
-		for _, p := range t.Partitions {
-			if p.Schema == "" || p.Name == "" {
-				continue
-			}
-			add(p)
-		}
-	}
-
-	// The embedded SQL is a no-op when the table is already FULL.
-	for _, t := range targets {
-		schemaLiteral := b.quoteLiteral(string(t.Schema))
-		nameLiteral := b.quoteLiteral(string(t.Name))
+	// One statement per table rather than one batched Exec: the simple protocol
+	// would run a batch as a single implicit transaction, holding every
+	// AccessExclusiveLock it takes until the last ALTER commits.
+	for _, t := range stale {
 		qualifiedIdentifier := b.quoteIdentifier(string(t.Schema)) + "." + b.quoteIdentifier(string(t.Name))
 
-		sql := fmt.Sprintf(bootstrapperReplicaIdentityEnsureFullSql, schemaLiteral, nameLiteral, qualifiedIdentifier)
+		sql := fmt.Sprintf(bootstrapperReplicaIdentitySetFullSql, qualifiedIdentifier)
 
 		if _, err := b.connection.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("set replica identity full on %s.%s: %w", t.Schema, t.Name, err)
 		}
+
+		logger.Info("Table was updated to REPLICA IDENTITY FULL", "schema", t.Schema, "table", t.Name)
 	}
 
 	return nil
+}
+
+// getStaleReplicaIdentityTables returns the subset of tables whose replica
+// identity is not FULL. Tables absent from the catalog are not reported: a
+// partition dropped since introspection has nothing left to alter.
+func (b *bootstrapper) getStaleReplicaIdentityTables(ctx context.Context, tables []domain.TableIdentifier) ([]domain.TableIdentifier, error) {
+	if len(tables) == 0 {
+		return nil, nil
+	}
+
+	params, err := tableArrayParams(b.newTypeMap(), tables)
+	if err != nil {
+		return nil, err
+	}
+
+	queryResult, err := b.connection.ExecParams(ctx, bootstrapperReplicaIdentityStaleSql, params, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get stale replica identity tables: %w", err)
+	}
+
+	stale := make([]domain.TableIdentifier, 0, len(queryResult.Rows))
+	for _, values := range queryResult.Rows {
+		if len(values) < 2 {
+			return nil, fmt.Errorf("get stale replica identity tables: expected 2 columns, got %d", len(values))
+		}
+
+		stale = append(stale, domain.TableIdentifier{
+			Schema: domain.TableSchema(values[0]),
+			Name:   domain.TableName(values[1]),
+		})
+	}
+
+	return stale, nil
 }
 
 // getTablesWithPartitions returns the configured tables along with their
@@ -201,35 +217,14 @@ func (b *bootstrapper) getTablesWithPartitions(ctx context.Context, tables []dom
 		return nil, err
 	}
 
-	schemas := make([]string, len(tables))
-	names := make([]string, len(tables))
-	for i, t := range tables {
-		schemas[i] = string(t.Schema)
-		names[i] = string(t.Name)
-	}
-
 	sql := bootstrapperMetadataTablesNoTimescaleSql
 	if timescale {
 		sql = bootstrapperMetadataTablesTimescaleSql
 	}
 
-	arrays := []struct {
-		name   string
-		values []string
-	}{
-		{name: "schemas", values: schemas},
-		{name: "names", values: names},
-	}
-
-	m := b.newTypeMap()
-	params := make([]param, 0, len(arrays))
-	for _, array := range arrays {
-		encoded, err := m.Encode(pgtype.TextArrayOID, pgtype.TextFormatCode, pgtype.FlatArray[string](array.values), nil)
-		if err != nil {
-			return nil, fmt.Errorf("encode %s array: %w", array.name, err)
-		}
-
-		params = append(params, param{Value: encoded, OID: pgtype.TextArrayOID, Format: pgtype.TextFormatCode})
+	params, err := tableArrayParams(b.newTypeMap(), tables)
+	if err != nil {
+		return nil, err
 	}
 
 	queryResult, err := b.connection.ExecParams(ctx, sql, params, nil)

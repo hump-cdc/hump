@@ -715,6 +715,8 @@ func tableLayoutResponder(timescale bool, rows ...[][]byte) func(string) queryRe
 		switch {
 		case strings.Contains(sql, "pg_extension"):
 			return singleValue(flag)
+		case strings.Contains(sql, "relreplident"):
+			return staleReplicaIdentity()
 		case strings.Contains(sql, "unnest("):
 			return tableLayout(rows...)
 		default:
@@ -734,6 +736,8 @@ func stagedLayoutResponder(stages ...[][][]byte) func(string) queryResult {
 		switch {
 		case strings.Contains(sql, "pg_extension"):
 			return singleValue("f")
+		case strings.Contains(sql, "relreplident"):
+			return staleReplicaIdentity()
 		case strings.Contains(sql, "unnest("):
 			mu.Lock()
 			defer mu.Unlock()
@@ -804,6 +808,17 @@ func tableLayout(rows ...[][]byte) queryResult {
 	}
 
 	return queryResult{columns: columns, rows: rows}
+}
+
+// staleReplicaIdentity scripts the result of the replica identity check, whose
+// rows are the tables that are not yet FULL.
+func staleReplicaIdentity(tables ...domain.TableIdentifier) queryResult {
+	rows := make([][][]byte, 0, len(tables))
+	for _, t := range tables {
+		rows = append(rows, [][]byte{[]byte(t.Schema), []byte(t.Name)})
+	}
+
+	return queryResult{columns: 2, rows: rows}
 }
 
 // layoutRow builds one row of the table layout query. A nil partitionSchema or
@@ -968,6 +983,15 @@ func configuredTable(schemaName domain.TableSchema, name domain.TableName) confi
 		Schema:  schemaName,
 		Name:    name,
 		Replica: domain.ReplicaIdentityFull,
+	}
+}
+
+// unmanagedTable builds a config.Table whose replica identity hump leaves alone.
+func unmanagedTable(schemaName domain.TableSchema, name domain.TableName) config.Table {
+	return config.Table{
+		Schema:  schemaName,
+		Name:    name,
+		Replica: domain.ReplicaIdentityUnmanaged,
 	}
 }
 

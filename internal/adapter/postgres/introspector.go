@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -33,7 +34,10 @@ type introspector struct {
 	// ignoredTables holds tables a re-introspection still failed to resolve;
 	// later lookups for them skip introspection entirely. Entries are never
 	// removed, so a table stays ignored for the lifetime of the introspector.
-	ignoredTables         map[domain.TableIdentifier]struct{}
+	ignoredTables map[domain.TableIdentifier]struct{}
+	// timescale caches the timescaledb extension probe, nil until it has run:
+	// the extension cannot be installed or dropped while a session is live.
+	timescale             *bool
 	ensureReplicaIdentity func(ctx context.Context, conn *connection, tables []domain.TableIdentifier) error
 	// newTypeMap builds the pgtype map that encodes array bind parameters. A
 	// fresh map per call keeps its encode-plan cache free of concurrent writes;
@@ -41,9 +45,10 @@ type introspector struct {
 	newTypeMap func() *pgtype.Map
 }
 
-// newIntrospector returns an introspector backed by connection and registry, calling
-// ensureReplicaIdentity after every successful introspection. conn is borrowed:
-// the caller must keep it open for the lifetime of the introspector.
+// newIntrospector returns an introspector backed by connection and registry,
+// calling ensureReplicaIdentity with the expanded target tables after every
+// successful introspection. conn is borrowed: the caller must keep it open for
+// the lifetime of the introspector.
 func newIntrospector(
 	conn *connection,
 	registry *introspectorRegistry,
@@ -82,13 +87,8 @@ func (i *introspector) ResolveTableConfiguration(ctx context.Context, table doma
 		}
 	}
 
-	if ref, ok := i.registry.Resolve(table); ok {
-		return ref, nil
-	}
-
-	// a previous re-introspection already failed to find it
-	if _, ignored := i.ignoredTables[table]; ignored {
-		return domain.TableIdentifier{}, ErrTableIgnored
+	if ref, err := i.resolveKnown(table); !errors.Is(err, errIntrospectionRequired) {
+		return ref, err
 	}
 
 	// retry once, in case table is a partition created after startup
@@ -105,31 +105,53 @@ func (i *introspector) ResolveTableConfiguration(ctx context.Context, table doma
 	return ref, nil
 }
 
+// ResolveKnownTableConfiguration answers from the in-memory registry alone,
+// never touching the database. It returns errIntrospectionRequired when only a
+// catalog refresh can decide, which is what ResolveTableConfiguration is for.
+func (i *introspector) ResolveKnownTableConfiguration(table domain.TableIdentifier) (domain.TableIdentifier, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	return i.resolveKnown(table)
+}
+
+// resolveKnown performs the registry-only lookup while the caller holds i.mu.
+// See ResolveKnownTableConfiguration for the semantics.
+func (i *introspector) resolveKnown(table domain.TableIdentifier) (domain.TableIdentifier, error) {
+	if !i.initialized {
+		return domain.TableIdentifier{}, errIntrospectionRequired
+	}
+
+	if ref, ok := i.registry.Resolve(table); ok {
+		return ref, nil
+	}
+
+	// a previous re-introspection already failed to find it
+	if _, ignored := i.ignoredTables[table]; ignored {
+		return domain.TableIdentifier{}, ErrTableIgnored
+	}
+
+	return domain.TableIdentifier{}, errIntrospectionRequired
+}
+
 // invalidate performs the introspection refresh while the caller holds
 // i.mu. See Invalidate for the semantics of the table argument.
 func (i *introspector) invalidate(ctx context.Context, conn *connection, table *domain.TableIdentifier) error {
-	// a non-nil table means an earlier lookup missed it; only refresh the
-	// registry if it proves to be a partition
-	if table != nil {
-		partition, err := i.resolveTableByPartition(ctx, conn, *table, i.registry.List())
-		if err != nil {
-			return err
-		}
-
-		// not a partition of any configured table, so a refresh would not resolve it
-		if partition == nil {
-			return nil
-		}
-	}
-
-	introspection, err := i.introspectTables(ctx, conn, i.registry.List())
+	metadata, err := i.getTablesMetadata(ctx, conn, i.registry.List())
 	if err != nil {
 		return err
 	}
 
-	i.registry.UpdatePartitions(introspection.Partitions)
+	// a non-nil table means an earlier lookup missed it; one that is not a
+	// partition of a configured table would not be resolved by a refresh either
+	if table != nil && i.resolveTableByPartition(metadata, *table) == nil {
+		return nil
+	}
 
-	if err := i.ensureReplicaIdentity(ctx, conn, i.registry.ReplicaIdentityFullTables()); err != nil {
+	i.registry.UpdatePartitions(i.introspectTables(metadata).Partitions)
+
+	targets := i.replicaIdentityTargets(metadata, i.registry.ReplicaIdentityFullTables())
+	if err := i.ensureReplicaIdentity(ctx, conn, targets); err != nil {
 		return err
 	}
 
@@ -154,35 +176,14 @@ func (i *introspector) getTablesMetadata(ctx context.Context, conn *connection, 
 		return nil, err
 	}
 
-	schemas := make([]string, len(tables))
-	names := make([]string, len(tables))
-	for idx, t := range tables {
-		schemas[idx] = string(t.Schema)
-		names[idx] = string(t.Name)
-	}
-
 	sql := introspectorTablesNoTimescaleSql
 	if timescale {
 		sql = introspectorTablesTimescaleSql
 	}
 
-	arrays := []struct {
-		name   string
-		values []string
-	}{
-		{name: "schemas", values: schemas},
-		{name: "names", values: names},
-	}
-
-	m := i.newTypeMap()
-	params := make([]param, 0, len(arrays))
-	for _, array := range arrays {
-		encoded, err := m.Encode(pgtype.TextArrayOID, pgtype.TextFormatCode, pgtype.FlatArray[string](array.values), nil)
-		if err != nil {
-			return nil, fmt.Errorf("encode %s array: %w", array.name, err)
-		}
-
-		params = append(params, param{Value: encoded, OID: pgtype.TextArrayOID, Format: pgtype.TextFormatCode})
+	params, err := tableArrayParams(i.newTypeMap(), tables)
+	if err != nil {
+		return nil, err
 	}
 
 	queryResult, err := conn.ExecParams(ctx, sql, params, nil)
@@ -229,14 +230,9 @@ func (i *introspector) getTablesMetadata(ctx context.Context, conn *connection, 
 	return result, nil
 }
 
-// introspectTables runs tablesWithPartitions and reshapes the result into a
-// parent map plus a flat partition→parent reverse index.
-func (i *introspector) introspectTables(ctx context.Context, conn *connection, tables []domain.TableIdentifier) (*tablesIntrospection, error) {
-	dbTables, err := i.getTablesMetadata(ctx, conn, tables)
-	if err != nil {
-		return nil, err
-	}
-
+// introspectTables reshapes a catalog snapshot into a parent table view plus a
+// flat partition→parent reverse index.
+func (i *introspector) introspectTables(dbTables tablesMetadata) *tablesIntrospection {
 	result := &tablesIntrospection{
 		Tables:     make(map[domain.TableIdentifier]*introspectedTable),
 		Partitions: make(map[domain.TableIdentifier]domain.TableIdentifier),
@@ -260,35 +256,73 @@ func (i *introspector) introspectTables(ctx context.Context, conn *connection, t
 		}
 	}
 
-	return result, nil
+	return result
 }
 
-// resolveTableByPartition returns the parent whose partition list contains partition,
-// or nil when no configured table claims it.
-func (i *introspector) resolveTableByPartition(ctx context.Context, conn *connection, partition domain.TableIdentifier, tables []domain.TableIdentifier) (*domain.TableIdentifier, error) {
-	metadata, err := i.getTablesMetadata(ctx, conn, tables)
-	if err != nil {
-		return nil, err
-	}
-
+// resolveTableByPartition returns the parent whose partition list contains
+// partition, or nil when no table in metadata claims it.
+func (i *introspector) resolveTableByPartition(metadata tablesMetadata, partition domain.TableIdentifier) *domain.TableIdentifier {
 	for parent, info := range metadata {
 		for _, p := range info.Partitions {
 			if p.Schema != partition.Schema {
 				continue
 			}
 			if info.Type == tableTypeHypertable || p.Name == partition.Name {
-				return &parent, nil
+				return &parent
 			}
 		}
 	}
 
-	return nil, nil
+	return nil
+}
+
+// replicaIdentityTargets expands managed into every table whose replica identity
+// hump sets: the table itself plus its partitions. TimescaleDB chunks are left
+// out, since they inherit from the hypertable and cannot be altered directly.
+func (i *introspector) replicaIdentityTargets(metadata tablesMetadata, managed []domain.TableIdentifier) []domain.TableIdentifier {
+	seen := make(map[domain.TableIdentifier]struct{})
+	var targets []domain.TableIdentifier
+	add := func(table domain.TableIdentifier) {
+		if _, ok := seen[table]; ok {
+			return
+		}
+		seen[table] = struct{}{}
+		targets = append(targets, table)
+	}
+
+	// Driven by managed, not by metadata: ranging over the map would shuffle the
+	// resulting statements between runs.
+	for _, table := range managed {
+		info, ok := metadata[table]
+		if !ok {
+			continue
+		}
+
+		add(table)
+		if info.Type == tableTypeHypertable {
+			continue
+		}
+
+		for _, p := range info.Partitions {
+			if p.Schema == "" || p.Name == "" {
+				continue
+			}
+			add(p)
+		}
+	}
+
+	return targets
 }
 
 // hasTimescaleDB reports whether the timescaledb extension is installed, which
-// decides which table layout query applies. An empty result wraps
-// database.ErrDbSetup; query errors pass through.
+// decides which table layout query applies. The answer is probed once and cached,
+// since the extension cannot appear or vanish mid-session; failures are not
+// cached and an empty result wraps database.ErrDbSetup.
 func (i *introspector) hasTimescaleDB(ctx context.Context, conn *connection) (bool, error) {
+	if i.timescale != nil {
+		return *i.timescale, nil
+	}
+
 	results, err := conn.Exec(ctx, introspectorHasTimescaleSql)
 	if err != nil {
 		return false, err
@@ -297,7 +331,10 @@ func (i *introspector) hasTimescaleDB(ctx context.Context, conn *connection) (bo
 		return false, fmt.Errorf("empty timescaledb extension result: %w", database.ErrDbSetup)
 	}
 
-	return string(results[0].Rows[0][0]) == "t", nil
+	timescale := string(results[0].Rows[0][0]) == "t"
+	i.timescale = &timescale
+
+	return timescale, nil
 }
 
 // introspectedTable holds the resolved table kind together with the partitions

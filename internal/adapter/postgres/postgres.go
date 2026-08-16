@@ -19,6 +19,9 @@ import (
 //go:embed sql/config.sql
 var configSql string
 
+// closeTimeout caps how long shutdown waits for one session to close.
+const closeTimeout = 5 * time.Second
+
 // Health reports the liveness of one part of the adapter to the outside world.
 type Health interface {
 	MarkHealthy()
@@ -106,7 +109,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer closeDetached(conn.Close)
 
 	introspector, err := p.configure(ctx, conn)
 	if err != nil {
@@ -119,7 +122,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
-	defer replicationConnection.Close(ctx)
+	defer closeDetached(replicationConnection.Close)
 
 	w, err := newWal(ctx, replicationConnection, p.publicationName, p.slotName, introspector, p.healthWal, p.metrics)
 	if err != nil {
@@ -127,11 +130,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	}
 
 	err = w.Start(ctx, handler)
-	// Start usually returns because ctx was cancelled, so shutdown gets its own
-	// context to close the replication connection on.
-	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 5*time.Second)
-	defer cancel()
-	defer w.Stop(closeCtx)
+	defer closeDetached(w.Stop)
 
 	return err
 }
@@ -236,4 +235,15 @@ func (p *Postgres) validateCompatibility(ctx context.Context, conn *connection) 
 	}
 
 	return nil
+}
+
+// closeDetached runs close on a context detached from the caller's, which is
+// usually already cancelled by the time shutdown reaches it. On a cancelled one
+// pgconn races its deadline handler against the Terminate write instead of
+// sending it cleanly.
+func closeDetached(close func(context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+
+	_ = close(ctx)
 }

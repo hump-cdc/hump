@@ -1109,17 +1109,19 @@ func TestDecodeRowText(t *testing.T) {
 	}
 }
 
-func TestMessageContextFlushClearsBufferedMessages(t *testing.T) {
+func TestMessageContextResetClearsBufferedMessages(t *testing.T) {
 	messageContext := &postgresMessageContext{messages: map[string]string{}}
 	messageContext.append("trace", "abc")
 	messageContext.append("trace", "def")
 
-	if got := messageContext.flush(); !maps.Equal(got, map[string]string{"trace": "def"}) {
-		t.Errorf("flush() = %v, want the latest value under each name", got)
+	if got := messageContext.dump(); !maps.Equal(got, map[string]string{"trace": "def"}) {
+		t.Errorf("dump() = %v, want the latest value under each name", got)
 	}
 
-	if got := messageContext.flush(); len(got) != 0 {
-		t.Errorf("flush() = %v, want none left after the first flush", got)
+	messageContext.reset()
+
+	if got := messageContext.dump(); len(got) != 0 {
+		t.Errorf("dump() = %v, want none left after reset()", got)
 	}
 }
 

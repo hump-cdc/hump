@@ -287,11 +287,10 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 	}
 }
 
-// processMessage parses a single pgoutput v2 message and dispatches it:
-// RelationMessageV2 updates the relation cache, BeginMessage/CommitMessage
-// track transaction boundaries and commit-lag metrics, LogicalDecodingMessageV2
-// is buffered as transactional context, and row-change messages are decoded
-// and forwarded to the process handler.
+// processMessage parses a single pgoutput v2 message and dispatches it: a
+// relation updates the cache, a transactional logical message is buffered as
+// context, a commit drops that buffer, and a row change is decoded and forwarded
+// to handler.
 func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
 	if len(walData) == 0 {
 		return errEmptyWalRecord
@@ -307,7 +306,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		w.relations[message.RelationID] = message
 
 	case *pglogrepl.CommitMessage:
-		w.messageContext.flush()
+		w.messageContext.reset()
 
 	case *pglogrepl.LogicalDecodingMessageV2:
 		if !message.Transactional || len(message.Prefix) == 0 || len(message.Content) == 0 {
@@ -581,15 +580,12 @@ func (c *postgresMessageContext) append(name, value string) {
 	c.messages[name] = value
 }
 
-// flush returns the buffered messages and resets the internal store.
-func (c *postgresMessageContext) flush() map[string]string {
+// reset drops the buffered messages.
+func (c *postgresMessageContext) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	messages := c.messages
 	c.messages = map[string]string{}
-
-	return messages
 }
 
 // dump returns a copy of the buffered messages without clearing the store, or

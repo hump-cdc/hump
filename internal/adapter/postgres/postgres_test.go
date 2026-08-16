@@ -387,7 +387,7 @@ type fakeServer struct {
 
 // newFakeServer starts a server on loopback that answers every statement with
 // a bare success until setResponder replaces the script.
-func newFakeServer(t *testing.T) *fakeServer {
+func newFakeServer(t testing.TB) *fakeServer {
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -464,7 +464,7 @@ func (s *fakeServer) standbyUpdates() []pglogrepl.StandbyStatusUpdate {
 
 // waitForStandbyUpdates blocks until at least n standby status updates have
 // arrived, failing the test if they do not within five seconds.
-func (s *fakeServer) waitForStandbyUpdates(t *testing.T, n int) []pglogrepl.StandbyStatusUpdate {
+func (s *fakeServer) waitForStandbyUpdates(t testing.TB, n int) []pglogrepl.StandbyStatusUpdate {
 	t.Helper()
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -478,6 +478,25 @@ func (s *fakeServer) waitForStandbyUpdates(t *testing.T, n int) []pglogrepl.Stan
 	t.Fatalf("timed out waiting for %d standby status updates", n)
 
 	return nil
+}
+
+// waitForStandbyPosition blocks until an update reporting position arrives,
+// failing the test after five seconds. Matching on the position rather than a
+// count keeps an unrelated keepalive tick from satisfying the caller.
+func (s *fakeServer) waitForStandbyPosition(t testing.TB, position pglogrepl.LSN) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, update := range s.standbyUpdates() {
+			if update.WALWritePosition == position {
+				return
+			}
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for a standby status update reporting %s", position)
 }
 
 // accept serves every session until the listener is closed by the cleanup.
@@ -914,7 +933,7 @@ func fakeServerUrl(s *fakeServer) string {
 
 // newTestConnection returns a connection talking to s over a real socket, with
 // retries disabled so a scripted error surfaces on the first attempt.
-func newTestConnection(t *testing.T, s *fakeServer, opts ...option) *connection {
+func newTestConnection(t testing.TB, s *fakeServer, opts ...option) *connection {
 	t.Helper()
 
 	conn, err := newConnection(fakeServerUrl(s), append([]option{withMaxAttempts(1)}, opts...)...)
@@ -1014,7 +1033,7 @@ func newTestTableMetadataLoader(t *testing.T, s *fakeServer) *tableMetadataLoade
 // retries disabled so a scripted error surfaces on the first attempt. A nil
 // ensure defaults to a stub that always succeeds.
 func newTestIntrospector(
-	t *testing.T,
+	t testing.TB,
 	s *fakeServer,
 	tables []config.Table,
 	ensure func(context.Context, *connection, []domain.TableIdentifier) error,

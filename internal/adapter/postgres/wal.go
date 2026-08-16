@@ -111,6 +111,20 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 
 	standbyDeadline := time.Now().Add(w.standbyInterval)
 
+	// The receive deadline is the standby tick, so the context is built once and
+	// rebuilt only when that tick is reset. Per message it would cost a runtime
+	// timer plus a contextWatcher registration inside ReceiveMessage.
+	standbyCtx, cancelStandby := context.WithDeadline(ctx, standbyDeadline)
+	defer func() { cancelStandby() }()
+
+	// resetStandby cancels the previous receive context and builds the next one.
+	// It stays a closure so vet's lostcancel sees one defended assignment.
+	resetStandby := func() {
+		cancelStandby()
+		standbyDeadline = time.Now().Add(w.standbyInterval)
+		standbyCtx, cancelStandby = context.WithDeadline(ctx, standbyDeadline)
+	}
+
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
 
@@ -120,16 +134,14 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return err
 			}
 
-			standbyDeadline = time.Now().Add(w.standbyInterval)
+			resetStandby()
 		}
 
 		if err = ctx.Err(); err != nil {
 			return err
 		}
 
-		standbyCtx, cancel := context.WithDeadline(ctx, standbyDeadline)
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
-		cancel()
 
 		if err != nil {
 			if pgconn.Timeout(err) {

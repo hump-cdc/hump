@@ -158,6 +158,66 @@ func TestStartAdvancesWalPositionAcrossChanges(t *testing.T) {
 	}
 }
 
+func TestStartKeepsReceivingAfterReplyRequestedFlush(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	recorder := newHandlerRecorder(nil)
+	errs := runStart(ctx, w, recorder.handle)
+
+	first := insertMessage(1, textColumn("7"))
+	second := insertMessage(1, textColumn("8"))
+
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, first))
+	server.stream(keepalive(0x1000, true))
+
+	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(first)))
+
+	server.stream(xLogData(0x200, 0x1000, second))
+	server.stream(keepalive(0x1000, true))
+
+	server.waitForStandbyPosition(t, pglogrepl.LSN(0x200+len(second)))
+
+	cancel()
+	awaitStart(t, errs)
+
+	if got := len(recorder.recorded()); got != 2 {
+		t.Errorf("handler called %d times, want 2: the receive context must survive a flush", got)
+	}
+}
+
+func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w.standbyInterval = testStandbyInterval
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	recorder := newHandlerRecorder(nil)
+	errs := runStart(ctx, w, recorder.handle)
+
+	server.waitForStandbyUpdates(t, 3)
+
+	insert := insertMessage(1, textColumn("7"))
+
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insert))
+
+	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(insert)))
+
+	cancel()
+	awaitStart(t, errs)
+
+	if got := len(recorder.recorded()); got != 1 {
+		t.Errorf("handler called %d times, want 1: the receive context must survive a standby tick", got)
+	}
+}
+
 func TestStartUpdatesReplicationLagOnKeepalive(t *testing.T) {
 	server := usersServer(t)
 	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
@@ -1249,7 +1309,7 @@ func (r *handlerRecorder) recorded() []handlerCall {
 
 // usersServer returns a fake server whose schema holds the single table
 // public.users.
-func usersServer(t *testing.T) *fakeServer {
+func usersServer(t testing.TB) *fakeServer {
 	t.Helper()
 
 	s := newFakeServer(t)
@@ -1294,7 +1354,7 @@ func newTestWal(t *testing.T, s *fakeServer, tables ...config.Table) (*wal, *fak
 
 // newReplicationWal returns a wal holding a replication session on s, taking
 // ownership of conn.
-func newReplicationWal(t *testing.T, s *fakeServer, conn *connection, tables ...config.Table) (*wal, *fakeHealth) {
+func newReplicationWal(t testing.TB, s *fakeServer, conn *connection, tables ...config.Table) (*wal, *fakeHealth) {
 	t.Helper()
 
 	health := newFakeHealth()

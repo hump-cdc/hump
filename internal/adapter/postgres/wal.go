@@ -94,10 +94,9 @@ func newWal(
 }
 
 // Start begins streaming from the configured slot at LSN 0 and blocks until
-// ctx is cancelled or a fatal protocol error occurs. It maintains the
-// relation cache, dispatches decoded rows to the process handler, and sends
-// standby status updates on every standbyTimeout tick. The last known WAL
-// position is flushed before returning on any error path.
+// ctx is cancelled or a fatal protocol error occurs. It maintains the relation
+// cache, dispatches decoded rows to the process handler, and flushes the WAL
+// position every time the standby window closes and on every exit path.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 
@@ -109,42 +108,40 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	w.health.MarkHealthy()
 	logger.Info("Logical replication started on slot", "slot", w.slotName)
 
-	standbyDeadline := time.Now().Add(w.standbyInterval)
-
 	// The receive deadline is the standby tick, so the context is built once and
 	// rebuilt only when that tick is reset. Per message it would cost a runtime
 	// timer plus a contextWatcher registration inside ReceiveMessage.
-	standbyCtx, cancelStandby := context.WithDeadline(ctx, standbyDeadline)
+	standbyCtx, cancelStandby := context.WithTimeout(ctx, w.standbyInterval)
 	defer func() { cancelStandby() }()
 
-	// resetStandby cancels the previous receive context and builds the next one.
+	// resetStandby cancels the previous receive context and opens the next window.
 	// It stays a closure so vet's lostcancel sees one defended assignment.
 	resetStandby := func() {
 		cancelStandby()
-		standbyDeadline = time.Now().Add(w.standbyInterval)
-		standbyCtx, cancelStandby = context.WithDeadline(ctx, standbyDeadline)
+		standbyCtx, cancelStandby = context.WithTimeout(ctx, w.standbyInterval)
 	}
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
 
 	for {
-		if time.Now().After(standbyDeadline) || ctx.Err() != nil {
-			if err := w.flush(ctx, walPosition); err != nil {
-				return err
-			}
-
-			resetStandby()
-		}
-
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
 
 		if err != nil {
+			// The receive deadline is the standby tick, so a timeout is the send
+			// window closing, not a broken stream. A finished ctx reports as a timeout
+			// too, and ends the loop once the position is flushed.
 			if pgconn.Timeout(err) {
+				if err := w.flush(ctx, walPosition); err != nil {
+					return err
+				}
+
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+
+				resetStandby()
+
 				continue
 			}
 
@@ -186,7 +183,11 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			}
 
 			if pkm.ReplyRequested {
-				standbyDeadline = time.Time{}
+				if err := w.flush(ctx, walPosition); err != nil {
+					return err
+				}
+
+				resetStandby()
 			}
 
 		case pglogrepl.XLogDataByteID:

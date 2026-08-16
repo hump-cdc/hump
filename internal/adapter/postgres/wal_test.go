@@ -255,11 +255,14 @@ func TestStartStopsOnStreamFailure(t *testing.T) {
 		name    string
 		frame   pgproto3.BackendMessage
 		wantErr string
+		wantIs  error
 	}{
-		{"malformed keepalive", copyFrame(pglogrepl.PrimaryKeepaliveMessageByteID, 0, 0), "ParsePrimaryKeepaliveMessage failed"},
-		{"malformed xlog data", copyFrame(pglogrepl.XLogDataByteID, 0, 0), "ParseXLogData failed"},
-		{"server error", &pgproto3.ErrorResponse{Severity: "ERROR", Code: "58000", Message: "WAL sender failed"}, "received Postgres WAL error"},
-		{"unknown relation", xLogData(0x10, 0x100, insertMessage(9, textColumn("7"))), "processMessage failed"},
+		{"malformed keepalive", copyFrame(pglogrepl.PrimaryKeepaliveMessageByteID, 0, 0), "ParsePrimaryKeepaliveMessage failed", nil},
+		{"malformed xlog data", copyFrame(pglogrepl.XLogDataByteID, 0, 0), "ParseXLogData failed", nil},
+		{"server error", &pgproto3.ErrorResponse{Severity: "ERROR", Code: "58000", Message: "WAL sender failed"}, "received Postgres WAL error", nil},
+		{"unknown relation", xLogData(0x10, 0x100, insertMessage(9, textColumn("7"))), "processMessage failed", nil},
+		{"empty copy data", copyFrame(), "received empty CopyData frame", errEmptyCopyData},
+		{"empty wal record", xLogData(0x10, 0x100, nil), "processMessage failed", errEmptyWalRecord},
 	}
 
 	for _, tt := range tests {
@@ -280,6 +283,10 @@ func TestStartStopsOnStreamFailure(t *testing.T) {
 
 			if !errors.Is(err, database.ErrWal) {
 				t.Errorf("Start() error does not wrap ErrWal: %v", err)
+			}
+
+			if tt.wantIs != nil && !errors.Is(err, tt.wantIs) {
+				t.Errorf("Start() error = %v, want it to wrap %v", err, tt.wantIs)
 			}
 
 			if failures := health.failures(); len(failures) != 1 {
@@ -365,6 +372,15 @@ func TestProcessMessageRejectsUnparseableMessage(t *testing.T) {
 	err := w.processMessage(context.Background(), []byte{'z'}, time.Now(), 0, failingHandler(t))
 	if err == nil || !strings.Contains(err.Error(), "Parse logical replication message") {
 		t.Fatalf("processMessage() error = %v, want it to mention a failed parse", err)
+	}
+}
+
+func TestProcessMessageRejectsEmptyMessage(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+
+	err := w.processMessage(context.Background(), nil, time.Now(), 0, failingHandler(t))
+	if !errors.Is(err, errEmptyWalRecord) {
+		t.Fatalf("processMessage() error = %v, want errEmptyWalRecord", err)
 	}
 }
 
@@ -885,6 +901,55 @@ func TestDecodeRowDropsUnchangedToastWithNothingToCarry(t *testing.T) {
 
 	if _, ok := next["blob"]; ok {
 		t.Errorf("next = %v, want the unchanged TOAST column dropped", next)
+	}
+}
+
+func TestDecodeRowRejectsUnexpectedDataType(t *testing.T) {
+	tests := []struct {
+		name    string
+		prevRow *pglogrepl.TupleData
+		nextRow *pglogrepl.TupleData
+	}{
+		{"old tuple", tupleData(tupleColumn{dataType: 'b', data: "7"}), nil},
+		{"new tuple", nil, tupleData(tupleColumn{dataType: 'b', data: "7"})},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, _ := newTestWal(t, usersServer(t))
+			registerRelation(t, w, 1, "public", "users", idColumn())
+
+			_, _, err := w.decodeRow(tt.prevRow, tt.nextRow, w.relations[1])
+			if err == nil || !strings.Contains(err.Error(), `unexpected tuple data type 'b' for column "id"`) {
+				t.Fatalf("decodeRow() error = %v, want it to name the unexpected data type and column", err)
+			}
+		})
+	}
+}
+
+func TestDecodeRowRejectsColumnCountMismatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		prevRow *pglogrepl.TupleData
+		nextRow *pglogrepl.TupleData
+		wantErr string
+	}{
+		{"old tuple too long", tupleData(textColumn("1"), textColumn("2")), nil, "old tuple has 2 columns, relation has 1"},
+		{"old tuple too short", tupleData(), nil, "old tuple has 0 columns, relation has 1"},
+		{"new tuple too long", nil, tupleData(textColumn("1"), textColumn("2")), "new tuple has 2 columns, relation has 1"},
+		{"new tuple too short", nil, tupleData(), "new tuple has 0 columns, relation has 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, _ := newTestWal(t, usersServer(t))
+			registerRelation(t, w, 1, "public", "users", idColumn())
+
+			_, _, err := w.decodeRow(tt.prevRow, tt.nextRow, w.relations[1])
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("decodeRow() error = %v, want it to mention %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -498,30 +499,54 @@ func TestResolveTableConfigurationIgnoresUnknownTable(t *testing.T) {
 func TestResolveTableConfigurationPropagatesRetryError(t *testing.T) {
 	server := newFakeServer(t)
 	var layouts int
-	server.setResponder(func(sql string) queryResult {
-		if strings.Contains(sql, "pg_extension") {
+	// The parent lookup must succeed and name a configured table, or the retry
+	// this test is about never runs: an unowned relation is ignored before it.
+	server.setResponder(withParent(func(sql string) queryResult {
+		switch {
+		case strings.Contains(sql, "pg_extension"):
 			return singleValue("f")
+		case strings.Contains(sql, "unnest("):
+			layouts++
+			if layouts > 1 {
+				return serverError("42501", "permission denied")
+			}
+
+			return tableLayout(layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")))
+		default:
+			return queryResult{}
 		}
+	}, domain.TableIdentifier{Schema: "public", Name: "events"}))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
 
-		layouts++
-		if layouts > 1 {
-			return serverError("42501", "permission denied")
-		}
-
-		return tableLayout(layoutRow("public", "users", tableTypeRegular, nil, nil))
-	})
-	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
-
-	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
-	_, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
+	partition := domain.TableIdentifier{Schema: "public", Name: "events_2025"}
+	_, err := introspector.ResolveTableConfiguration(context.Background(), partition)
 	if err == nil {
 		t.Fatal("ResolveTableConfiguration() error = nil, want the retry error")
 	}
 	if !strings.Contains(err.Error(), "permission denied") {
 		t.Errorf("error = %v, want the retry error", err)
 	}
-	if _, ignored := introspector.ignoredTables[unknown]; ignored {
+	if _, ignored := introspector.ignoredTables[partition]; ignored {
 		t.Error("a table whose retry failed must not be ignored: the lookup never completed")
+	}
+}
+
+func TestGetTableParentRejectsShortRows(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(failingOn(
+		tableLayoutResponder(false, layoutRow("public", "users", tableTypeRegular, nil, nil)),
+		"inheritance parent",
+		queryResult{columns: 1, rows: [][][]byte{{[]byte("public")}}},
+	))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
+
+	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
+	_, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
+	if err == nil {
+		t.Fatal("ResolveTableConfiguration() error = nil, want the column count error")
+	}
+	if !strings.Contains(err.Error(), "get parent of other.logs: expected 2 columns, got 1") {
+		t.Errorf("error = %v, want it to name the table and the column count", err)
 	}
 }
 
@@ -1025,6 +1050,21 @@ func TestReplicaIdentityTargetsCoversTablesAndPartitions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReplicaIdentityTargetsSkipsTablesMissingFromMetadata(t *testing.T) {
+	present := domain.TableIdentifier{Schema: "public", Name: "users"}
+	dropped := domain.TableIdentifier{Schema: "public", Name: "logs"}
+
+	metadata := tablesMetadata{present: &tableMetadata{Type: tableTypeRegular}}
+	introspector := newTestIntrospector(t, newFakeServer(t), nil, nil)
+
+	got := introspector.replicaIdentityTargets(metadata, []domain.TableIdentifier{dropped, present})
+
+	want := []domain.TableIdentifier{present}
+	if !slices.Equal(got, want) {
+		t.Errorf("targets = %+v, want %+v: a table absent from the snapshot has nothing to alter", got, want)
 	}
 }
 

@@ -676,6 +676,34 @@ func TestExecBacksOffBetweenDeadSessions(t *testing.T) {
 	}
 }
 
+func TestExecStopsWhenContextIsCancelledDuringBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var once sync.Once
+	d := newFakeDialer(t, false)
+	d.serve = func(conn net.Conn, _ int) {
+		serveSession(conn, func(*pgproto3.Backend, pgproto3.FrontendMessage) error {
+			// Cancel well inside the first backoff so run is parked in the wait
+			// rather than at the context check that precedes it.
+			once.Do(func() { time.AfterFunc(200*time.Millisecond, cancel) })
+
+			return errors.New("connection reset")
+		})
+	}
+	conn := newFakeConnection(t, d, withMaxAttempts(3), withBaseDelay(5*time.Second), withMaxDelay(5*time.Second))
+
+	start := time.Now()
+	_, err := conn.Exec(ctx, "select 1")
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Exec() error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed >= conn.baseDelay {
+		t.Errorf("Exec() took %v, want it back as soon as the backoff was cancelled", elapsed)
+	}
+}
+
 func TestExecParamsBindsParameters(t *testing.T) {
 	var (
 		mu     sync.Mutex

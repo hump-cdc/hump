@@ -155,6 +155,15 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			continue
 		}
 
+		// A conforming sender never frames an empty body, so the stream is no
+		// longer one this loop can decode.
+		if len(msg.Data) == 0 {
+			err := errors.Join(errEmptyCopyData, database.ErrWal)
+			w.flush(ctx, walPosition)
+			w.health.MarkUnhealthy(err)
+			return err
+		}
+
 		switch msg.Data[0] {
 		case pglogrepl.PrimaryKeepaliveMessageByteID:
 			pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
@@ -285,6 +294,10 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 // is buffered as transactional context, and row-change messages are decoded
 // and forwarded to the process handler.
 func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+	if len(walData) == 0 {
+		return errEmptyWalRecord
+	}
+
 	message, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
 		return fmt.Errorf("Parse logical replication message: %w", err)
@@ -439,6 +452,10 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogrepl.RelationMessageV2) (domain.DbRecord, domain.DbRecord, error) {
 	var prev domain.DbRecord
 	if prevRow != nil {
+		if len(prevRow.Columns) != len(relation.Columns) {
+			return nil, nil, fmt.Errorf("old tuple has %d columns, relation has %d", len(prevRow.Columns), len(relation.Columns))
+		}
+
 		prev = domain.DbRecord{}
 
 		for index, column := range prevRow.Columns {
@@ -454,12 +471,18 @@ func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogre
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
 				prev[columnName] = val
+			default:
+				return nil, nil, fmt.Errorf("unexpected tuple data type %q for column %q", column.DataType, columnName)
 			}
 		}
 	}
 
 	var next domain.DbRecord
 	if nextRow != nil {
+		if len(nextRow.Columns) != len(relation.Columns) {
+			return nil, nil, fmt.Errorf("new tuple has %d columns, relation has %d", len(nextRow.Columns), len(relation.Columns))
+		}
+
 		next = domain.DbRecord{}
 
 		for index, column := range nextRow.Columns {
@@ -478,6 +501,8 @@ func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogre
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
 				next[columnName] = val
+			default:
+				return nil, nil, fmt.Errorf("unexpected tuple data type %q for column %q", column.DataType, columnName)
 			}
 		}
 	}

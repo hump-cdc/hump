@@ -462,6 +462,40 @@ func TestEnsureReplicaIdentityFullWrapsServerError(t *testing.T) {
 	}
 }
 
+func TestEnsureReplicaIdentityFullWrapsEncodeError(t *testing.T) {
+	server := newFakeServer(t)
+	bootstrapper := newTestBootstrapper(t, server)
+	bootstrapper.newTypeMap = newUnencodableTypeMap
+
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{{Schema: "public", Name: "users"}})
+	if err == nil {
+		t.Fatal("EnsureReplicaIdentityFull() error = nil, want the encode error")
+	}
+	if !strings.Contains(err.Error(), "encode schemas array") {
+		t.Errorf("error = %v, want it to name the array that failed", err)
+	}
+
+	if statements := server.recorded(); len(statements) != 0 {
+		t.Errorf("statements = %q, want none: the check must not run", statements)
+	}
+}
+
+func TestEnsureReplicaIdentityFullRejectsShortRows(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult {
+		return queryResult{columns: 1, rows: [][][]byte{{[]byte("public")}}}
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	err := bootstrapper.EnsureReplicaIdentityFull(context.Background(), []domain.TableIdentifier{{Schema: "public", Name: "users"}})
+	if err == nil {
+		t.Fatal("EnsureReplicaIdentityFull() error = nil, want the column count error")
+	}
+	if !strings.Contains(err.Error(), "expected 2 columns, got 1") {
+		t.Errorf("error = %v, want it to report the column count", err)
+	}
+}
+
 func TestTablesWithPartitionsRejectsEmptyTableList(t *testing.T) {
 	server := newFakeServer(t)
 	bootstrapper := newTestBootstrapper(t, server)

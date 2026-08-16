@@ -36,11 +36,9 @@ func (s *HTTPSink) Metadata(context sinkport.SinkContext) (string, string) {
 	}
 
 	url, _ := s.URL.Render(context)
-	host := metadata.ParseHost(url)
 	method, _ := s.Method.Render(context)
-	target := fmt.Sprintf("HTTP %s %s", method, host)
 
-	return host, target
+	return metadata.ParseHost(url), method
 }
 
 func (*HTTPSink) CrossValidate([][]sinkport.Definition) error { return nil }

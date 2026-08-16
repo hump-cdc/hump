@@ -5,23 +5,10 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"hump/internal/domain"
-	"hump/internal/port/database"
 )
-
-//go:embed sql/introspector_tables_timescale.sql
-var introspectorTablesTimescaleSql string
-
-//go:embed sql/introspector_tables_no_timescale.sql
-var introspectorTablesNoTimescaleSql string
-
-//go:embed sql/introspector_has_timescale.sql
-var introspectorHasTimescaleSql string
 
 //go:embed sql/introspector_table_parent.sql
 var introspectorTableParentSql string
@@ -30,22 +17,15 @@ var introspectorTableParentSql string
 // changes (e.g., new partitions) and ensures replica identity is set for
 // replicated tables.
 type introspector struct {
-	connection  *connection
+	*tableMetadataLoader
 	registry    *introspectorRegistry
 	mu          sync.Mutex
 	initialized bool // initialized reports whether the first full introspection has run.
 	// ignoredTables holds tables a re-introspection still failed to resolve;
 	// later lookups for them skip introspection entirely. Entries are never
 	// removed, so a table stays ignored for the lifetime of the introspector.
-	ignoredTables map[domain.TableIdentifier]struct{}
-	// timescale caches the timescaledb extension probe, nil until it has run:
-	// the extension cannot be installed or dropped while a session is live.
-	timescale             *bool
+	ignoredTables         map[domain.TableIdentifier]struct{}
 	ensureReplicaIdentity func(ctx context.Context, conn *connection, tables []domain.TableIdentifier) error
-	// newTypeMap builds the pgtype map that encodes array bind parameters. A
-	// fresh map per call keeps its encode-plan cache free of concurrent writes;
-	// tests replace it with one that refuses to encode.
-	newTypeMap func() *pgtype.Map
 }
 
 // newIntrospector returns an introspector backed by connection and registry,
@@ -58,11 +38,10 @@ func newIntrospector(
 	ensureReplicaIdentity func(ctx context.Context, conn *connection, tables []domain.TableIdentifier) error,
 ) *introspector {
 	return &introspector{
-		connection:            conn,
+		tableMetadataLoader:   newTableMetadataLoader(conn),
 		registry:              registry,
 		ignoredTables:         make(map[domain.TableIdentifier]struct{}),
 		ensureReplicaIdentity: ensureReplicaIdentity,
-		newTypeMap:            pgtype.NewMap,
 	}
 }
 
@@ -154,7 +133,7 @@ func (i *introspector) resolveKnown(table domain.TableIdentifier) (domain.TableI
 // invalidate performs the introspection refresh while the caller holds
 // i.mu. See Invalidate for the semantics of the table argument.
 func (i *introspector) invalidate(ctx context.Context, conn *connection, table *domain.TableIdentifier) error {
-	metadata, err := i.getTablesMetadata(ctx, conn, i.registry.List())
+	metadata, err := i.getTablesMetadata(ctx, i.registry.List())
 	if err != nil {
 		return err
 	}
@@ -203,74 +182,6 @@ func (i *introspector) getTableParent(ctx context.Context, conn *connection, tab
 	}
 
 	return parent, true, nil
-}
-
-// getTablesMetadata queries the database and returns the configured tables with
-// their partition layout. Returns database.ErrNoTablesConfigured when tables is
-// empty, database.ErrTablesNotFound when any configured table is missing (the
-// error lists every one).
-func (i *introspector) getTablesMetadata(ctx context.Context, conn *connection, tables []domain.TableIdentifier) (tablesMetadata, error) {
-	if len(tables) == 0 {
-		return nil, database.ErrNoTablesConfigured
-	}
-
-	timescale, err := i.hasTimescaleDB(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	sql := introspectorTablesNoTimescaleSql
-	if timescale {
-		sql = introspectorTablesTimescaleSql
-	}
-
-	params, err := tableArrayParams(i.newTypeMap(), tables)
-	if err != nil {
-		return nil, err
-	}
-
-	queryResult, err := conn.ExecParams(ctx, sql, params, nil)
-	if err != nil {
-		return nil, fmt.Errorf("get tables with partitions: %w", err)
-	}
-
-	result := make(tablesMetadata)
-	for _, values := range queryResult.Rows {
-		if len(values) < 5 {
-			return nil, fmt.Errorf("get tables with partitions: expected 5 columns, got %d", len(values))
-		}
-
-		table := domain.TableIdentifier{Schema: domain.TableSchema(values[0]), Name: domain.TableName(values[1])}
-		kind := parseTableType(string(values[2]))
-		partitionSchema := values[3]
-		partitionTable := values[4]
-
-		info, ok := result[table]
-		if !ok {
-			info = &tableMetadata{Type: kind}
-			result[table] = info
-		}
-
-		if partitionSchema != nil {
-			p := domain.TableIdentifier{Schema: domain.TableSchema(partitionSchema)}
-			if partitionTable != nil {
-				p.Name = domain.TableName(partitionTable)
-			}
-			info.Partitions = append(info.Partitions, p)
-		}
-	}
-
-	var missing []string
-	for _, t := range tables {
-		if _, ok := result[t]; !ok {
-			missing = append(missing, string(t.Schema)+"."+string(t.Name))
-		}
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("%w: %s", database.ErrTablesNotFound, strings.Join(missing, ", "))
-	}
-
-	return result, nil
 }
 
 // introspectTables reshapes a catalog snapshot into a parent table view plus a
@@ -355,29 +266,6 @@ func (i *introspector) replicaIdentityTargets(metadata tablesMetadata, managed [
 	}
 
 	return targets
-}
-
-// hasTimescaleDB reports whether the timescaledb extension is installed, which
-// decides which table layout query applies. The answer is probed once and cached,
-// since the extension cannot appear or vanish mid-session; failures are not
-// cached and an empty result wraps database.ErrDbSetup.
-func (i *introspector) hasTimescaleDB(ctx context.Context, conn *connection) (bool, error) {
-	if i.timescale != nil {
-		return *i.timescale, nil
-	}
-
-	results, err := conn.Exec(ctx, introspectorHasTimescaleSql)
-	if err != nil {
-		return false, err
-	}
-	if len(results) == 0 || len(results[0].Rows) == 0 {
-		return false, fmt.Errorf("empty timescaledb extension result: %w", database.ErrDbSetup)
-	}
-
-	timescale := string(results[0].Rows[0][0]) == "t"
-	i.timescale = &timescale
-
-	return timescale, nil
 }
 
 // introspectedTable holds the resolved table kind together with the partitions

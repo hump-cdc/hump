@@ -23,7 +23,7 @@ application layer keyed by the *configured* table.
   shape most catalog queries filter on, `tableScalarParams` / `textParam` for scalars.
   Statements built by string formatting must quote through `quoteIdentifier` / `quoteLiteral`.
 - **Catalog queries come in two flavours**, TimescaleDB and not, picked by a probe that is
-  cached per session (`introspector.hasTimescaleDB`) — the extension cannot appear or vanish
+  cached per session (`tableMetadataLoader.hasTimescaleDB`) — the extension cannot appear or vanish
   mid-session.
 - **Tests talk to a real socket** against `fakeServer` (`postgres_test.go`), whose responders
   dispatch on substrings of the SQL. A new query therefore needs a distinctive marker in its

@@ -1002,6 +1002,14 @@ func newTestBootstrapper(t *testing.T, s *fakeServer) *bootstrapper {
 	return newBootstrapper(newTestConnection(t, s))
 }
 
+// newTestTableMetadataLoader returns a loader talking to s over a real socket, with
+// retries disabled so a scripted error surfaces on the first attempt.
+func newTestTableMetadataLoader(t *testing.T, s *fakeServer) *tableMetadataLoader {
+	t.Helper()
+
+	return newTableMetadataLoader(newTestConnection(t, s))
+}
+
 // newTestIntrospector returns an introspector talking to s over a real socket, with
 // retries disabled so a scripted error surfaces on the first attempt. A nil
 // ensure defaults to a stub that always succeeds.

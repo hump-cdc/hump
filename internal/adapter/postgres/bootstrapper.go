@@ -8,10 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"hump/internal/domain"
-	"hump/internal/port/database"
 )
 
 //go:embed sql/bootstrapper_publication_ensure_exists.sql
@@ -32,15 +29,6 @@ var bootstrapperReplicaIdentityStaleSql string
 //go:embed sql/bootstrapper_replica_identity_set_full.sql
 var bootstrapperReplicaIdentitySetFullSql string
 
-//go:embed sql/bootstrapper_metadata_tables_timescale.sql
-var bootstrapperMetadataTablesTimescaleSql string
-
-//go:embed sql/bootstrapper_metadata_tables_no_timescale.sql
-var bootstrapperMetadataTablesNoTimescaleSql string
-
-//go:embed sql/bootstrapper_metadata_has_timescale.sql
-var bootstrapperMetadataHasTimescaleSql string
-
 //go:embed sql/bootstrapper_publication_missing_identity.sql
 var bootstrapperPublicationMissingIdentitySql string
 
@@ -51,21 +39,20 @@ const missingIdentityLogLimit = 20
 // bootstrapper ensures the server-side replication state — publication,
 // replication slot and replica identity — matches the configured tables.
 type bootstrapper struct {
-	connection *connection
-	newTypeMap func() *pgtype.Map
+	*tableMetadataLoader
 }
 
 // newBootstrapper returns a bootstrapper backed by conn. conn is borrowed, not
 // owned: the caller must keep it open for the lifetime of the bootstrapper.
 func newBootstrapper(conn *connection) *bootstrapper {
-	return &bootstrapper{connection: conn, newTypeMap: pgtype.NewMap}
+	return &bootstrapper{tableMetadataLoader: newTableMetadataLoader(conn)}
 }
 
 // EnsurePublicationExists creates the publication with the configured tables,
 // or updates an existing one to match them, always with
 // publish_via_partition_root enabled.
 func (b *bootstrapper) EnsurePublicationExists(ctx context.Context, publicationName string, tables []domain.TableIdentifier) error {
-	info, err := b.getTablesWithPartitions(ctx, tables)
+	info, err := b.getTablesMetadata(ctx, tables)
 	if err != nil {
 		return err
 	}
@@ -259,85 +246,6 @@ func (b *bootstrapper) getStaleReplicaIdentityTables(ctx context.Context, tables
 	}
 
 	return stale, nil
-}
-
-// getTablesWithPartitions returns the configured tables along with their
-// partition layout (for partitioned/hypertables).
-func (b *bootstrapper) getTablesWithPartitions(ctx context.Context, tables []domain.TableIdentifier) (tablesMetadata, error) {
-	if len(tables) == 0 {
-		return nil, database.ErrNoTablesConfigured
-	}
-
-	timescale, err := b.hasTimescaleDB(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sql := bootstrapperMetadataTablesNoTimescaleSql
-	if timescale {
-		sql = bootstrapperMetadataTablesTimescaleSql
-	}
-
-	params, err := tableArrayParams(b.newTypeMap(), tables)
-	if err != nil {
-		return nil, err
-	}
-
-	queryResult, err := b.connection.ExecParams(ctx, sql, params, nil)
-	if err != nil {
-		return nil, fmt.Errorf("get tables with partitions: %w", err)
-	}
-
-	result := make(tablesMetadata)
-	for _, values := range queryResult.Rows {
-		if len(values) < 5 {
-			return nil, fmt.Errorf("get tables with partitions: expected 5 columns, got %d", len(values))
-		}
-
-		table := domain.TableIdentifier{Schema: domain.TableSchema(values[0]), Name: domain.TableName(values[1])}
-		kind := parseTableType(string(values[2]))
-		partitionSchema := values[3]
-		partitionTable := values[4]
-
-		info, ok := result[table]
-		if !ok {
-			info = &tableMetadata{Type: kind}
-			result[table] = info
-		}
-
-		if partitionSchema != nil {
-			p := domain.TableIdentifier{Schema: domain.TableSchema(partitionSchema)}
-			if partitionTable != nil {
-				p.Name = domain.TableName(partitionTable)
-			}
-			info.Partitions = append(info.Partitions, p)
-		}
-	}
-
-	var missing []string
-	for _, t := range tables {
-		if _, ok := result[t]; !ok {
-			missing = append(missing, string(t.Schema)+"."+string(t.Name))
-		}
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("%w: %s", database.ErrTablesNotFound, strings.Join(missing, ", "))
-	}
-
-	return result, nil
-}
-
-// hasTimescaleDB reports whether the timescaledb extension is installed.
-func (b *bootstrapper) hasTimescaleDB(ctx context.Context) (bool, error) {
-	results, err := b.connection.Exec(ctx, bootstrapperMetadataHasTimescaleSql)
-	if err != nil {
-		return false, err
-	}
-	if len(results) == 0 || len(results[0].Rows) == 0 {
-		return false, fmt.Errorf("empty timescaledb extension result: %w", database.ErrDbSetup)
-	}
-
-	return string(results[0].Rows[0][0]) == "t", nil
 }
 
 // quoteLiteral wraps s as a SQL string literal, doubling embedded single quotes.

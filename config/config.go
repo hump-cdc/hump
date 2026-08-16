@@ -17,8 +17,10 @@ func (c *Configuration) ResolveAll() []Table {
 }
 
 type Table struct {
-	Schema  domain.TableSchema     `yaml:"schema"            validate:"omitempty"`
-	Name    domain.TableName       `yaml:"table"             validate:"required"`
+	Schema domain.TableSchema `yaml:"schema"            validate:"omitempty"`
+	Name   domain.TableName   `yaml:"table"             validate:"required"`
+	// Replica is the replica identity hump enforces; "full" (the default) is
+	// what makes unchanged TOAST values and old rows arrive complete.
 	Replica domain.ReplicaIdentity `yaml:"replica,omitempty" validate:"omitempty,oneof=full unmanaged"`
 	Sinks   []sinkcfg.Config       `yaml:"sinks"             validate:"min=1"`
 }

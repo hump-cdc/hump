@@ -78,6 +78,18 @@ server-side check never fires for them.
 protocol would run a batch as one implicit transaction and hold every `AccessExclusiveLock`
 until the last one commits.
 
+**What `replica: unmanaged` costs at decode time.** FULL is what makes `decodeRow` able to fill
+in an unchanged TOAST column (`'u'`) — `ExtractReplicaIdentity` flattens the old tuple, so it
+arrives as `'t'` with the real value. Without FULL the old tuple is either absent or key-only
+(`'K'`), and a key-only tuple nulls out every column outside the replica identity. Those nulls
+are absences, not values, so `decodeRow` reports them — and any `'u'` it cannot resolve — as
+`domain.Unavailable` rather than `nil`. The distinction is invisible in a payload (the sentinel
+renders as `""`); only the `unavailable` template func exposes it.
+
+`relation.Columns[i].Flags == 1` means "part of the effective replica identity", **not** "primary
+key": under FULL pgoutput sets it on every column. It only discriminates while
+`OldTupleType == 'K'`, which is the one place `decodeRow` reads it.
+
 ## Stream mechanics worth knowing
 
 - pgoutput runs with `proto_version '2'`, streaming **off**, so only committed transactions

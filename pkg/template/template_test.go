@@ -367,6 +367,7 @@ func TestNew_FuncMap_AllCallable(t *testing.T) {
 		{"empty", `{{ empty "" }}`, nil, "true"},
 		{"required", `{{ required "must" "ok" }}`, nil, "ok"},
 		{"ternary", `{{ ternary "y" "n" true }}`, nil, "y"},
+		{"unavailable", `{{ unavailable "" }}`, nil, "false"},
 
 		// case (direct call form)
 		{"camelcase", `{{ camelcase "foo bar" }}`, nil, "fooBar"},

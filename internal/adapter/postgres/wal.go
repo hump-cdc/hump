@@ -333,7 +333,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
 
-		prev, next, err := w.decodeRow(nil, message.Tuple, relation)
+		prev, next, err := w.decodeRow(nil, pglogrepl.UpdateMessageTupleTypeNone, message.Tuple, relation)
 		if err != nil {
 			return fmt.Errorf("decode insert tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
@@ -364,7 +364,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
 
-		prev, next, err := w.decodeRow(message.OldTuple, message.NewTuple, relation)
+		prev, next, err := w.decodeRow(message.OldTuple, message.OldTupleType, message.NewTuple, relation)
 		if err != nil {
 			return fmt.Errorf("decode update tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
@@ -395,7 +395,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 		}
 
-		prev, next, err := w.decodeRow(message.OldTuple, nil, relation)
+		prev, next, err := w.decodeRow(message.OldTuple, message.OldTupleType, nil, relation)
 		if err != nil {
 			return fmt.Errorf("decode delete tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
 		}
@@ -446,10 +446,11 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 	return nil
 }
 
-// decodeRow turns the optional previous and next tuples of a change event
-// into column maps using relation for column names and OIDs. Unchanged TOAST
-// columns ('u') are dropped from prev and copied from prev into next.
-func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogrepl.RelationMessageV2) (domain.DbRecord, domain.DbRecord, error) {
+// decodeRow turns the optional previous and next tuples of a change event into
+// column maps using relation for column names and OIDs. prevTupleType is the
+// old tuple's pgoutput kind. Columns the stream did not carry are reported as
+// [domain.Unavailable] rather than dropped or reported as NULL.
+func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextRow *pglogrepl.TupleData, relation *pglogrepl.RelationMessageV2) (domain.DbRecord, domain.DbRecord, error) {
 	var prev domain.DbRecord
 	if prevRow != nil {
 		if len(prevRow.Columns) != len(relation.Columns) {
@@ -463,8 +464,18 @@ func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogre
 
 			switch column.DataType {
 			case 'n': // null
+				// A key-only tuple nulls out everything outside the replica
+				// identity, so those nulls are absences, not values. Flags == 1
+				// means "part of the replica identity" — under FULL every column
+				// carries it, which is why the key-only check gates on the tuple
+				// type rather than on the flag alone.
+				if prevTupleType == pglogrepl.UpdateMessageTupleTypeKey && relation.Columns[index].Flags != 1 {
+					prev[columnName] = domain.Unavailable
+					continue
+				}
 				prev[columnName] = nil
-			case 'u': // unchanged toast: ignore on prev
+			case 'u': // unchanged toast: the old value is not in the stream
+				prev[columnName] = domain.Unavailable
 			case 't': // text
 				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)
 				if err != nil {
@@ -494,6 +505,8 @@ func (w *wal) decodeRow(prevRow, nextRow *pglogrepl.TupleData, relation *pglogre
 			case 'u': // unchanged toast
 				if val, ok := prev[columnName]; ok {
 					next[columnName] = val
+				} else {
+					next[columnName] = domain.Unavailable
 				}
 			case 't': // text
 				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)

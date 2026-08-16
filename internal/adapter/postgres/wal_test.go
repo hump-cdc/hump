@@ -535,6 +535,37 @@ func TestProcessMessageDispatchesRowChanges(t *testing.T) {
 	}
 }
 
+func TestProcessMessageReportsKeyOnlyOldTupleAsUnavailable(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t), configuredTable("public", "users"))
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
+
+	recorder := newHandlerRecorder(nil)
+	message := keyUpdateMessage(1,
+		[]tupleColumn{textColumn("6"), nullColumn()},
+		[]tupleColumn{textColumn("7"), toastColumn()},
+	)
+
+	if err := w.processMessage(context.Background(), message, time.Now(), 0, recorder.handle); err != nil {
+		t.Fatalf("processMessage() error = %v", err)
+	}
+
+	calls := recorder.recorded()
+	if len(calls) != 1 {
+		t.Fatalf("handler called %d times, want 1", len(calls))
+	}
+
+	wantPrev := domain.DbRecord{"id": int32(6), "blob": domain.Unavailable}
+	wantNext := domain.DbRecord{"id": int32(7), "blob": domain.Unavailable}
+
+	if !maps.Equal(calls[0].prev, wantPrev) {
+		t.Errorf("prev = %v, want %v", calls[0].prev, wantPrev)
+	}
+
+	if !maps.Equal(calls[0].next, wantNext) {
+		t.Errorf("next = %v, want %v", calls[0].next, wantNext)
+	}
+}
+
 func TestProcessMessageDispatchesTruncateForEveryRelation(t *testing.T) {
 	server := twoTableServer(t)
 	w, _ := newTestWal(t, server, configuredTable("public", "users"), configuredTable("public", "orders"))
@@ -833,7 +864,7 @@ func TestDecodeRowWithoutTuples(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 	registerRelation(t, w, 1, "public", "users", idColumn())
 
-	prev, next, err := w.decodeRow(nil, nil, w.relations[1])
+	prev, next, err := w.decodeRow(nil, pglogrepl.UpdateMessageTupleTypeNone, nil, w.relations[1])
 	if err != nil {
 		t.Fatalf("decodeRow() error = %v", err)
 	}
@@ -847,7 +878,7 @@ func TestDecodeRowKeepsNullColumns(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 	registerRelation(t, w, 1, "public", "users", idColumn())
 
-	prev, next, err := w.decodeRow(tupleData(nullColumn()), tupleData(nullColumn()), w.relations[1])
+	prev, next, err := w.decodeRow(tupleData(nullColumn()), pglogrepl.UpdateMessageTupleTypeOld, tupleData(nullColumn()), w.relations[1])
 	if err != nil {
 		t.Fatalf("decodeRow() error = %v", err)
 	}
@@ -862,10 +893,11 @@ func TestDecodeRowKeepsNullColumns(t *testing.T) {
 
 func TestDecodeRowCarriesUnchangedToastForward(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
-	registerRelation(t, w, 1, "public", "users", idColumn(), relationColumn{"blob", pgtype.TextOID})
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
 
 	prev, next, err := w.decodeRow(
 		tupleData(textColumn("1"), textColumn("stored")),
+		pglogrepl.UpdateMessageTupleTypeOld,
 		tupleData(textColumn("1"), toastColumn()),
 		w.relations[1],
 	)
@@ -882,12 +914,13 @@ func TestDecodeRowCarriesUnchangedToastForward(t *testing.T) {
 	}
 }
 
-func TestDecodeRowDropsUnchangedToastWithNothingToCarry(t *testing.T) {
+func TestDecodeRowReportsUnchangedToastWithNothingToCarryAsUnavailable(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
-	registerRelation(t, w, 1, "public", "users", idColumn(), relationColumn{"blob", pgtype.TextOID})
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
 
 	prev, next, err := w.decodeRow(
 		tupleData(textColumn("1"), toastColumn()),
+		pglogrepl.UpdateMessageTupleTypeOld,
 		tupleData(textColumn("1"), toastColumn()),
 		w.relations[1],
 	)
@@ -895,12 +928,97 @@ func TestDecodeRowDropsUnchangedToastWithNothingToCarry(t *testing.T) {
 		t.Fatalf("decodeRow() error = %v", err)
 	}
 
-	if _, ok := prev["blob"]; ok {
-		t.Errorf("prev = %v, want the unchanged TOAST column dropped", prev)
+	for name, got := range map[string]domain.DbRecord{"prev": prev, "next": next} {
+		if got["blob"] != domain.Unavailable {
+			t.Errorf(`%s["blob"] = %#v, want domain.Unavailable`, name, got["blob"])
+		}
+	}
+}
+
+func TestDecodeRowReportsUnchangedToastWithoutOldTupleAsUnavailable(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
+
+	prev, next, err := w.decodeRow(
+		nil,
+		pglogrepl.UpdateMessageTupleTypeNone,
+		tupleData(textColumn("1"), toastColumn()),
+		w.relations[1],
+	)
+	if err != nil {
+		t.Fatalf("decodeRow() error = %v", err)
 	}
 
-	if _, ok := next["blob"]; ok {
-		t.Errorf("next = %v, want the unchanged TOAST column dropped", next)
+	if prev != nil {
+		t.Errorf("prev = %v, want nil", prev)
+	}
+
+	if next["blob"] != domain.Unavailable {
+		t.Errorf(`next["blob"] = %#v, want domain.Unavailable`, next["blob"])
+	}
+}
+
+func TestDecodeRowReportsNonKeyColumnsOfKeyOnlyTupleAsUnavailable(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
+
+	prev, next, err := w.decodeRow(
+		tupleData(textColumn("1"), nullColumn()),
+		pglogrepl.UpdateMessageTupleTypeKey,
+		tupleData(textColumn("2"), toastColumn()),
+		w.relations[1],
+	)
+	if err != nil {
+		t.Fatalf("decodeRow() error = %v", err)
+	}
+
+	if prev["id"] != int32(1) {
+		t.Errorf(`prev["id"] = %#v, want the key column decoded as int32(1)`, prev["id"])
+	}
+
+	for name, got := range map[string]domain.DbRecord{"prev": prev, "next": next} {
+		if got["blob"] != domain.Unavailable {
+			t.Errorf(`%s["blob"] = %#v, want domain.Unavailable rather than a fabricated NULL`, name, got["blob"])
+		}
+	}
+}
+
+func TestDecodeRowKeepsKeyColumnsOfKeyOnlyTuple(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+	registerRelation(t, w, 1, "public", "users", idColumn(), relationColumn{name: "email", oid: pgtype.TextOID, key: true})
+
+	prev, _, err := w.decodeRow(
+		tupleData(textColumn("1"), textColumn("a@b.c")),
+		pglogrepl.UpdateMessageTupleTypeKey,
+		nil,
+		w.relations[1],
+	)
+	if err != nil {
+		t.Fatalf("decodeRow() error = %v", err)
+	}
+
+	if prev["id"] != int32(1) || prev["email"] != "a@b.c" {
+		t.Errorf("prev = %#v, want every replica identity column decoded", prev)
+	}
+}
+
+func TestDecodeRowKeepsNullsOfFullOldTuple(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+	registerRelation(t, w, 1, "public", "users", idColumn(), blobColumn())
+
+	prev, _, err := w.decodeRow(
+		tupleData(textColumn("1"), nullColumn()),
+		pglogrepl.UpdateMessageTupleTypeOld,
+		nil,
+		w.relations[1],
+	)
+	if err != nil {
+		t.Fatalf("decodeRow() error = %v", err)
+	}
+
+	value, ok := prev["blob"]
+	if !ok || value != nil {
+		t.Errorf(`prev["blob"] = %#v, want a genuine NULL`, prev["blob"])
 	}
 }
 
@@ -919,7 +1037,7 @@ func TestDecodeRowRejectsUnexpectedDataType(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t))
 			registerRelation(t, w, 1, "public", "users", idColumn())
 
-			_, _, err := w.decodeRow(tt.prevRow, tt.nextRow, w.relations[1])
+			_, _, err := w.decodeRow(tt.prevRow, pglogrepl.UpdateMessageTupleTypeOld, tt.nextRow, w.relations[1])
 			if err == nil || !strings.Contains(err.Error(), `unexpected tuple data type 'b' for column "id"`) {
 				t.Fatalf("decodeRow() error = %v, want it to name the unexpected data type and column", err)
 			}
@@ -945,7 +1063,7 @@ func TestDecodeRowRejectsColumnCountMismatch(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t))
 			registerRelation(t, w, 1, "public", "users", idColumn())
 
-			_, _, err := w.decodeRow(tt.prevRow, tt.nextRow, w.relations[1])
+			_, _, err := w.decodeRow(tt.prevRow, pglogrepl.UpdateMessageTupleTypeOld, tt.nextRow, w.relations[1])
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("decodeRow() error = %v, want it to mention %q", err, tt.wantErr)
 			}
@@ -1200,7 +1318,12 @@ func registerRelation(t *testing.T, w *wal, relationId uint32, schemaName, name 
 
 // idColumn is the int4 primary key every fixture relation carries.
 func idColumn() relationColumn {
-	return relationColumn{name: "id", oid: pgtype.Int4OID}
+	return relationColumn{name: "id", oid: pgtype.Int4OID, key: true}
+}
+
+// blobColumn is the TOASTable text column the unchanged-TOAST tests exercise.
+func blobColumn() relationColumn {
+	return relationColumn{name: "blob", oid: pgtype.TextOID}
 }
 
 // tupleData builds the tuple submessage decodeRow reads one row from.

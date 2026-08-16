@@ -37,12 +37,13 @@ var Funcs = template.FuncMap{
 	"urlquery": template.URLQueryEscaper,
 
 	// flow control
-	"coalesce": tmplCoalesce,
-	"default":  tmplDefault,
-	"empty":    tmplEmpty,
-	"fail":     tmplFail,
-	"required": tmplRequired,
-	"ternary":  tmplTernary,
+	"coalesce":    tmplCoalesce,
+	"default":     tmplDefault,
+	"empty":       tmplEmpty,
+	"fail":        tmplFail,
+	"required":    tmplRequired,
+	"ternary":     tmplTernary,
+	"unavailable": tmplUnavailable,
 
 	// case conversions
 	"camelcase":       tmplCamelCase,

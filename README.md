@@ -48,6 +48,19 @@ tables:
 
 The multi-table form is fanned out into one canonical single-table entry per inner table, each carrying a deep copy of the shared `sinks` block.
 
+**`replica`** — optional, `full` (default) or `unmanaged`. With `full`, hump issues `ALTER TABLE … REPLICA IDENTITY FULL` on the table and its declarative partitions, which is what makes the old row and unchanged TOAST values reach the stream in full. With `unmanaged`, hump touches the table's replica identity not at all.
+
+```yaml
+tables:
+  - schema: public
+    table: audit_log
+    replica: unmanaged
+    sinks:
+      - kafka: { connection: "localhost:9092", topic: audit }
+```
+
+Under any replica identity other than FULL, Postgres omits data hump cannot reconstruct: an unchanged TOAST value on `UPDATE`, and every non-key column of the old row when the update changes a key column or the row is deleted. Those columns reach templates as **unavailable** — they render as an empty string, and only `{{ unavailable . }}` tells them apart from a genuine `''`. See [Templating](#templating).
+
 ### Sinks (table level)
 
 Each item in a table's `sinks` sequence is a mapping that contains:
@@ -351,6 +364,13 @@ Every template renders against the per-event context:
 | `.Headers`   | `map[string]string`   | Carries `traceparent` when present.                              |
 | `.Prev`      | `map[string]any`      | Row before the change (`nil` on `INSERT`).                       |
 | `.Next`      | `map[string]any`      | Row after the change (`nil` on `DELETE`).                        |
+
+A column the source could not deliver — see [`replica`](#tables) — is **unavailable**: it renders as an empty string, compares equal to `""`, and counts as empty for `empty`, `coalesce` and `required`. `{{ unavailable .Next.blob }}` is the only way to distinguish it from a column that really is `''`:
+
+```yaml
+payload: |
+  {{ if unavailable .Next.blob }}{"blob":"unchanged"}{{ else }}{{ .Next | json false }}{{ end }}
+```
 
 Standard `text/template` actions plus the bundled funcs (`json`, `sha256`, `cat`, `coalesce`, `unixepoch`, `mul`, `lower`, `trunc`, `replace`, `now`, `env`, `index`, …) are available. Example: `{{ coalesce .Next.id .Prev.id }}` extracts the row's id across INSERT/UPDATE/DELETE.
 

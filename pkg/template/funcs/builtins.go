@@ -373,13 +373,13 @@ func canCompare(v1, v2 reflect.Value) bool {
 
 // tmplEq evaluates the comparison a == b || a == c || ...
 func tmplEq(arg1 reflect.Value, arg2 ...reflect.Value) (bool, error) {
-	arg1 = indirectInterface(arg1)
+	arg1 = normalizeUnavailable(indirectInterface(arg1))
 	if len(arg2) == 0 {
 		return false, errNoComparison
 	}
 	k1, _ := basicKind(arg1)
 	for _, arg := range arg2 {
-		arg = indirectInterface(arg)
+		arg = normalizeUnavailable(indirectInterface(arg))
 		k2, _ := basicKind(arg)
 		t := false
 		if k1 != k2 {

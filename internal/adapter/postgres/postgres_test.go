@@ -301,7 +301,7 @@ func TestListenStreamsChangesUntilContextIsCancelled(t *testing.T) {
 		})
 	}()
 
-	server.stream(xLogData(0x10, 0x100, relationMessage(1, "public", "users", relationColumn{"id", pgtype.Int4OID})))
+	server.stream(xLogData(0x10, 0x100, relationMessage(1, "public", "users", relationColumn{name: "id", oid: pgtype.Int4OID, key: true})))
 	server.stream(xLogData(0x20, 0x100, insertMessage(1, textColumn("7"))))
 
 	select {
@@ -1437,6 +1437,9 @@ func copyFrame(data ...byte) *pgproto3.CopyData {
 type relationColumn struct {
 	name string
 	oid  uint32
+	// key marks the column as part of the replica identity, which is what the
+	// server sets on every column of a table with REPLICA IDENTITY FULL.
+	key bool
 }
 
 // tupleColumn is one column of a pgoutput tuple: 'n' for null, 'u' for an
@@ -1472,7 +1475,12 @@ func relationMessage(relationId uint32, namespace, name string, columns ...relat
 	data = binary.BigEndian.AppendUint16(data, uint16(len(columns)))
 
 	for _, column := range columns {
-		data = append(data, 0)
+		flags := byte(0)
+		if column.key {
+			flags = 1
+		}
+
+		data = append(data, flags)
 		data = appendCString(data, column.name)
 		data = binary.BigEndian.AppendUint32(data, column.oid)
 		data = binary.BigEndian.AppendUint32(data, 0)
@@ -1501,6 +1509,19 @@ func updateMessage(relationId uint32, oldTuple, newTuple []tupleColumn) []byte {
 		data = appendTuple(data, oldTuple)
 	}
 
+	data = append(data, 'N')
+
+	return appendTuple(data, newTuple)
+}
+
+// keyUpdateMessage encodes a pgoutput update whose old row is a key-only
+// tuple, which is what a table without REPLICA IDENTITY FULL sends when the
+// update touches a replica identity column.
+func keyUpdateMessage(relationId uint32, keyTuple, newTuple []tupleColumn) []byte {
+	data := []byte{'U'}
+	data = binary.BigEndian.AppendUint32(data, relationId)
+	data = append(data, 'K')
+	data = appendTuple(data, keyTuple)
 	data = append(data, 'N')
 
 	return appendTuple(data, newTuple)

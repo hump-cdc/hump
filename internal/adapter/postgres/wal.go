@@ -129,14 +129,15 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 
 		if err != nil {
 			// The receive deadline is the standby tick, so a timeout is the send
-			// window closing, not a broken stream. A finished ctx reports as a timeout
-			// too, and ends the loop once the position is flushed.
+			// window closing, not a broken stream. A finished ctx surfaces either way —
+			// pgx reports a cancelled one as a bare context.Canceled and an expired
+			// deadline as a timeout — and fail tells the two apart from the real faults.
 			if pgconn.Timeout(err) {
-				if err := w.flush(ctx, walPosition); err != nil {
-					return err
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return w.fail(ctx, walPosition, ctxErr)
 				}
 
-				if err := ctx.Err(); err != nil {
+				if err := w.flush(ctx, walPosition); err != nil {
 					return err
 				}
 
@@ -242,9 +243,21 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 
 // fail flushes position back to the server on a best-effort basis, marks the
 // sender unhealthy with err and returns it. The flush error is dropped: err is
-// why the stream is ending, and a status update failing on the way out adds
-// nothing.
+// why the stream is ending. A finished ctx is the exception — err then only
+// restates the shutdown, so health is left alone and ctx.Err() is returned.
 func (w *wal) fail(ctx context.Context, position pglogrepl.LSN, err error) error {
+	// The stream is ending because the process is, and the same shutdown reaches
+	// here in several shapes: pgx normalizes a cancelled receive into a bare
+	// context.Canceled, and the worker pool returns one through the handler. Requiring
+	// err to carry the context error keeps a real fault racing the cancel visible.
+	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+		// Detached so the last position still goes out. It reaches the socket today
+		// because pglogrepl.SendStandbyStatusUpdate ignores the context it takes.
+		_ = w.flush(context.WithoutCancel(ctx), position)
+
+		return ctxErr
+	}
+
 	_ = w.flush(ctx, position)
 	w.health.MarkUnhealthy(err)
 

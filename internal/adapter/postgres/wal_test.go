@@ -87,16 +87,55 @@ func TestStartStopsWhenContextIsCancelled(t *testing.T) {
 	cancel()
 
 	err := awaitStart(t, errs)
-	if err == nil || !strings.Contains(err.Error(), "receive message failed") {
-		t.Fatalf("Start() error = %v, want it to mention a failed receive", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() error = %v, want context.Canceled", err)
 	}
 
-	if !errors.Is(err, database.ErrWal) {
-		t.Errorf("Start() error does not wrap ErrWal: %v", err)
+	if errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error = %v, want a shutdown rather than a WAL failure", err)
 	}
 
-	if failures := health.failures(); len(failures) != 1 {
-		t.Errorf("MarkUnhealthy() called %d times, want 1", len(failures))
+	if failures := health.failures(); len(failures) != 0 {
+		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
+	}
+
+	server.waitForStandbyUpdates(t, 1)
+}
+
+func TestStartStopsWhenContextIsCancelledDuringHandler(t *testing.T) {
+	server := usersServer(t)
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
+	handler := func(ctx context.Context, _ time.Time, _ domain.OperationType, _ domain.DbName, _ domain.TableSchema, _ domain.TableName, _ domain.Headers, _ domain.DbRecord, _ domain.DbRecord) error {
+		close(entered)
+		<-ctx.Done()
+
+		return ctx.Err()
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+
+	<-entered
+	cancel()
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() error = %v, want context.Canceled", err)
+	}
+
+	if errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error = %v, want a shutdown rather than a WAL failure", err)
+	}
+
+	if failures := health.failures(); len(failures) != 0 {
+		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
 	}
 }
 

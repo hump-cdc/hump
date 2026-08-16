@@ -252,13 +252,13 @@ func TestResolveTableConfigurationResolvesKnownPartition(t *testing.T) {
 
 func TestResolveTableConfigurationReIntrospectsNewPartition(t *testing.T) {
 	server := newFakeServer(t)
-	server.setResponder(stagedLayoutResponder(
+	server.setResponder(withParent(stagedLayoutResponder(
 		[][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
 		[][][]byte{
 			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
 			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2025")),
 		},
-	))
+	), domain.TableIdentifier{Schema: "public", Name: "events"}))
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
 
 	partition := domain.TableIdentifier{Schema: "public", Name: "events_2025"}
@@ -277,15 +277,15 @@ func TestResolveTableConfigurationReIntrospectsNewPartition(t *testing.T) {
 	}
 }
 
-func TestResolveTableConfigurationCostsOneQueryPerMiss(t *testing.T) {
+func TestResolveTableConfigurationCostsTwoQueriesPerOwnedMiss(t *testing.T) {
 	server := newFakeServer(t)
-	server.setResponder(stagedLayoutResponder(
+	server.setResponder(withParent(stagedLayoutResponder(
 		[][][]byte{layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024"))},
 		[][][]byte{
 			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2024")),
 			layoutRow("public", "events", tableTypePartitioned, []byte("public"), []byte("events_2025")),
 		},
-	))
+	), domain.TableIdentifier{Schema: "public", Name: "events"}))
 	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "events")}, nil)
 
 	known := domain.TableIdentifier{Schema: "public", Name: "events_2024"}
@@ -300,11 +300,98 @@ func TestResolveTableConfigurationCostsOneQueryPerMiss(t *testing.T) {
 	}
 
 	statements := server.recorded()[before:]
-	if len(statements) != 1 {
-		t.Fatalf("statements = %q, want one metadata lookup", statements)
+	if len(statements) != 2 {
+		t.Fatalf("statements = %q, want the parent lookup and the metadata lookup", statements)
 	}
-	if !strings.Contains(statements[0], "unnest(") {
-		t.Errorf("statement = %q, want the table layout query", statements[0])
+	if !strings.Contains(statements[0], "inheritance parent") {
+		t.Errorf("statement = %q, want the parent lookup first", statements[0])
+	}
+	if !strings.Contains(statements[1], "unnest(") {
+		t.Errorf("statement = %q, want the table layout query second", statements[1])
+	}
+}
+
+func TestResolveTableConfigurationCostsOneQueryPerForeignMiss(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(true,
+		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1_chunk")),
+	))
+	ensure, calls := replicaIdentityRecorder()
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "metrics")}, ensure)
+
+	known := domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), known); err != nil {
+		t.Fatalf("ResolveTableConfiguration() error = %v", err)
+	}
+
+	before := len(server.recorded())
+	beforeEnsures := len(*calls)
+
+	foreign := domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), foreign); !errors.Is(err, ErrTableIgnored) {
+		t.Fatalf("ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
+	}
+
+	statements := server.recorded()[before:]
+	if len(statements) != 1 {
+		t.Fatalf("statements = %q, want only the parent lookup", statements)
+	}
+	if !strings.Contains(statements[0], "inheritance parent") {
+		t.Errorf("statement = %q, want the parent lookup", statements[0])
+	}
+	if after := len(*calls); after != beforeEnsures {
+		t.Errorf("replica identity passes = %d, want %d: a foreign chunk must not trigger DDL", after, beforeEnsures)
+	}
+}
+
+func TestResolveTableConfigurationIgnoresChunkOfUnconfiguredHypertable(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(withParent(tableLayoutResponder(true,
+		layoutRow("public", "metrics", tableTypeHypertable, []byte("_timescaledb_internal"), []byte("_hyper_1_1_chunk")),
+	), domain.TableIdentifier{Schema: "public", Name: "other_metrics"}))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "metrics")}, nil)
+
+	foreign := domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), foreign); !errors.Is(err, ErrTableIgnored) {
+		t.Fatalf("ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
+	}
+	if _, ignored := introspector.ignoredTables[foreign]; !ignored {
+		t.Error("a chunk of an unconfigured hypertable must be ignored from then on")
+	}
+}
+
+func TestResolveTableConfigurationIgnoresInheritanceChildOfRegularTable(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(withParent(tableLayoutResponder(false,
+		layoutRow("public", "users", tableTypeRegular, nil, nil),
+	), domain.TableIdentifier{Schema: "public", Name: "users"}))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
+
+	child := domain.TableIdentifier{Schema: "public", Name: "users_archive"}
+	if _, err := introspector.ResolveTableConfiguration(context.Background(), child); !errors.Is(err, ErrTableIgnored) {
+		t.Fatalf("ResolveTableConfiguration() error = %v, want ErrTableIgnored", err)
+	}
+}
+
+func TestResolveTableConfigurationPropagatesParentLookupError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(failingOn(
+		tableLayoutResponder(false, layoutRow("public", "users", tableTypeRegular, nil, nil)),
+		"inheritance parent",
+		serverError("42501", "permission denied"),
+	))
+	introspector := newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, nil)
+
+	unknown := domain.TableIdentifier{Schema: "other", Name: "logs"}
+	_, err := introspector.ResolveTableConfiguration(context.Background(), unknown)
+	if err == nil {
+		t.Fatal("ResolveTableConfiguration() error = nil, want the parent lookup error")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("error = %v, want the parent lookup error", err)
+	}
+	if _, ignored := introspector.ignoredTables[unknown]; ignored {
+		t.Error("a table whose parent lookup failed must not be ignored: the lookup never completed")
 	}
 }
 
@@ -782,13 +869,22 @@ func TestResolveTableByPartition(t *testing.T) {
 			want:      &events,
 		},
 		{
-			name: "hypertable chunk matched by schema alone",
+			name: "hypertable chunk matched by name",
+			metadata: tablesMetadata{metrics: {
+				Type:       tableTypeHypertable,
+				Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"}},
+			}},
+			partition: domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"},
+			want:      &metrics,
+		},
+		{
+			name: "chunk of another hypertable in the same schema",
 			metadata: tablesMetadata{metrics: {
 				Type:       tableTypeHypertable,
 				Partitions: []domain.TableIdentifier{{Schema: "_timescaledb_internal", Name: "_hyper_1_1_chunk"}},
 			}},
 			partition: domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"},
-			want:      &metrics,
+			want:      nil,
 		},
 		{
 			name: "name mismatch in the same schema",

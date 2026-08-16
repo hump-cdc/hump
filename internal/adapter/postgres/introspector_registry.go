@@ -68,6 +68,14 @@ func (r *introspectorRegistry) Resolve(table domain.TableIdentifier) (domain.Tab
 	return domain.TableIdentifier{}, false
 }
 
+// IsConfigured reports whether table is named in the configuration. Unlike
+// Resolve it does not consider partitions, so a partition of a configured table
+// answers false.
+func (r *introspectorRegistry) IsConfigured(table domain.TableIdentifier) bool {
+	_, ok := r.configured[table]
+	return ok
+}
+
 // Partitions returns the partition→parent mapping.
 func (r *introspectorRegistry) Partitions() map[domain.TableIdentifier]domain.TableIdentifier {
 	return r.partitions

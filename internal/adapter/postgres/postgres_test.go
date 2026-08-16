@@ -139,6 +139,10 @@ func TestConfigureBootstrapsPublicationAndSlot(t *testing.T) {
 	if !strings.Contains(statements, "pg_create_logical_replication_slot") {
 		t.Errorf("configure() did not create the replication slot, statements:\n%s", statements)
 	}
+
+	if !strings.Contains(statements, "pg_publication_tables") {
+		t.Errorf("configure() did not check replica identity of published tables, statements:\n%s", statements)
+	}
 }
 
 func TestConfigureReportsFailingStage(t *testing.T) {
@@ -715,6 +719,10 @@ func tableLayoutResponder(timescale bool, rows ...[][]byte) func(string) queryRe
 		switch {
 		case strings.Contains(sql, "pg_extension"):
 			return singleValue(flag)
+		case strings.Contains(sql, "inheritance parent"):
+			return inheritanceParent()
+		case strings.Contains(sql, "pg_publication_tables"):
+			return publishedTables()
 		case strings.Contains(sql, "relreplident"):
 			return staleReplicaIdentity()
 		case strings.Contains(sql, "unnest("):
@@ -736,6 +744,10 @@ func stagedLayoutResponder(stages ...[][][]byte) func(string) queryResult {
 		switch {
 		case strings.Contains(sql, "pg_extension"):
 			return singleValue("f")
+		case strings.Contains(sql, "inheritance parent"):
+			return inheritanceParent()
+		case strings.Contains(sql, "pg_publication_tables"):
+			return publishedTables()
 		case strings.Contains(sql, "relreplident"):
 			return staleReplicaIdentity()
 		case strings.Contains(sql, "unnest("):
@@ -777,6 +789,40 @@ func failingOn(respond func(string) queryResult, marker string, result queryResu
 
 		return respond(sql)
 	}
+}
+
+// withParent wraps respond so that the inheritance parent lookup answers with
+// parent instead of the empty result the layout responders return.
+func withParent(respond func(string) queryResult, parent domain.TableIdentifier) func(string) queryResult {
+	return func(sql string) queryResult {
+		if strings.Contains(sql, "inheritance parent") {
+			return inheritanceParent(parent)
+		}
+
+		return respond(sql)
+	}
+}
+
+// inheritanceParent scripts the result of the parent lookup, whose single row is
+// the parent of the table asked about. No table means no parent.
+func inheritanceParent(tables ...domain.TableIdentifier) queryResult {
+	rows := make([][][]byte, 0, len(tables))
+	for _, t := range tables {
+		rows = append(rows, [][]byte{[]byte(t.Schema), []byte(t.Name)})
+	}
+
+	return queryResult{columns: 2, rows: rows}
+}
+
+// publishedTables scripts the result of the replica identity preflight, whose
+// rows are the published tables that support neither UPDATE nor DELETE.
+func publishedTables(tables ...domain.TableIdentifier) queryResult {
+	rows := make([][][]byte, 0, len(tables))
+	for _, t := range tables {
+		rows = append(rows, [][]byte{[]byte(t.Schema), []byte(t.Name)})
+	}
+
+	return queryResult{columns: 2, rows: rows}
 }
 
 // singleValue scripts a one-column, one-row result holding value.

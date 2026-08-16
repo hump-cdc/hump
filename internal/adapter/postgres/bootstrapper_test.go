@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -114,6 +115,98 @@ func TestEnsurePublicationExistsWrapsServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `ensure publication "hump_pub"`) {
 		t.Errorf("error = %v, want it to name the publication", err)
+	}
+}
+
+func TestWarnMissingReplicaIdentityQueriesThePublication(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult {
+		return publishedTables(domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_materialized_hypertable_2"})
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	bootstrapper.WarnMissingReplicaIdentity(context.Background(), "hump_pub")
+
+	statements := server.recorded()
+	if len(statements) != 1 {
+		t.Fatalf("statements = %q, want the preflight query", statements)
+	}
+	if !strings.Contains(statements[0], "pg_publication_tables") {
+		t.Errorf("statement = %q, want the preflight query", statements[0])
+	}
+
+	params := server.boundParams()
+	if len(params) != 1 {
+		t.Fatalf("bound parameter sets = %d, want 1", len(params))
+	}
+	if got, want := string(params[0][0]), "hump_pub"; got != want {
+		t.Errorf("publication = %q, want %q", got, want)
+	}
+}
+
+func TestWarnMissingReplicaIdentitySwallowsQueryError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	bootstrapper.WarnMissingReplicaIdentity(context.Background(), "hump_pub")
+
+	if statements := server.recorded(); len(statements) != 1 {
+		t.Fatalf("statements = %q, want the preflight query to have been attempted", statements)
+	}
+}
+
+func TestGetPublishedTablesMissingReplicaIdentity(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult {
+		return publishedTables(
+			domain.TableIdentifier{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"},
+			domain.TableIdentifier{Schema: "public", Name: "logs"},
+		)
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	tables, err := bootstrapper.getPublishedTablesMissingReplicaIdentity(context.Background(), "hump_pub")
+	if err != nil {
+		t.Fatalf("getPublishedTablesMissingReplicaIdentity() error = %v", err)
+	}
+
+	want := []domain.TableIdentifier{
+		{Schema: "_timescaledb_internal", Name: "_hyper_9_9_chunk"},
+		{Schema: "public", Name: "logs"},
+	}
+	if !slices.Equal(tables, want) {
+		t.Errorf("tables = %+v, want %+v", tables, want)
+	}
+}
+
+func TestGetPublishedTablesMissingReplicaIdentityRejectsShortRows(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult {
+		return queryResult{columns: 1, rows: [][][]byte{{[]byte("public")}}}
+	})
+	bootstrapper := newTestBootstrapper(t, server)
+
+	_, err := bootstrapper.getPublishedTablesMissingReplicaIdentity(context.Background(), "hump_pub")
+	if err == nil {
+		t.Fatal("getPublishedTablesMissingReplicaIdentity() error = nil, want the column count error")
+	}
+	if !strings.Contains(err.Error(), "expected 2 columns") {
+		t.Errorf("error = %v, want it to report the column count", err)
+	}
+}
+
+func TestGetPublishedTablesMissingReplicaIdentityWrapsQueryError(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+	bootstrapper := newTestBootstrapper(t, server)
+
+	_, err := bootstrapper.getPublishedTablesMissingReplicaIdentity(context.Background(), "hump_pub")
+	if err == nil {
+		t.Fatal("getPublishedTablesMissingReplicaIdentity() error = nil, want the server error")
+	}
+	if !strings.Contains(err.Error(), "get published tables missing replica identity") {
+		t.Errorf("error = %v, want it wrapped", err)
 	}
 }
 
@@ -738,6 +831,35 @@ func TestQuoteIdentifier(t *testing.T) {
 
 // alteredTables returns the qualified table of every ALTER TABLE ... REPLICA
 // IDENTITY FULL the server was asked to run, in order.
+func TestSummarizeTables(t *testing.T) {
+	tables := []domain.TableIdentifier{
+		{Schema: "public", Name: "a"},
+		{Schema: "public", Name: "b"},
+		{Schema: "public", Name: "c"},
+	}
+
+	cases := []struct {
+		name   string
+		tables []domain.TableIdentifier
+		limit  int
+		want   string
+	}{
+		{name: "none", tables: nil, limit: 2, want: ""},
+		{name: "under the limit", tables: tables[:2], limit: 2, want: "public.a, public.b"},
+		{name: "over the limit", tables: tables, limit: 2, want: "public.a, public.b, ... and 1 more"},
+	}
+
+	bootstrapper := newTestBootstrapper(t, newFakeServer(t))
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := bootstrapper.summarizeTables(tt.tables, tt.limit); got != tt.want {
+				t.Errorf("summarizeTables() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func alteredTables(s *fakeServer) []string {
 	alterPattern := regexp.MustCompile(`ALTER TABLE (.+) REPLICA IDENTITY FULL`)
 

@@ -23,6 +23,9 @@ var introspectorTablesNoTimescaleSql string
 //go:embed sql/introspector_has_timescale.sql
 var introspectorHasTimescaleSql string
 
+//go:embed sql/introspector_table_parent.sql
+var introspectorTableParentSql string
+
 // introspector manages in-memory table configuration in response to schema
 // changes (e.g., new partitions) and ensures replica identity is set for
 // replicated tables.
@@ -74,8 +77,9 @@ func (i *introspector) Invalidate(ctx context.Context, table *domain.TableIdenti
 }
 
 // ResolveTableConfiguration returns the resolved table — the parent when table
-// is a partition. A miss costs one re-introspection; if that still misses, the
-// table is ignored from then on and every lookup for it returns ErrTableIgnored.
+// is a partition. A miss costs a parent lookup, plus one re-introspection when a
+// configured table owns it; anything left unresolved is ignored from then on and
+// every lookup for it returns ErrTableIgnored.
 func (i *introspector) ResolveTableConfiguration(ctx context.Context, table domain.TableIdentifier) (domain.TableIdentifier, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -89,6 +93,19 @@ func (i *introspector) ResolveTableConfiguration(ctx context.Context, table doma
 
 	if ref, err := i.resolveKnown(table); !errors.Is(err, errIntrospectionRequired) {
 		return ref, err
+	}
+
+	// A relation the registry misses is only worth a refresh when a configured
+	// table owns it. Resolving its parent first keeps every other relation —
+	// chunks of hypertables hump does not replicate, which the publication pulls
+	// in schema-wide — off the expensive path.
+	parent, ok, err := i.getTableParent(ctx, i.connection, table)
+	if err != nil {
+		return domain.TableIdentifier{}, err
+	}
+	if !ok || !i.registry.IsConfigured(parent) {
+		i.ignoredTables[table] = struct{}{}
+		return domain.TableIdentifier{}, ErrTableIgnored
 	}
 
 	// retry once, in case table is a partition created after startup
@@ -160,6 +177,32 @@ func (i *introspector) invalidate(ctx context.Context, conn *connection, table *
 	}
 
 	return nil
+}
+
+// getTableParent returns the inheritance parent of table — the hypertable owning
+// a chunk, or the partitioned table owning a partition — and false when table is
+// not an inheritance child. Only the immediate parent is reported.
+func (i *introspector) getTableParent(ctx context.Context, conn *connection, table domain.TableIdentifier) (domain.TableIdentifier, bool, error) {
+	queryResult, err := conn.ExecParams(ctx, introspectorTableParentSql, tableScalarParams(table), nil)
+	if err != nil {
+		return domain.TableIdentifier{}, false, fmt.Errorf("get parent of %s.%s: %w", table.Schema, table.Name, err)
+	}
+
+	if len(queryResult.Rows) == 0 {
+		return domain.TableIdentifier{}, false, nil
+	}
+
+	values := queryResult.Rows[0]
+	if len(values) < 2 {
+		return domain.TableIdentifier{}, false, fmt.Errorf("get parent of %s.%s: expected 2 columns, got %d", table.Schema, table.Name, len(values))
+	}
+
+	parent := domain.TableIdentifier{
+		Schema: domain.TableSchema(values[0]),
+		Name:   domain.TableName(values[1]),
+	}
+
+	return parent, true, nil
 }
 
 // getTablesMetadata queries the database and returns the configured tables with
@@ -259,7 +302,7 @@ func (i *introspector) introspectTables(dbTables tablesMetadata) *tablesIntrospe
 	return result
 }
 
-// resolveTableByPartition returns the parent whose partition list contains
+// resolveTableByPartition returns the parent whose partition list names
 // partition, or nil when no table in metadata claims it.
 func (i *introspector) resolveTableByPartition(metadata tablesMetadata, partition domain.TableIdentifier) *domain.TableIdentifier {
 	for parent, info := range metadata {
@@ -267,7 +310,7 @@ func (i *introspector) resolveTableByPartition(metadata tablesMetadata, partitio
 			if p.Schema != partition.Schema {
 				continue
 			}
-			if info.Type == tableTypeHypertable || p.Name == partition.Name {
+			if p.Name == partition.Name {
 				return &parent
 			}
 		}

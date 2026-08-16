@@ -75,3 +75,17 @@ func tableArrayParams(m *pgtype.Map, tables []domain.TableIdentifier) ([]param, 
 
 	return params, nil
 }
+
+// tableScalarParams encodes table as the (schema, name) text bind parameters a
+// catalog query filtering on a single table takes.
+func tableScalarParams(table domain.TableIdentifier) []param {
+	return []param{
+		textParam(string(table.Schema)),
+		textParam(string(table.Name)),
+	}
+}
+
+// textParam encodes value as a text-format bind parameter.
+func textParam(value string) param {
+	return param{Value: []byte(value), OID: pgtype.TextOID, Format: pgtype.TextFormatCode}
+}

@@ -41,6 +41,13 @@ var bootstrapperMetadataTablesNoTimescaleSql string
 //go:embed sql/bootstrapper_metadata_has_timescale.sql
 var bootstrapperMetadataHasTimescaleSql string
 
+//go:embed sql/bootstrapper_publication_missing_identity.sql
+var bootstrapperPublicationMissingIdentitySql string
+
+// missingIdentityLogLimit caps how many table names the replica identity warning
+// spells out before it falls back to a count.
+const missingIdentityLogLimit = 20
+
 // bootstrapper ensures the server-side replication state — publication,
 // replication slot and replica identity — matches the configured tables.
 type bootstrapper struct {
@@ -104,6 +111,55 @@ func (b *bootstrapper) EnsurePublicationExists(ctx context.Context, publicationN
 	}
 
 	return nil
+}
+
+// WarnMissingReplicaIdentity logs the published tables whose replica identity
+// cannot carry an UPDATE or a DELETE, which the server rejects for as long as
+// the publication lists them. A TimescaleDB chunk schema is published whole, so
+// the list reaches past the configured tables. Diagnostics only: a failed lookup
+// is logged and swallowed.
+func (b *bootstrapper) WarnMissingReplicaIdentity(ctx context.Context, publicationName string) {
+	tables, err := b.getPublishedTablesMissingReplicaIdentity(ctx, publicationName)
+	if err != nil {
+		logger.Warn("Could not check replica identity of published tables", "publication", publicationName, "error", err)
+		return
+	}
+	if len(tables) == 0 {
+		return
+	}
+
+	logger.Warn("Published tables reject UPDATE and DELETE: no primary key and no REPLICA IDENTITY FULL",
+		"publication", publicationName,
+		"count", len(tables),
+		"tables", b.summarizeTables(tables, missingIdentityLogLimit),
+		"hint", "give each one a primary key or REPLICA IDENTITY FULL",
+	)
+}
+
+// getPublishedTablesMissingReplicaIdentity returns the tables in the publication
+// whose replica identity supports neither UPDATE nor DELETE. It reads
+// pg_publication_tables, so tables published through a schema are covered too.
+func (b *bootstrapper) getPublishedTablesMissingReplicaIdentity(ctx context.Context, publicationName string) ([]domain.TableIdentifier, error) {
+	params := []param{textParam(publicationName)}
+
+	queryResult, err := b.connection.ExecParams(ctx, bootstrapperPublicationMissingIdentitySql, params, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get published tables missing replica identity: %w", err)
+	}
+
+	tables := make([]domain.TableIdentifier, 0, len(queryResult.Rows))
+	for _, values := range queryResult.Rows {
+		if len(values) < 2 {
+			return nil, fmt.Errorf("get published tables missing replica identity: expected 2 columns, got %d", len(values))
+		}
+
+		tables = append(tables, domain.TableIdentifier{
+			Schema: domain.TableSchema(values[0]),
+			Name:   domain.TableName(values[1]),
+		})
+	}
+
+	return tables, nil
 }
 
 // EnsurePublicationRemoved drops the publication if it exists. It is a no-op
@@ -293,4 +349,23 @@ func (b *bootstrapper) quoteLiteral(s string) string {
 // quoteIdentifier wraps s as a SQL identifier, doubling embedded double quotes.
 func (b *bootstrapper) quoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+// summarizeTables renders tables as qualified names, keeping at most limit of
+// them and reporting the remainder as a count so a large schema cannot flood the
+// log line.
+func (b *bootstrapper) summarizeTables(tables []domain.TableIdentifier, limit int) string {
+	shown := min(len(tables), limit)
+
+	names := make([]string, 0, shown)
+	for _, t := range tables[:shown] {
+		names = append(names, string(t.Schema)+"."+string(t.Name))
+	}
+
+	summary := strings.Join(names, ", ")
+	if rest := len(tables) - shown; rest > 0 {
+		summary += fmt.Sprintf(", ... and %d more", rest)
+	}
+
+	return summary
 }

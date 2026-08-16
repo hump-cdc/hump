@@ -184,6 +184,8 @@ func (p *Postgres) configure(ctx context.Context, conn *connection) (*introspect
 		return nil, fmt.Errorf("ensure publication: %w", err)
 	}
 
+	bs.WarnMissingReplicaIdentity(ctx, p.publicationName)
+
 	if err := bs.EnsureReplicationSlotExists(ctx, p.slotName); err != nil {
 		return nil, fmt.Errorf("ensure replication slot: %w", err)
 	}

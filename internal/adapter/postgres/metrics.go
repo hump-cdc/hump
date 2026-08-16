@@ -10,12 +10,16 @@ import (
 )
 
 type metrics struct {
-	replicationLag       prometheus.Gauge
-	rowDurations         *prometheus.HistogramVec
-	rowInsertDurations   map[domain.TableIdentifier]prometheus.Observer
-	rowUpdateDurations   map[domain.TableIdentifier]prometheus.Observer
-	rowDeleteDurations   map[domain.TableIdentifier]prometheus.Observer
-	rowTruncateDurations map[domain.TableIdentifier]prometheus.Observer
+	replicationLag prometheus.Gauge
+	rowDurations   *prometheus.HistogramVec
+	rowObservers   map[rowObserverKey]prometheus.Observer
+}
+
+// rowObserverKey identifies the cached histogram observer for one operation on
+// one table.
+type rowObserverKey struct {
+	operation domain.OperationType
+	table     domain.TableIdentifier
 }
 
 func newMetrics(dbName string, factory promauto.Factory) *metrics {
@@ -43,10 +47,7 @@ func newMetrics(dbName string, factory promauto.Factory) *metrics {
 			},
 			ConstLabels: prometheus.Labels{"db": dbName},
 		}, []string{"operation", "schema", "table"}),
-		rowInsertDurations:   make(map[domain.TableIdentifier]prometheus.Observer),
-		rowUpdateDurations:   make(map[domain.TableIdentifier]prometheus.Observer),
-		rowDeleteDurations:   make(map[domain.TableIdentifier]prometheus.Observer),
-		rowTruncateDurations: make(map[domain.TableIdentifier]prometheus.Observer),
+		rowObservers: make(map[rowObserverKey]prometheus.Observer),
 	}
 }
 
@@ -62,45 +63,15 @@ func (m *metrics) updateReplicationLag(processed pglogrepl.LSN, server pglogrepl
 	}
 }
 
-// observeInsert records the duration of an insert operation for a specific table.
-func (m *metrics) observeInsert(table domain.TableIdentifier, duration time.Duration) {
-	observer, ok := m.rowInsertDurations[table]
+// observeRow records the duration of operation on table, caching the observer
+// for the label set on first use.
+func (m *metrics) observeRow(operation domain.OperationType, table domain.TableIdentifier, duration time.Duration) {
+	key := rowObserverKey{operation: operation, table: table}
+
+	observer, ok := m.rowObservers[key]
 	if !ok {
-		observer = m.rowDurations.WithLabelValues("insert", string(table.Schema), string(table.Name))
-		m.rowInsertDurations[table] = observer
-	}
-
-	observer.Observe(duration.Seconds())
-}
-
-// observeInsert records the duration of an update operation for a specific table.
-func (m *metrics) observeUpdate(table domain.TableIdentifier, duration time.Duration) {
-	observer, ok := m.rowUpdateDurations[table]
-	if !ok {
-		observer = m.rowDurations.WithLabelValues("update", string(table.Schema), string(table.Name))
-		m.rowUpdateDurations[table] = observer
-	}
-
-	observer.Observe(duration.Seconds())
-}
-
-// observeInsert records the duration of an delete operation for a specific table.
-func (m *metrics) observeDelete(table domain.TableIdentifier, duration time.Duration) {
-	observer, ok := m.rowDeleteDurations[table]
-	if !ok {
-		observer = m.rowDurations.WithLabelValues("delete", string(table.Schema), string(table.Name))
-		m.rowDeleteDurations[table] = observer
-	}
-
-	observer.Observe(duration.Seconds())
-}
-
-// observeInsert records the duration of an truncate operation for a specific table.
-func (m *metrics) observeTruncate(table domain.TableIdentifier, duration time.Duration) {
-	observer, ok := m.rowTruncateDurations[table]
-	if !ok {
-		observer = m.rowDurations.WithLabelValues("truncate", string(table.Schema), string(table.Name))
-		m.rowTruncateDurations[table] = observer
+		observer = m.rowDurations.WithLabelValues(string(operation), string(table.Schema), string(table.Name))
+		m.rowObservers[key] = observer
 	}
 
 	observer.Observe(duration.Seconds())

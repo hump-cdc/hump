@@ -329,97 +329,29 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		w.messageContext.append(message.Prefix, string(message.Content))
 
 	case *pglogrepl.InsertMessageV2:
-		start := time.Now()
-		relation, ok := w.relations[message.RelationID]
-		if !ok {
-			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
-		}
-
-		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.resolveTable(ctx, table, position)
-		if errors.Is(err, ErrTableIgnored) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
-		}
-
-		prev, next, err := w.decodeRow(nil, pglogrepl.UpdateMessageTupleTypeNone, message.Tuple, relation)
-		if err != nil {
-			return fmt.Errorf("decode insert tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
-
-		err = handler(ctx, timestamp, domain.OperationTypeInsert, w.dbName, ref.Schema, ref.Name, headers, prev, next)
-		if err != nil {
-			return err
-		}
-
-		elapsed := time.Since(start)
-		w.metrics.observeInsert(ref, elapsed)
+		return w.processRow(ctx, rowChange{
+			operation:     domain.OperationTypeInsert,
+			relationID:    message.RelationID,
+			prevTupleType: pglogrepl.UpdateMessageTupleTypeNone,
+			nextTuple:     message.Tuple,
+		}, timestamp, position, handler)
 
 	case *pglogrepl.UpdateMessageV2:
-		start := time.Now()
-		relation, ok := w.relations[message.RelationID]
-		if !ok {
-			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
-		}
-
-		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.resolveTable(ctx, table, position)
-		if errors.Is(err, ErrTableIgnored) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
-		}
-
-		prev, next, err := w.decodeRow(message.OldTuple, message.OldTupleType, message.NewTuple, relation)
-		if err != nil {
-			return fmt.Errorf("decode update tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
-
-		err = handler(ctx, timestamp, domain.OperationTypeUpdate, w.dbName, ref.Schema, ref.Name, headers, prev, next)
-		if err != nil {
-			return err
-		}
-
-		elapsed := time.Since(start)
-		w.metrics.observeUpdate(ref, elapsed)
+		return w.processRow(ctx, rowChange{
+			operation:     domain.OperationTypeUpdate,
+			relationID:    message.RelationID,
+			prevTuple:     message.OldTuple,
+			prevTupleType: message.OldTupleType,
+			nextTuple:     message.NewTuple,
+		}, timestamp, position, handler)
 
 	case *pglogrepl.DeleteMessageV2:
-		start := time.Now()
-		relation, ok := w.relations[message.RelationID]
-		if !ok {
-			return fmt.Errorf("unknown relation ID: %d: %w", message.RelationID, database.ErrWal)
-		}
-
-		table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-		ref, err := w.resolveTable(ctx, table, position)
-		if errors.Is(err, ErrTableIgnored) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
-		}
-
-		prev, next, err := w.decodeRow(message.OldTuple, message.OldTupleType, nil, relation)
-		if err != nil {
-			return fmt.Errorf("decode delete tuples for %s.%s: %w", relation.Namespace, relation.RelationName, err)
-		}
-
-		headers := w.messageContext.dump()
-
-		err = handler(ctx, timestamp, domain.OperationTypeDelete, w.dbName, ref.Schema, ref.Name, headers, prev, next)
-		if err != nil {
-			return err
-		}
-
-		elapsed := time.Since(start)
-		w.metrics.observeDelete(ref, elapsed)
+		return w.processRow(ctx, rowChange{
+			operation:     domain.OperationTypeDelete,
+			relationID:    message.RelationID,
+			prevTuple:     message.OldTuple,
+			prevTupleType: message.OldTupleType,
+		}, timestamp, position, handler)
 
 	case *pglogrepl.TruncateMessageV2:
 		resultErrs := make([]error, 0, len(message.RelationIDs))
@@ -445,7 +377,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 				resultErrs = append(resultErrs, e)
 			} else {
 				elapsed := time.Since(start)
-				w.metrics.observeTruncate(ref, elapsed)
+				w.metrics.observeRow(domain.OperationTypeTruncate, ref, elapsed)
 			}
 		}
 
@@ -453,6 +385,57 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			return errors.Join(resultErrs...)
 		}
 	}
+
+	return nil
+}
+
+// rowChange is the per-operation part of a decoded row change: the tuples that
+// go into decodeRow and the operation reported to the handler and to metrics.
+type rowChange struct {
+	// operation is the change kind reported to the handler and used as the
+	// metric label.
+	operation  domain.OperationType
+	relationID uint32
+	// prevTuple is the old tuple, nil when the operation carries none.
+	prevTuple *pglogrepl.TupleData
+	// prevTupleType is the old tuple's pgoutput kind.
+	prevTupleType uint8
+	// nextTuple is the new tuple, nil for a delete.
+	nextTuple *pglogrepl.TupleData
+}
+
+// processRow resolves the relation behind change, decodes its tuples and
+// forwards the result to handler, recording the time the whole path took.
+func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+	start := time.Now()
+
+	relation, ok := w.relations[change.relationID]
+	if !ok {
+		return fmt.Errorf("unknown relation ID: %d: %w", change.relationID, database.ErrWal)
+	}
+
+	table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
+	ref, err := w.resolveTable(ctx, table, position)
+	if errors.Is(err, ErrTableIgnored) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
+	}
+
+	prev, next, err := w.decodeRow(change.prevTuple, change.prevTupleType, change.nextTuple, relation)
+	if err != nil {
+		return fmt.Errorf("decode %s tuples for %s.%s: %w", change.operation, relation.Namespace, relation.RelationName, err)
+	}
+
+	headers := w.messageContext.dump()
+
+	err = handler(ctx, timestamp, change.operation, w.dbName, ref.Schema, ref.Name, headers, prev, next)
+	if err != nil {
+		return err
+	}
+
+	w.metrics.observeRow(change.operation, ref, time.Since(start))
 
 	return nil
 }

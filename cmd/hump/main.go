@@ -90,7 +90,7 @@ func main() {
 			r.Run(
 				// Web UI
 				func(ctx context.Context) error {
-					// configController := getconfig.NewController(opts, configuration, pg)
+					// configController := getconfig.NewController(opts, configuration, db)
 					server := controller.NewWebUIController()
 					return server.Serve(ctx, *opts.WebPort)
 				})

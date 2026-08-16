@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"hump/config"
@@ -31,6 +30,9 @@ type Health interface {
 // Postgres is a database.Database backed by a single PostgreSQL source.
 type Postgres struct {
 	databaseUrl     string
+	dbHost          string
+	dbPort          uint16
+	dbName          string
 	cfg             config.Configuration
 	publicationName string
 	slotName        string
@@ -51,6 +53,14 @@ func New(databaseUrl string, cfg config.Configuration, publicationName string, s
 		healthWal:       healthWal,
 	}
 
+	// Parsed once here rather than per getter: the getters serve a web UI
+	// handler, and ParseConfig reads PG* environment variables and may read .pgpass.
+	if _, host, port, name, err := newConnectionOptions(databaseUrl).GetConnectionConfig(); err == nil {
+		p.dbHost = host
+		p.dbPort = port
+		p.dbName = string(name)
+	}
+
 	// The collectors register on the factory, which panics on a duplicate, so
 	// they are built once here rather than per Listen.
 	p.metrics = newMetrics(p.GetDbName(), metricsFactory)
@@ -61,34 +71,19 @@ func New(databaseUrl string, cfg config.Configuration, publicationName string, s
 // GetDbName returns the database name parsed from the connection string, or an
 // empty string when the string is unusable.
 func (p *Postgres) GetDbName() string {
-	cfg, err := pgconn.ParseConfig(p.databaseUrl)
-	if err != nil {
-		return ""
-	}
-
-	return cfg.Database
+	return p.dbName
 }
 
 // GetDbHost returns the host parsed from the connection string, or an empty
 // string when the string is unusable.
 func (p *Postgres) GetDbHost() string {
-	cfg, err := pgconn.ParseConfig(p.databaseUrl)
-	if err != nil {
-		return ""
-	}
-
-	return cfg.Host
+	return p.dbHost
 }
 
 // GetDbPort returns the port parsed from the connection string, or zero when
 // the string is unusable.
 func (p *Postgres) GetDbPort() uint16 {
-	cfg, err := pgconn.ParseConfig(p.databaseUrl)
-	if err != nil {
-		return 0
-	}
-
-	return cfg.Port
+	return p.dbPort
 }
 
 // GetPublicationName returns the publication this adapter replicates through.

@@ -137,16 +137,12 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			}
 
 			err = fmt.Errorf("receive message failed: %w", errors.Join(err, database.ErrWal))
-			w.flush(ctx, walPosition)
-			w.health.MarkUnhealthy(err)
-			return err
+			return w.fail(ctx, walPosition, err)
 		}
 
 		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
 			err := fmt.Errorf("received Postgres WAL error: %+v: %w", errMsg, database.ErrWal)
-			w.flush(ctx, walPosition)
-			w.health.MarkUnhealthy(err)
-			return err
+			return w.fail(ctx, walPosition, err)
 		}
 
 		msg, ok := rawMsg.(*pgproto3.CopyData)
@@ -159,9 +155,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 		// longer one this loop can decode.
 		if len(msg.Data) == 0 {
 			err := errors.Join(errEmptyCopyData, database.ErrWal)
-			w.flush(ctx, walPosition)
-			w.health.MarkUnhealthy(err)
-			return err
+			return w.fail(ctx, walPosition, err)
 		}
 
 		switch msg.Data[0] {
@@ -169,9 +163,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
 			if err != nil {
 				err = fmt.Errorf("ParsePrimaryKeepaliveMessage failed: %w", errors.Join(err, database.ErrWal))
-				w.flush(ctx, walPosition)
-				w.health.MarkUnhealthy(err)
-				return err
+				return w.fail(ctx, walPosition, err)
 			}
 
 			// Keepalives carry the only fresh ServerWALEnd an idle stream gets, but
@@ -189,9 +181,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 			xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 			if err != nil {
 				err = fmt.Errorf("ParseXLogData failed: %w", errors.Join(err, database.ErrWal))
-				w.flush(ctx, walPosition)
-				w.health.MarkUnhealthy(err)
-				return err
+				return w.fail(ctx, walPosition, err)
 			}
 
 			err = w.processMessage(ctx, xld.WALData, xld.ServerTime, walPosition, handler)
@@ -204,9 +194,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				w.metrics.updateReplicationLag(walPosition, xld.ServerWALEnd)
 			} else {
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, database.ErrWal))
-				w.flush(ctx, walPosition)
-				w.health.MarkUnhealthy(err)
-				return err
+				return w.fail(ctx, walPosition, err)
 			}
 		}
 	}
@@ -235,6 +223,17 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 		err = fmt.Errorf("send status failed: %w", errors.Join(err, database.ErrWal))
 		w.health.MarkUnhealthy(err)
 	}
+
+	return err
+}
+
+// fail flushes position back to the server on a best-effort basis, marks the
+// sender unhealthy with err and returns it. The flush error is dropped: err is
+// why the stream is ending, and a status update failing on the way out adds
+// nothing.
+func (w *wal) fail(ctx context.Context, position pglogrepl.LSN, err error) error {
+	_ = w.flush(ctx, position)
+	w.health.MarkUnhealthy(err)
 
 	return err
 }

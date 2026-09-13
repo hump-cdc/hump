@@ -43,12 +43,6 @@ export const DatabaseStructSchema = z.object({
     host: z.string().register(z.globalRegistry, {
         description: 'PostgreSQL host'
     }),
-    maxReplicationSlots: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'PostgreSQL max_replication_slots setting'
-    }),
-    maxWalSenders: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'PostgreSQL max_wal_senders setting'
-    }),
     name: z.string().register(z.globalRegistry, {
         description: 'PostgreSQL database name'
     }),
@@ -115,75 +109,7 @@ export const ErrorModelSchema = z.object({
 
 export type ErrorModel = z.infer<typeof ErrorModelSchema>;
 
-export const EventSchema = z.object({
-    durationMs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    error: z.string().optional(),
-    headers: z.record(z.string(), z.string()).optional(),
-    host: z.string(),
-    id: z.string(),
-    metadata: z.record(z.string(), z.string()).optional(),
-    operation: z.string(),
-    payload: z.string().optional(),
-    schema: z.string(),
-    sinkType: z.string(),
-    success: z.boolean(),
-    table: z.string(),
-    target: z.string(),
-    timestamp: z.iso.datetime()
-});
-
-export type Event = z.infer<typeof EventSchema>;
-
-export const RetryEventSchema = z.object({
-    attempt: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }),
-    durationMs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    error: z.string().optional(),
-    operationId: z.string(),
-    success: z.boolean(),
-    timestamp: z.iso.datetime()
-});
-
-export type RetryEvent = z.infer<typeof RetryEventSchema>;
-
 /**
  * OK
  */
 export const zGetApiConfigResponse = ConfigResponseBodySchema;
-
-/**
- * Prometheus metrics in text exposition format
- */
-export const zGetApiMetricsResponse = z.string().register(z.globalRegistry, {
-    description: 'Prometheus metrics in text exposition format'
-});
-
-/**
- * Server Sent Events
- *
- * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
- */
-export const zGetApiOperationsResponse = z.array(z.union([z.object({
-        data: EventSchema,
-        event: z.literal('operation').register(z.globalRegistry, {
-            description: 'The event name.'
-        }),
-        id: z.int().register(z.globalRegistry, {
-            description: 'The event ID.'
-        }).optional(),
-        retry: z.int().register(z.globalRegistry, {
-            description: 'The retry time in milliseconds.'
-        }).optional()
-    }), z.object({
-        data: RetryEventSchema,
-        event: z.literal('retry').register(z.globalRegistry, {
-            description: 'The event name.'
-        }),
-        id: z.int().register(z.globalRegistry, {
-            description: 'The event ID.'
-        }).optional(),
-        retry: z.int().register(z.globalRegistry, {
-            description: 'The retry time in milliseconds.'
-        }).optional()
-    })])).register(z.globalRegistry, {
-    description: 'Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.'
-});

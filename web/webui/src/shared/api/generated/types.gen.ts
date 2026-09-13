@@ -78,14 +78,6 @@ export type DatabaseStructModel = {
      */
     host: string;
     /**
-     * PostgreSQL max_replication_slots setting
-     */
-    maxReplicationSlots: number;
-    /**
-     * PostgreSQL max_wal_senders setting
-     */
-    maxWalSenders: number;
-    /**
      * PostgreSQL database name
      */
     name: string;
@@ -145,36 +137,6 @@ export type ErrorModelModel = {
     type?: string;
 };
 
-export type EventModel = {
-    durationMs: number;
-    error?: string;
-    headers?: {
-        [key: string]: string;
-    };
-    host: string;
-    id: string;
-    metadata?: {
-        [key: string]: string;
-    };
-    operation: string;
-    payload?: string;
-    schema: string;
-    sinkType: string;
-    success: boolean;
-    table: string;
-    target: string;
-    timestamp: string;
-};
-
-export type RetryEventModel = {
-    attempt: number;
-    durationMs: number;
-    error?: string;
-    operationId: string;
-    success: boolean;
-    timestamp: string;
-};
-
 export type GetApiConfigData = {
     body?: never;
     path?: never;
@@ -199,83 +161,3 @@ export type GetApiConfigResponses = {
 };
 
 export type GetApiConfigResponse = GetApiConfigResponses[keyof GetApiConfigResponses];
-
-export type GetApiMetricsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/metrics';
-};
-
-export type GetApiMetricsErrors = {
-    /**
-     * Error
-     */
-    default: ErrorModelModel;
-};
-
-export type GetApiMetricsError = GetApiMetricsErrors[keyof GetApiMetricsErrors];
-
-export type GetApiMetricsResponses = {
-    /**
-     * Prometheus metrics in text exposition format
-     */
-    200: string;
-};
-
-export type GetApiMetricsResponse = GetApiMetricsResponses[keyof GetApiMetricsResponses];
-
-export type GetApiOperationsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/operations';
-};
-
-export type GetApiOperationsErrors = {
-    /**
-     * Error
-     */
-    default: ErrorModelModel;
-};
-
-export type GetApiOperationsError = GetApiOperationsErrors[keyof GetApiOperationsErrors];
-
-export type GetApiOperationsResponses = {
-    /**
-     * Server Sent Events
-     *
-     * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
-     */
-    200: Array<{
-        data: EventModel;
-        /**
-         * The event name.
-         */
-        event: 'operation';
-        /**
-         * The event ID.
-         */
-        id?: number;
-        /**
-         * The retry time in milliseconds.
-         */
-        retry?: number;
-    } | {
-        data: RetryEventModel;
-        /**
-         * The event name.
-         */
-        event: 'retry';
-        /**
-         * The event ID.
-         */
-        id?: number;
-        /**
-         * The retry time in milliseconds.
-         */
-        retry?: number;
-    }>;
-};
-
-export type GetApiOperationsResponse = GetApiOperationsResponses[keyof GetApiOperationsResponses];

@@ -11,6 +11,7 @@ import (
 	sinkcfg "hump/config/sink"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
+	getConfigFeature "hump/internal/application/get_config"
 	processOperationFeature "hump/internal/application/process_operation"
 	"hump/internal/controller"
 	databasePort "hump/internal/port/database"
@@ -90,8 +91,9 @@ func main() {
 			r.Serve(
 				// Web UI
 				func(ctx context.Context) error {
-					// configController := getconfig.NewController(opts, configuration, db)
-					server := controller.NewWebUIController()
+					server := controller.NewWebUIController(
+						getConfigFeature.NewController(opts, configuration, db),
+					)
 					return server.Serve(ctx, *opts.WebPort)
 				})
 		}

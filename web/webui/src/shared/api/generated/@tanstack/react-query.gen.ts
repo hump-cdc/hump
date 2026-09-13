@@ -3,8 +3,8 @@
 import { queryOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { Config, Metrics, type Options } from '../sdk.gen';
-import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse, GetApiMetricsData, GetApiMetricsError, GetApiMetricsResponse } from '../types.gen';
+import { Config, type Options } from '../sdk.gen';
+import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -55,22 +55,4 @@ export const getApiConfigOptions = (options?: Options<GetApiConfigData>) => quer
         return data;
     },
     queryKey: getApiConfigQueryKey(options)
-});
-
-export const getApiMetricsQueryKey = (options?: Options<GetApiMetricsData>) => createQueryKey('getApiMetrics', options);
-
-/**
- * Get Prometheus metrics
- */
-export const getApiMetricsOptions = (options?: Options<GetApiMetricsData>) => queryOptions<GetApiMetricsResponse, GetApiMetricsError, GetApiMetricsResponse, ReturnType<typeof getApiMetricsQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await Metrics.get({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getApiMetricsQueryKey(options)
 });

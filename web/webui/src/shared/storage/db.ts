@@ -91,5 +91,5 @@ export class HumpDatabase extends Dexie {
     }
 }
 
-/** App-wide singleton, shared by the main thread and the operations-stream worker. */
+/** App-wide singleton. */
 export const db = new HumpDatabase()

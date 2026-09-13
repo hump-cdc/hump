@@ -9,8 +9,6 @@ import (
 	"net/http"
 )
 
-var telemetryLogger = log.Scope("telemetry")
-
 // TelemetryController is the HTTP-facing surface that serves the process
 // health probes (/health/startup, /health/ready, /health/live) and the
 // Prometheus /metrics scrape endpoint on a single port.
@@ -33,6 +31,8 @@ func NewTelemetryController(healthHandler, metricsHandler http.Handler) *Telemet
 // hook closes the underlying server. It returns nil on a clean shutdown and
 // the server error otherwise.
 func (c *TelemetryController) Serve(port uint) error {
+	logger := log.Scope("telemetry")
+
 	mux := http.NewServeMux()
 
 	mux.Handle("/health/startup", c.healthHandler)
@@ -49,7 +49,7 @@ func (c *TelemetryController) Serve(port uint) error {
 		return server.Shutdown(ctx)
 	})
 
-	telemetryLogger.Debug(fmt.Sprintf("Telemetry started at http://localhost:%d", port))
+	logger.Info(fmt.Sprintf("Telemetry started at http://localhost:%d", port))
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

@@ -3,7 +3,8 @@
         "label": "Run",
         "command": "task run",
         "env": {
-            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable"
+            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable",
+            "TELEMETRY_PORT": "9100"
         },
         "show_command": false,
         "hide": "on_success",

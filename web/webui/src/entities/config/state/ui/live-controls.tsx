@@ -7,7 +7,6 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
-import { useLiveStream } from '@/shared/workers/live-stream'
 
 import { CHART_STEPS, type ChartStep, useLiveControlsStore } from '../model/store'
 
@@ -19,9 +18,9 @@ export const LiveControls: FC = () => {
         })),
     )
 
-    // Read from the workers rather than from a flag of our own, so the button and the badge
-    // describe what the stream workers are doing even when something else stopped them.
-    const { running, toggle } = useLiveStream()
+    // TODO: update later
+    const running = false
+    const toggle = () => {}
 
     return (
         <DropdownMenu>

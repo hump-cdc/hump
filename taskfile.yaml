@@ -9,6 +9,7 @@ vars:
     LDFLAGS: -s -w -X hump/pkg/version.Version={{.VERSION}} -X hump/pkg/version.Commit={{.COMMIT}} -X hump/pkg/version.Date={{.DATE}}
     # Fallback only: DATABASE_URL from the caller's environment (Zed task env) wins.
     DATABASE_URL: '{{env "DATABASE_URL" | default "postgres://hump:hump@localhost:5437/hump?sslmode=disable"}}'
+    TELEMETRY_PORT: '{{env "TELEMETRY_PORT" | default "9100"}}'
 
 env:
     CGO_ENABLED: '0'
@@ -57,6 +58,7 @@ tasks:
         deps: [web:build]
         env:
             DATABASE_URL: '{{.DATABASE_URL}}'
+            TELEMETRY_PORT: '{{.TELEMETRY_PORT}}'
             LOG_VERBOSE: 'false'
             LOG_FORMAT: pretty
             CORS: http://localhost:3000
@@ -65,7 +67,7 @@ tasks:
             RABBITMQ_URL: amqp://hump:hump@localhost:5672/
             RABBITMQ_STREAM_URL: rabbitmq-stream://hump:hump@localhost:5552/%2F
         cmds:
-            - go run -ldflags "{{.LDFLAGS}}" ./cmd/hump -f dev/hump.yaml -t 9100 -w 3200
+            - go run -ldflags "{{.LDFLAGS}}" ./cmd/hump -f dev/hump.yaml -w 3200
 
     run:cleanup:
         desc: Remove hump replication artifacts from the dev database

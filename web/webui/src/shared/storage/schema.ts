@@ -2,7 +2,7 @@ import { db } from './db'
 
 /**
  * Declare the IndexedDB schema, once on the main thread before the database is opened. Other
- * contexts (e.g. the operations-stream worker) open it in Dexie's dynamic mode and declare nothing.
+ * contexts open it in Dexie's dynamic mode and declare nothing.
  */
 export const schema = (): void => {
     db.version(1).stores({

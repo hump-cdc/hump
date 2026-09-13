@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	getconfig "hump/internal/application/get_config"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/middleware"
 	"hump/pkg/telemetry/log"
@@ -21,19 +22,13 @@ import (
 //go:embed webui
 var webuiFS embed.FS
 
-// type Controller interface {
-// 	Handler() func(ctx context.Context, _ *struct{}) (*huma.StreamResponse, error)
-// }
-
 type WebUIController struct {
-	// configController  Controller
-	// metricsController Controller
+	configController *getconfig.Controller
 }
 
-func NewWebUIController( /*configController Controller, metricsController Controller*/ ) *WebUIController {
+func NewWebUIController(configController *getconfig.Controller) *WebUIController {
 	return &WebUIController{
-		// configController:  configController,
-		// metricsController: metricsController,
+		configController: configController,
 	}
 }
 
@@ -49,14 +44,7 @@ func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 	router.NotFound(middleware.Static(webuiFS, "webui"))
 
 	// Routes
-	apiCfg := huma.DefaultConfig("hump", version.Version)
-	apiCfg.CreateHooks = nil
-	apiCfg.OpenAPIPath = ""
-	apiCfg.DocsPath = ""
-	apiCfg.SchemasPath = ""
-
-	api := humachi.New(router, apiCfg)
-	c.routes(api)
+	c.Api(router)
 
 	// Server
 	server := &http.Server{
@@ -79,16 +67,29 @@ func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 	return nil
 }
 
-func (c *WebUIController) routes(api huma.API) {
-	// TODO: add routes
+// Api registers the web UI API routes on router and returns the resulting API,
+// whose OpenAPI spec is also used to generate the web UI client.
+func (c *WebUIController) Api(router chi.Router) huma.API {
+	apiCfg := huma.DefaultConfig("hump", version.Version)
+	apiCfg.CreateHooks = nil
+	apiCfg.OpenAPIPath = ""
+	apiCfg.DocsPath = ""
+	apiCfg.SchemasPath = ""
 
-	// huma.Register(api, huma.Operation{
-	// 	OperationID: "config.get",
-	// 	Method:      http.MethodGet,
-	// 	Path:        "/api/config",
-	// 	Summary:     "Get server configuration",
-	// 	Tags:        []string{"Config"},
-	// }, c.configController.Handler())
+	api := humachi.New(router, apiCfg)
+	c.routes(api)
+
+	return api
+}
+
+func (c *WebUIController) routes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "config.get",
+		Method:      http.MethodGet,
+		Path:        "/api/config",
+		Summary:     "Get server configuration",
+		Tags:        []string{"Config"},
+	}, c.configController.Handler())
 
 	// huma.Register(api, huma.Operation{
 	// 	OperationID: "metrics.get",

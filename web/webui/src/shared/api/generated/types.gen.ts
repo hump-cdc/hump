@@ -137,6 +137,74 @@ export type ErrorModelModel = {
     type?: string;
 };
 
+export type MetricsPointModel = {
+    /**
+     * Messages delivered successfully during the bucket
+     */
+    delivered: number;
+    /**
+     * Messages that failed to deliver during the bucket
+     */
+    failed: number;
+    /**
+     * Peak allocated heap in bytes
+     */
+    memoryAllocBytes: number;
+    /**
+     * Peak replication lag in bytes
+     */
+    replicationLagBytes: number;
+    /**
+     * Delivered and failed messages by sink type
+     */
+    sinkDelivery: {
+        [key: string]: number;
+    };
+    /**
+     * P95 sink write latency in seconds by sink type; a type without an estimate is absent
+     */
+    sinkLatencyP95Seconds: {
+        [key: string]: number;
+    };
+    /**
+     * Messages delivered successfully per second
+     */
+    throughput: number;
+    /**
+     * Start of the bucket
+     */
+    timestamp: string;
+};
+
+export type MetricsRequestBodyModel = {
+    /**
+     * Width of the buckets the points are aggregated into
+     */
+    duration: '1m' | '5m' | '10m';
+};
+
+export type MetricsResponseBodyModel = {
+    /**
+     * Bucket width in seconds
+     */
+    bucketSeconds: number;
+    /**
+     * Width of the buckets the points are aggregated into
+     */
+    duration: string;
+    /**
+     * Newest points, oldest first
+     */
+    points: Array<MetricsPointModel> | null;
+};
+
+export type PingEventModel = {
+    /**
+     * Time the ping was sent
+     */
+    timestamp: string;
+};
+
 export type GetApiConfigData = {
     body?: never;
     path?: never;
@@ -161,3 +229,69 @@ export type GetApiConfigResponses = {
 };
 
 export type GetApiConfigResponse = GetApiConfigResponses[keyof GetApiConfigResponses];
+
+export type GetApiLiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/live';
+};
+
+export type GetApiLiveErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type GetApiLiveError = GetApiLiveErrors[keyof GetApiLiveErrors];
+
+export type GetApiLiveResponses = {
+    /**
+     * Server Sent Events
+     *
+     * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
+     */
+    200: Array<{
+        data: PingEventModel;
+        /**
+         * The event name.
+         */
+        event: 'ping';
+        /**
+         * The event ID.
+         */
+        id?: number;
+        /**
+         * The retry time in milliseconds.
+         */
+        retry?: number;
+    }>;
+};
+
+export type GetApiLiveResponse = GetApiLiveResponses[keyof GetApiLiveResponses];
+
+export type PostApiMetricsData = {
+    body: MetricsRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/metrics';
+};
+
+export type PostApiMetricsErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiMetricsError = PostApiMetricsErrors[keyof PostApiMetricsErrors];
+
+export type PostApiMetricsResponses = {
+    /**
+     * OK
+     */
+    200: MetricsResponseBodyModel;
+};
+
+export type PostApiMetricsResponse = PostApiMetricsResponses[keyof PostApiMetricsResponses];

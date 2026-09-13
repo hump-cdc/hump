@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 
 	"hump/config"
-	getconfig "hump/internal/application/get_config"
+	getwebuiconfig "hump/internal/application/webui/get_webui_config"
+	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
+	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
 	"hump/pkg/app/options"
 
@@ -19,7 +21,9 @@ const outEnv = "OPENAPI_OUT"
 func main() {
 	// Handlers are only registered, never invoked, so their dependencies can stay empty.
 	api := controller.NewWebUIController(
-		getconfig.NewController(options.Options{}, config.Configuration{}, nil),
+		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
+		getwebuimetrics.NewController(nil),
+		streamwebuiupdates.NewController(nil),
 	).Api(chi.NewMux())
 
 	spec, err := api.OpenAPI().MarshalJSON()

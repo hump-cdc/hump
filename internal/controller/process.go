@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"hump/internal/application/process_operation"
+	"hump/internal/application/processing/process_operation"
 	"hump/internal/port/database"
 )
 

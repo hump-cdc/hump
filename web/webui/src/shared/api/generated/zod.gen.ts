@@ -109,7 +109,95 @@ export const ErrorModelSchema = z.object({
 
 export type ErrorModel = z.infer<typeof ErrorModelSchema>;
 
+export const MetricsPointSchema = z.object({
+    delivered: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Messages delivered successfully during the bucket'
+    }),
+    failed: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Messages that failed to deliver during the bucket'
+    }),
+    memoryAllocBytes: z.number().register(z.globalRegistry, {
+        description: 'Peak allocated heap in bytes'
+    }),
+    replicationLagBytes: z.number().register(z.globalRegistry, {
+        description: 'Peak replication lag in bytes'
+    }),
+    sinkDelivery: z.record(z.string(), z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' })).register(z.globalRegistry, {
+        description: 'Delivered and failed messages by sink type'
+    }),
+    sinkLatencyP95Seconds: z.record(z.string(), z.number()).register(z.globalRegistry, {
+        description: 'P95 sink write latency in seconds by sink type; a type without an estimate is absent'
+    }),
+    throughput: z.number().register(z.globalRegistry, {
+        description: 'Messages delivered successfully per second'
+    }),
+    timestamp: z.iso.datetime().register(z.globalRegistry, {
+        description: 'Start of the bucket'
+    })
+});
+
+export type MetricsPoint = z.infer<typeof MetricsPointSchema>;
+
+export const MetricsRequestBodySchema = z.object({
+    duration: z.enum([
+        '1m',
+        '5m',
+        '10m'
+    ]).register(z.globalRegistry, {
+        description: 'Width of the buckets the points are aggregated into'
+    })
+});
+
+export type MetricsRequestBody = z.infer<typeof MetricsRequestBodySchema>;
+
+export const MetricsResponseBodySchema = z.object({
+    bucketSeconds: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Bucket width in seconds'
+    }),
+    duration: z.string().register(z.globalRegistry, {
+        description: 'Width of the buckets the points are aggregated into'
+    }),
+    points: z.array(MetricsPointSchema).nullable()
+});
+
+export type MetricsResponseBody = z.infer<typeof MetricsResponseBodySchema>;
+
+export const PingEventSchema = z.object({
+    timestamp: z.iso.datetime().register(z.globalRegistry, {
+        description: 'Time the ping was sent'
+    })
+});
+
+export type PingEvent = z.infer<typeof PingEventSchema>;
+
 /**
  * OK
  */
 export const zGetApiConfigResponse = ConfigResponseBodySchema;
+
+/**
+ * Server Sent Events
+ *
+ * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
+ */
+export const zGetApiLiveResponse = z.array(z.object({
+    data: PingEventSchema,
+    event: z.literal('ping').register(z.globalRegistry, {
+        description: 'The event name.'
+    }),
+    id: z.int().register(z.globalRegistry, {
+        description: 'The event ID.'
+    }).optional(),
+    retry: z.int().register(z.globalRegistry, {
+        description: 'The retry time in milliseconds.'
+    }).optional()
+})).register(z.globalRegistry, {
+    description: 'Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.'
+});
+
+export const zPostApiMetricsBody = MetricsRequestBodySchema;
+
+/**
+ * OK
+ */
+export const zPostApiMetricsResponse = MetricsResponseBodySchema;

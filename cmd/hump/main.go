@@ -9,12 +9,16 @@ import (
 
 	cfg "hump/config"
 	sinkcfg "hump/config/sink"
+	metricsCollectorAdapter "hump/internal/adapter/metrics_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
-	getConfigFeature "hump/internal/application/get_config"
-	processOperationFeature "hump/internal/application/process_operation"
+	processOperationFeature "hump/internal/application/processing/process_operation"
+	getWebuiConfigFeature "hump/internal/application/webui/get_webui_config"
+	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
+	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
 	databasePort "hump/internal/port/database"
+	metricsCollectorPort "hump/internal/port/metrics_collector"
 	sinkPort "hump/internal/port/sink"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
@@ -56,12 +60,15 @@ func main() {
 		os.Exit(1)
 		return
 	}
-	metrics, metricHandler := metric.New("hump")
+	metrics, metricHandler, metricGatherer := metric.New("hump")
 
 	// Adapters
-	pg := postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
-	var db databasePort.Database = pg
+	var db databasePort.Database = postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
 	var sink sinkPort.Sink = sinkAdapter.New()
+	var collector metricsCollectorPort.Collector
+	if opts.TelemetryPort != nil {
+		collector = metricsCollectorAdapter.New(metricGatherer)
+	}
 
 	// Application
 	if !opts.Cleanup {
@@ -92,7 +99,9 @@ func main() {
 				// Web UI
 				func(ctx context.Context) error {
 					server := controller.NewWebUIController(
-						getConfigFeature.NewController(opts, configuration, db),
+						getWebuiConfigFeature.NewController(opts, configuration, db),
+						getWebUIMetricsFeature.NewController(collector),
+						streamWebuiUpdatesFeature.NewController(collector),
 					)
 					return server.Serve(ctx, *opts.WebPort)
 				})

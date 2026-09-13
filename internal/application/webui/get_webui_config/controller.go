@@ -1,4 +1,4 @@
-package getconfig
+package getwebuiconfig
 
 import (
 	"context"

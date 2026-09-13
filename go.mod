@@ -3,7 +3,6 @@ module hump
 go 1.26.1
 
 require (
-	github.com/brianvoe/gofakeit/v7 v7.15.0
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2

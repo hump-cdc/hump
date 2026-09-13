@@ -100,68 +100,14 @@ tasks:
               vars:
                   DIR: '{{.USER_WORKING_DIR}}'
 
-    it:kafka:
-        desc: 'Integration: Kafka (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -count=1 -timeout 30m -run TestPipeline_Kafka_Integration -coverpkg=./... ./...
-
-    it:http:
-        desc: 'Integration: HTTP (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -tags=integration -timeout 30m -run TestPipeline_HTTP_Integration -coverpkg=./internal/... ./test/
-                  PROFILE: cover-http.out
-                  OUT: hump-cover-http.html
-
-    it:nats-core:
-        desc: 'Integration: NATS Core (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -count=1 -timeout 30m -run TestPipeline_NatsCore_Integration -coverpkg=./... ./...
-                  PROFILE: cover-nats-core.out
-                  OUT: hump-cover-nats-core.html
-
-    it:nats-jetstream:
-        desc: 'Integration: NATS JetStream (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -count=1 -timeout 30m -run TestPipeline_NatsJetStream_Integration -coverpkg=./... ./...
-                  PROFILE: cover-nats-js.out
-                  OUT: hump-cover-nats-js.html
-
-    it:rabbitmq-classic:
-        desc: 'Integration: RabbitMQ Classic (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -count=1 -timeout 30m -run TestPipeline_RabbitMQClassic_Integration -coverpkg=./... ./...
-                  PROFILE: cover-rabbitmq-classic.out
-                  OUT: hump-cover-rabbitmq-classic.html
-
-    it:rabbitmq-stream:
-        desc: 'Integration: RabbitMQ Stream (coverage)'
-        cmds:
-            - task: _cover
-              vars:
-                  ARGS: -count=1 -timeout 30m -run TestPipeline_RabbitMQStream_Integration -coverpkg=./... ./...
-                  PROFILE: cover-rabbitmq-stream.out
-                  OUT: hump-cover-rabbitmq-stream.html
-
     _cover:
         internal: true
         dir: '{{.DIR}}'
         vars:
             DIR: '{{.DIR | default .ROOT_DIR}}'
             ARGS: '{{.ARGS | default ""}}'
-            PROFILE: '{{.PROFILE | default "cover.out"}}'
-            OUT: '{{.OUT | default "hump-cover.html"}}'
         cmds:
-            - defer: rm -f {{.PROFILE}}
-            - gotestsum --format testdox -- -coverprofile={{.PROFILE}} {{.ARGS}}
-            - gocov convert {{.PROFILE}} | gocov-html > "${TMPDIR:-/tmp}/{{.OUT}}"
-            - open "${TMPDIR:-/tmp}/{{.OUT}}"
+            - defer: rm -f cover.out
+            - gotestsum --format testdox -- -coverprofile=cover.out {{.ARGS}}
+            - gocov convert cover.out | gocov-html > "${TMPDIR:-/tmp}/hump-cover.html"
+            - open "${TMPDIR:-/tmp}/hump-cover.html"

@@ -3,7 +3,6 @@ module hump
 go 1.26.1
 
 require (
-	github.com/brianvoe/gofakeit/v7 v7.15.0
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
@@ -20,6 +19,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.11.0
 	github.com/rabbitmq/rabbitmq-stream-go-client v1.8.1
 	github.com/twmb/franz-go v1.21.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.42.0
 )
@@ -37,6 +37,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect

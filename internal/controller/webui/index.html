@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+  <head><script>(function () {
+  try {
+    var stored = localStorage.getItem('theme')
+    var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark'
+    var isDark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.classList.toggle('dark', isDark)
+  } catch (e) {}
+})()</script><link rel="icon" href="/favicon.ico"><title>hump</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script defer src="/static/js/lib-react.27f2c0d9.js"></script><script defer src="/static/js/354.329e78c7.js"></script><script defer src="/static/js/287.ac8b7af1.js"></script><script defer src="/static/js/876.c45da644.js"></script><script defer src="/static/js/index.ee2f2298.js"></script><link href="/static/css/index.0b7b616f.css" rel="stylesheet"></head>
+  <body class="bg-canvas">
+    <div id="app"></div>
+  </body>
+</html>

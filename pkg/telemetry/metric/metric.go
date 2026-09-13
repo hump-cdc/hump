@@ -1,0 +1,24 @@
+package metric
+
+import (
+	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+// New returns a [promauto.Factory] over a namespaced registry and the [http.Handler] exposing it.
+func New(namespace string) (promauto.Factory, http.Handler) {
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(
+		collectors.NewGoCollector(
+			collectors.WithGoCollectorRuntimeMetrics(collectors.MetricsMemory, collectors.MetricsGC, collectors.MetricsScheduler),
+		),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
+
+	return promauto.With(prometheus.WrapRegistererWithPrefix(namespace+"_", registry)),
+		promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+}

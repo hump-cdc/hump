@@ -62,6 +62,18 @@ payload: |
   {{ with .Next }}{{ .id }}{{ else }}truncated{{ end }}
 ```
 
+A column the source could not deliver is *unavailable*. On a table whose replica
+identity is not `FULL`, that covers an unchanged TOAST value on `update`, and
+every non-key column of the old row on `delete` or on an `update` that changes a
+key column. Such a column renders as an empty string, compares equal to `""`,
+and counts as empty for `empty`, `coalesce` and `required`; `unavailable` is the
+only way to tell it apart from a column that really is `''`:
+
+```yaml
+payload: |
+  {{ if unavailable .Next.blob }}unchanged{{ else }}{{ .Next.blob }}{{ end }}
+```
+
 ## Static vs. dynamic strings
 
 The parser classifies each string at load time:
@@ -165,6 +177,7 @@ nil/missing field is coerced to `""` (no error).
 | `ternary`  | `ternary trueVal falseVal cond` | `cond ? trueVal : falseVal`                                               |
 | `required` | `required msg v`                | Returns `v`, or aborts the render with `msg` if empty                     |
 | `fail`     | `fail msg`                      | Always aborts the render with `msg`                                       |
+| `unavailable` | `unavailable v` → bool       | true for a column the source could not deliver                            |
 
 ### Case conversion
 
@@ -634,6 +647,19 @@ zero numbers pass through unchanged.
 ```
 {{ required "id is required" "ok" }} → ok
 {{ required "id is required" "" }} → render error: id is required
+```
+
+#### `unavailable`
+
+`unavailable v` — reports whether `v` is a column the source could not deliver.
+Such a column is indistinguishable from `""` everywhere else: it renders empty,
+compares equal to `""`, and counts as empty for `empty`, `coalesce` and
+`required`.
+
+```
+{{ unavailable .Next.blob }} → true
+{{ unavailable .Next.id }} → false
+{{ unavailable "" }} → false
 ```
 
 #### `fail`

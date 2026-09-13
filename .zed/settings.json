@@ -14,7 +14,7 @@
   "lsp": {
     "biome": {
       "settings": {
-        "config_path": "web/biome.json",
+        "config_path": "web/webui/biome.json",
         "require_config_file": true
       }
     }

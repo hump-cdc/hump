@@ -7,20 +7,19 @@ import (
 	"os"
 	"strings"
 
-	"hump/internal/app"
-	"hump/internal/app/options"
-	cfg "hump/internal/config"
-	"hump/internal/log"
-	"hump/internal/pipeline"
-	"hump/internal/source/postgres"
-	"hump/internal/source/postgres/connection"
-	"hump/internal/telemetry"
-	"hump/internal/telemetry/health"
-	"hump/internal/telemetry/metrics"
-	"hump/internal/types/config"
-	"hump/internal/types/errs"
-	"hump/internal/web"
-	"hump/internal/web/streamer"
+	cfg "hump/config"
+	sinkcfg "hump/config/sink"
+	postgresAdapter "hump/internal/adapter/postgres"
+	sinkAdapter "hump/internal/adapter/sink"
+	processOperationFeature "hump/internal/application/process_operation"
+	"hump/internal/controller"
+	databasePort "hump/internal/port/database"
+	sinkPort "hump/internal/port/sink"
+	"hump/pkg/app"
+	"hump/pkg/app/options"
+	"hump/pkg/telemetry/health"
+	"hump/pkg/telemetry/log"
+	"hump/pkg/telemetry/metric"
 
 	"github.com/goccy/go-yaml"
 )
@@ -41,14 +40,30 @@ func main() {
 	r, release := app.New(context.Background())
 	defer release()
 
+	// Configuration
+	configuration, err := cfg.Parse(opts.Config)
+	if err != nil {
+		logger.Error(err.Error(), "error", err)
+		os.Exit(1)
+		return
+	}
+
+	// Telemetry
+	health, err := health.New("hump")
+	if err != nil {
+		logger.Error("Unable to init health probes", "error", err)
+		os.Exit(1)
+		return
+	}
+	metrics, metricHandler := metric.New("hump")
+
+	// Adapters
+	pg := postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
+	var db databasePort.Database = pg
+	var sink sinkPort.Sink = sinkAdapter.New()
+
+	// Application
 	if !opts.Cleanup {
-		// Configuration
-		configuration, err := cfg.Parse(opts.Config)
-		if err != nil {
-			logger.Error(err.Error(), "error", err)
-			os.Exit(1)
-			return
-		}
 		cfgResult, _ := yaml.Marshal(&configuration)
 		logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
 
@@ -60,55 +75,50 @@ func main() {
 			)
 		}
 
-		// Services
-		health, healthStartupHandler, healthReadyHandler, healthLiveHandler := health.New()
-		metrics, metricsHandler := metrics.New("hump")
-
-		// Shared operations stream fanned out to web SSE clients.
-		operations := streamer.New()
-
 		// Run
 		if opts.TelemetryPort != nil {
-			r.Run(
+			r.Serve(
 				// Telemetry
 				func(ctx context.Context) error {
-					t := telemetry.New(healthStartupHandler, healthReadyHandler, healthLiveHandler, metricsHandler)
+					t := controller.NewTelemetryController(health.Handler(), metricHandler)
 					return t.Serve(*opts.TelemetryPort)
 				})
 		}
 
+		// Web UI
 		if opts.WebPort != nil {
-			r.Run(
+			r.Serve(
 				// Web UI
 				func(ctx context.Context) error {
-					w := web.New(opts, configuration, operations, metricsHandler)
-					return w.Serve(ctx, *opts.WebPort)
+					// configController := getconfig.NewController(opts, configuration, db)
+					server := controller.NewWebUIController()
+					return server.Serve(ctx, *opts.WebPort)
 				})
 		}
 
+		// WAL
 		r.Run(
-			// WAL
 			func(ctx context.Context) error {
-				p := pipeline.New(health, operations, metrics)
-				return p.Start(ctx, opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName)
+				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics)
+				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
+
+				return controller.Listen(ctx)
 			},
 		)
 	} else {
 		r.Run(
 			// Cleanup: drop publication + slot, then stop the runner.
 			func(ctx context.Context) error {
-				connector := connection.New(opts.DatabaseUrl)
-				if err := postgres.Cleanup(ctx, connector, opts.PublicationName, opts.ReplicationSlotName); err != nil {
+				if err := db.Cleanup(ctx); err != nil {
 					return err
 				}
 
-				logger.Info("Cleanup complete", "publication", opts.PublicationName, "slot", opts.ReplicationSlotName)
-				return errs.ErrShutdown
+				return app.ErrShutdown
 			},
 		)
 	}
 
-	err := r.Wait()
+	err = r.Wait()
 	if err != nil {
 		logger.Error(err.Error(), "error", err)
 		os.Exit(1)
@@ -117,7 +127,7 @@ func main() {
 	}
 }
 
-func formatSinks(sinks []config.SinkConfig) string {
+func formatSinks(sinks []sinkcfg.Config) string {
 	parts := make([]string, 0, len(sinks))
 	for _, s := range sinks {
 		parts = append(parts, s.Sink.DisplayName())

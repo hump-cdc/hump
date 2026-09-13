@@ -32,10 +32,6 @@ sinks:
               name: "hump.{{.Schema}}"
               type: topic
           routingKey: "{{.Schema}}.{{.Table}}"
-      # delivery:
-      # mode: async
-      # maxConcurrent: 10
-      # concurrencyKey: test
     - name: rabbitmq-stream
       rabbitmq-stream:
           url: '{{ env "RABBITMQ_STREAM_URL" }}'
@@ -46,9 +42,6 @@ sinks:
           url: "http://localhost:3050/submit"
           method: "POST"
       failure: skip
-      delivery:
-          mode: async
-          maxConcurrent: 3
 
 tables:
     - tables:

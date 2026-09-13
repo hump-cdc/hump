@@ -15,8 +15,8 @@ var logger = log.Scope("web")
 // Static serves the embedded single-page application. Asset requests are served
 // directly; unknown paths fall back to the SPA shell (index.html) so the client
 // router can render them.
-func Static(assetsFS embed.FS) http.HandlerFunc {
-	s, err := newStatic(assetsFS)
+func Static(assetsFS embed.FS, path string) http.HandlerFunc {
+	s, err := newStatic(assetsFS, path)
 	if err != nil {
 		logger.Error("failed to initialize static handler: %v", "err", err)
 		return http.NotFoundHandler().ServeHTTP
@@ -31,8 +31,8 @@ type static struct {
 
 type routes = map[string]struct{}
 
-func newStatic(assetsFS embed.FS) (*static, error) {
-	assets, err := fs.Sub(assetsFS, "assets")
+func newStatic(assetsFS embed.FS, path string) (*static, error) {
+	assets, err := fs.Sub(assetsFS, path)
 	if err != nil {
 		return nil, err
 	}

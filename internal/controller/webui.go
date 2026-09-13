@@ -19,7 +19,7 @@ import (
 )
 
 //go:embed webui
-var assetsFS embed.FS
+var webuiFS embed.FS
 
 // type Controller interface {
 // 	Handler() func(ctx context.Context, _ *struct{}) (*huma.StreamResponse, error)
@@ -46,7 +46,7 @@ func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 	// Middleware
 	router.Use(chimiddleware.Compress(5))
 	router.Use(middleware.Cors())
-	router.NotFound(middleware.Static(assetsFS))
+	router.NotFound(middleware.Static(webuiFS, "webui"))
 
 	// Routes
 	apiCfg := huma.DefaultConfig("hump", version.Version)

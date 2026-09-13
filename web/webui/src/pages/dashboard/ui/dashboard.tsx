@@ -12,13 +12,12 @@ import { Throughput } from '@/entities/dashboard/throughput'
 
 export const Dashboard: FC = () => (
     <div className="flex flex-1 flex-col gap-4 p-6 max-w-6xl">
-        <ReplicationLag />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"></div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Delivered />
             <Failed />
         </div>
         <Throughput />
+        <ReplicationLag />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SinkDelivery />
             <SinkLatency />

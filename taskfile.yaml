@@ -17,14 +17,14 @@ tasks:
     openapi:
         desc: Generate OpenAPI spec for the web UI
         env:
-            OPENAPI_OUT: '{{.ROOT_DIR}}/web/src/shared/api/openapi.json'
+            OPENAPI_OUT: '{{.ROOT_DIR}}/web/webui/src/shared/api/openapi.json'
         cmds:
             - go run -ldflags "{{.LDFLAGS}}" ./cmd/openapi
 
     web:build:
         desc: Build the web UI into the embedded webui directory
         deps: [openapi]
-        dir: web
+        dir: web/webui
         env:
             NODE_ENV: production
             VERSION: '{{.VERSION}}'
@@ -34,7 +34,7 @@ tasks:
     web:dev:
         desc: Run the web UI dev server
         deps: [openapi]
-        dir: web
+        dir: web/webui
         env:
             API_URL: http://localhost:3200
         cmds:
@@ -42,7 +42,7 @@ tasks:
 
     web:storybook:
         desc: Run the web UI Storybook
-        dir: web
+        dir: web/webui
         cmds:
             - bun run storybook
 
@@ -54,6 +54,7 @@ tasks:
 
     run:
         desc: Run hump against the dev environment
+        deps: [web:build]
         env:
             DATABASE_URL: '{{.DATABASE_URL}}'
             LOG_VERBOSE: 'false'

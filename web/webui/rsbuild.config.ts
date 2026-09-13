@@ -42,7 +42,7 @@ export default defineConfig(({ command }) => ({
         },
     },
     output: {
-        distPath: { root: '../internal/controller/webui' },
+        distPath: { root: '../../internal/controller/webui' },
         cleanDistPath: command === 'build', // Dev keeps output in memory; cleaning there would wipe the committed embedded build.
         legalComments: 'none',
     },

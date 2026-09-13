@@ -1,7 +1,167 @@
 version: '3'
 
+vars:
+    VERSION: 0.0.0
+    COMMIT:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+    DATE:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+    LDFLAGS: -s -w -X hump/pkg/version.Version={{.VERSION}} -X hump/pkg/version.Commit={{.COMMIT}} -X hump/pkg/version.Date={{.DATE}}
+    # Fallback only: DATABASE_URL from the caller's environment (Zed task env) wins.
+    DATABASE_URL: '{{env "DATABASE_URL" | default "postgres://hump:hump@localhost:5437/hump?sslmode=disable"}}'
+
+env:
+    CGO_ENABLED: '0'
+
 tasks:
+    openapi:
+        desc: Generate OpenAPI spec for the web UI
+        env:
+            OPENAPI_OUT: '{{.ROOT_DIR}}/web/src/shared/api/openapi.json'
+        cmds:
+            - go run -ldflags "{{.LDFLAGS}}" ./cmd/openapi
+
+    web:build:
+        desc: Build the web UI into the embedded webui directory
+        deps: [openapi]
+        dir: web
+        env:
+            NODE_ENV: production
+            VERSION: '{{.VERSION}}'
+        cmds:
+            - bun run build
+
+    web:dev:
+        desc: Run the web UI dev server
+        deps: [openapi]
+        dir: web
+        env:
+            API_URL: http://localhost:3200
+        cmds:
+            - bun run dev
+
+    web:storybook:
+        desc: Run the web UI Storybook
+        dir: web
+        cmds:
+            - bun run storybook
+
     build:
+        desc: Build the hump binary with the embedded web UI
+        deps: [web:build]
+        cmds:
+            - go build -ldflags "{{.LDFLAGS}}" -o ./bin/hump ./cmd/hump
+
+    run:
+        desc: Run hump against the dev environment
+        env:
+            DATABASE_URL: '{{.DATABASE_URL}}'
+            LOG_VERBOSE: 'false'
+            LOG_FORMAT: pretty
+            CORS: http://localhost:3000
+            KAFKA_HOST: localhost:9092
+            NATS_URL: nats://localhost:4222
+            RABBITMQ_URL: amqp://hump:hump@localhost:5672/
+            RABBITMQ_STREAM_URL: rabbitmq-stream://hump:hump@localhost:5552/%2F
+        cmds:
+            - go run -ldflags "{{.LDFLAGS}}" ./cmd/hump -f dev/hump.yaml -t 9100 -w 3200
+
+    run:cleanup:
+        desc: Remove hump replication artifacts from the dev database
+        env:
+            DATABASE_URL: '{{.DATABASE_URL}}'
+            LOG_VERBOSE: 'false'
+            LOG_FORMAT: pretty
+        cmds:
+            - go run -ldflags "{{.LDFLAGS}}" ./cmd/hump -f dev/hump.yaml --cleanup
+
+    test:
+        desc: Run all tests
+        cmds:
+            - gotestsum --format testdox ./...
+
+    test:file:
+        desc: Run tests of the package in the current directory
         dir: '{{.USER_WORKING_DIR}}'
         cmds:
-        - "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi && cd web && bun run build && cd .. && go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump"
+            - gotestsum --format testdox
+
+    test:cover:
+        desc: Run all tests with coverage report
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -coverpkg=./... ./...
+
+    test:file:cover:
+        desc: Run tests of the package in the current directory with coverage report
+        cmds:
+            - task: _cover
+              vars:
+                  DIR: '{{.USER_WORKING_DIR}}'
+
+    it:kafka:
+        desc: 'Integration: Kafka (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -count=1 -timeout 30m -run TestPipeline_Kafka_Integration -coverpkg=./... ./...
+
+    it:http:
+        desc: 'Integration: HTTP (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -tags=integration -timeout 30m -run TestPipeline_HTTP_Integration -coverpkg=./internal/... ./test/
+                  PROFILE: cover-http.out
+                  OUT: hump-cover-http.html
+
+    it:nats-core:
+        desc: 'Integration: NATS Core (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -count=1 -timeout 30m -run TestPipeline_NatsCore_Integration -coverpkg=./... ./...
+                  PROFILE: cover-nats-core.out
+                  OUT: hump-cover-nats-core.html
+
+    it:nats-jetstream:
+        desc: 'Integration: NATS JetStream (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -count=1 -timeout 30m -run TestPipeline_NatsJetStream_Integration -coverpkg=./... ./...
+                  PROFILE: cover-nats-js.out
+                  OUT: hump-cover-nats-js.html
+
+    it:rabbitmq-classic:
+        desc: 'Integration: RabbitMQ Classic (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -count=1 -timeout 30m -run TestPipeline_RabbitMQClassic_Integration -coverpkg=./... ./...
+                  PROFILE: cover-rabbitmq-classic.out
+                  OUT: hump-cover-rabbitmq-classic.html
+
+    it:rabbitmq-stream:
+        desc: 'Integration: RabbitMQ Stream (coverage)'
+        cmds:
+            - task: _cover
+              vars:
+                  ARGS: -count=1 -timeout 30m -run TestPipeline_RabbitMQStream_Integration -coverpkg=./... ./...
+                  PROFILE: cover-rabbitmq-stream.out
+                  OUT: hump-cover-rabbitmq-stream.html
+
+    _cover:
+        internal: true
+        dir: '{{.DIR}}'
+        vars:
+            DIR: '{{.DIR | default .ROOT_DIR}}'
+            ARGS: '{{.ARGS | default ""}}'
+            PROFILE: '{{.PROFILE | default "cover.out"}}'
+            OUT: '{{.OUT | default "hump-cover.html"}}'
+        cmds:
+            - defer: rm -f {{.PROFILE}}
+            - gotestsum --format testdox -- -coverprofile={{.PROFILE}} {{.ARGS}}
+            - gocov convert {{.PROFILE}} | gocov-html > "${TMPDIR:-/tmp}/{{.OUT}}"
+            - open "${TMPDIR:-/tmp}/{{.OUT}}"

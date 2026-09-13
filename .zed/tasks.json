@@ -1,17 +1,9 @@
 [
     {
         "label": "Run",
-        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/hump -f dev/hump.yaml -t 9100 -w 3200",
+        "command": "task run",
         "env": {
-            "CGO_ENABLED": "0",
-            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable",
-            "LOG_VERBOSE": "false",
-            "LOG_FORMAT": "pretty",
-            "CORS": "http://localhost:3000",
-            "KAFKA_HOST": "localhost:9092",
-            "NATS_URL": "nats://localhost:4222",
-            "RABBITMQ_URL": "amqp://hump:hump@localhost:5672/",
-            "RABBITMQ_STREAM_URL": "rabbitmq-stream://hump:hump@localhost:5552/%2F",
+            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable"
         },
         "show_command": false,
         "hide": "on_success",
@@ -23,12 +15,9 @@
     },
     {
         "label": "Run Cleanup",
-        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/hump -f dev/hump.yaml --cleanup",
+        "command": "task run:cleanup",
         "env": {
-            "CGO_ENABLED": "0",
-            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable",
-            "LOG_VERBOSE": "false",
-            "LOG_FORMAT": "pretty",
+            "DATABASE_URL": "postgres://hump:hump@localhost:5437/hump?sslmode=disable"
         },
         "show_command": false,
         "hide": "never",
@@ -40,53 +29,40 @@
     },
     {
         "label": "Run Web UI",
-        "command": "bun run dev",
-        "env": {
-            "API_URL": "http://localhost:3200"
-        },
+        "command": "task web:dev",
         "show_command": false,
         "hide": "never",
         "reveal": "no_focus",
         "reveal_target": "dock",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
-        "cwd": "$ZED_WORKTREE_ROOT/web"
+        "cwd": "$ZED_WORKTREE_ROOT"
     },
     {
         "label": "Run Web UI Storybook",
-        "command": "bun run storybook",
+        "command": "task web:storybook",
         "show_command": false,
         "hide": "never",
         "reveal": "no_focus",
         "reveal_target": "dock",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
-        "cwd": "$ZED_WORKTREE_ROOT/web"
+        "cwd": "$ZED_WORKTREE_ROOT"
     },
     {
         "label": "Build Web UI",
-        "command": "bun run build",
-        "env": {
-            "NODE_ENV": "production",
-            "VERSION": "0.0.1"
-        },
+        "command": "task web:build",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
         "reveal_target": "dock",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
-        "cwd": "$ZED_WORKTREE_ROOT/web"
+        "cwd": "$ZED_WORKTREE_ROOT"
     },
     {
         "label": "Build",
-        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi && cd web && bun run build && cd .. && go build -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./bin/hump ./cmd/hump",
-        "env": {
-            "CGO_ENABLED": "0",
-            "NODE_ENV": "production",
-            "VERSION": "0.0.1",
-            "OPENAPI_OUT": "$ZED_WORKTREE_ROOT/web/src/shared/api/openapi.json"
-        },
+        "command": "task build",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -97,11 +73,7 @@
     },
     {
         "label": "Generate OpenAPI",
-        "command": "go run -ldflags \"-s -w -X hump/pkg/version.Version=1.0.0 -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" ./cmd/openapi",
-        "env": {
-            "CGO_ENABLED": "0",
-            "OPENAPI_OUT": "$ZED_WORKTREE_ROOT/web/src/shared/api/openapi.json"
-        },
+        "command": "task openapi",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -112,7 +84,7 @@
     },
     {
         "label": "Test current file",
-        "command": "gotestsum --format testdox",
+        "command": "task test:file",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -123,7 +95,7 @@
     },
     {
         "label": "Test all",
-        "command": "gotestsum --format testdox ./...",
+        "command": "task test",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -134,7 +106,7 @@
     },
     {
         "label": "Test current file (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover.html\"; gotestsum --format testdox -- -coverprofile=cover.out && gocov convert cover.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover.out",
+        "command": "task test:file:cover",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -145,7 +117,7 @@
     },
     {
         "label": "Test all (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover.html\"; gotestsum --format testdox -- -coverpkg=./... -coverprofile=cover.out ./... && gocov convert cover.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover.out",
+        "command": "task test:cover",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -156,7 +128,7 @@
     },
     {
         "label": "Integration: Kafka (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_Kafka_Integration -coverpkg=./... -coverprofile=cover.out ./... && gocov convert cover.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover.out",
+        "command": "task it:kafka",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -167,7 +139,7 @@
     },
     {
         "label": "Integration: HTTP (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-http.html\"; gotestsum --format testdox -- -tags=integration -timeout 30m -run TestPipeline_HTTP_Integration -coverpkg=./internal/... -coverprofile=cover-http.out ./test/ && gocov convert cover-http.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-http.out",
+        "command": "task it:http",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -178,7 +150,7 @@
     },
     {
         "label": "Integration: NATS Core (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-nats-core.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_NatsCore_Integration -coverpkg=./... -coverprofile=cover-nats-core.out ./... && gocov convert cover-nats-core.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-nats-core.out",
+        "command": "task it:nats-core",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -189,7 +161,7 @@
     },
     {
         "label": "Integration: NATS JetStream (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-nats-js.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_NatsJetStream_Integration -coverpkg=./... -coverprofile=cover-nats-js.out ./... && gocov convert cover-nats-js.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-nats-js.out",
+        "command": "task it:nats-jetstream",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -200,7 +172,7 @@
     },
     {
         "label": "Integration: RabbitMQ Classic (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-rabbitmq-classic.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_RabbitMQClassic_Integration -coverpkg=./... -coverprofile=cover-rabbitmq-classic.out ./... && gocov convert cover-rabbitmq-classic.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-rabbitmq-classic.out",
+        "command": "task it:rabbitmq-classic",
         "show_command": false,
         "hide": "never",
         "reveal": "always",
@@ -211,7 +183,7 @@
     },
     {
         "label": "Integration: RabbitMQ Stream (coverage)",
-        "command": "OUT=\"${TMPDIR:-/tmp}/hump-cover-rabbitmq-stream.html\"; gotestsum --format testdox -- -count=1 -timeout 30m -run TestPipeline_RabbitMQStream_Integration -coverpkg=./... -coverprofile=cover-rabbitmq-stream.out ./... && gocov convert cover-rabbitmq-stream.out | gocov-html > \"$OUT\" && open \"$OUT\"; rm -f cover-rabbitmq-stream.out",
+        "command": "task it:rabbitmq-stream",
         "show_command": false,
         "hide": "never",
         "reveal": "always",

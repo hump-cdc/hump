@@ -66,7 +66,7 @@ func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 	}
 
 	// Shutdown
-	shutdown.OnShutdown("web", func(shutdownCtx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageServers, "web", func(shutdownCtx context.Context) error {
 		return server.Shutdown(shutdownCtx)
 	})
 

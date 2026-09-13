@@ -19,25 +19,27 @@ type registry struct {
 	handlers []shutdownFunc
 }
 
-// Pairs a handler with a human-readable name used in logs.
+// Pairs a handler with its stage and a human-readable name used in logs.
 type shutdownFunc struct {
-	name string
-	fn   func(context.Context) error
+	stage Stage
+	name  string
+	fn    func(context.Context) error
 }
 
-// Appends a named handler to the registry. Safe for concurrent use.
-func (s *registry) add(name string, fn func(context.Context) error) {
+// Appends a named handler for stage to the registry. Safe for concurrent use.
+func (s *registry) add(stage Stage, name string, fn func(context.Context) error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.handlers = append(s.handlers, shutdownFunc{
-		name: name,
-		fn:   fn,
+		stage: stage,
+		name:  name,
+		fn:    fn,
 	})
 }
 
-// Runs all registered handlers in reverse registration order, each
-// bounded by timeout.
+// Runs all registered handlers stage by stage and, within a stage, in reverse
+// registration order, each bounded by timeout.
 func (s *registry) shutdown(timeout time.Duration) error {
 	logger.Info("Shutting down...")
 
@@ -54,28 +56,15 @@ func (s *registry) shutdown(timeout time.Duration) error {
 
 		var fnErrors []error
 
-		for _, h := range slices.Backward(handlers) {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-
-			result := make(chan error, 1)
-			start := time.Now()
-			go func() {
-				logger.Debug("Stopping down service...", "name", h.name)
-				result <- h.fn(ctx)
-			}()
-
-			select {
-			case err := <-result:
-				if err != nil {
-					fnErrors = append(fnErrors, err)
-					logger.Error("Stop service error", "name", h.name, "duration", time.Since(start))
-				} else {
-					logger.Info("Service stopped", "name", h.name, "duration", time.Since(start))
+		for stage := range stageCount {
+			for _, h := range slices.Backward(handlers) {
+				if h.stage != stage {
+					continue
 				}
-			case <-ctx.Done():
-				fnErrors = append(fnErrors, ErrShutdownTimeout)
-				logger.Warn("Timeout to stop service", "name", h.name, "duration", time.Since(start))
+
+				if err := run(h, timeout); err != nil {
+					fnErrors = append(fnErrors, err)
+				}
 			}
 		}
 
@@ -83,4 +72,33 @@ func (s *registry) shutdown(timeout time.Duration) error {
 	})
 
 	return result
+}
+
+// run calls h bounded by timeout and returns its error, or ErrShutdownTimeout
+// when it does not finish in time.
+func run(h shutdownFunc, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	result := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		logger.Debug("Stopping down service...", "name", h.name)
+		result <- h.fn(ctx)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			logger.Error("Stop service error", "name", h.name, "duration", time.Since(start), "error", err)
+		} else {
+			logger.Info("Service stopped", "name", h.name, "duration", time.Since(start))
+		}
+
+		return err
+	case <-ctx.Done():
+		logger.Warn("Timeout to stop service", "name", h.name, "duration", time.Since(start))
+
+		return ErrShutdownTimeout
+	}
 }

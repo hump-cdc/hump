@@ -92,7 +92,7 @@ func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) (*r
 
 	clients[key] = rc
 
-	shutdown.OnShutdown(fmt.Sprintf("rabbitmq_sink(%s)", url), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_sink(%s)", url), func(_ context.Context) error {
 		// Signal the supervisor to stop, then close the channel and connection.
 		// Idempotency: closing an already-closed channel panics, guard with
 		// a select that races against the supervisor.

@@ -6,6 +6,7 @@ import (
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	"hump/internal/port/sink"
+	"hump/pkg/app/shutdown"
 	"hump/pkg/resilience"
 	"time"
 
@@ -44,7 +45,7 @@ func newBinding(
 		return sinksPort.Process(ctx, cfg.Sink, operationContext)
 	}
 	fn = resilience.WithTimeout(fn, cfg.Retry.AttemptTimeout)
-	fn = resilience.WithRetry(fn, uint(cfg.Retry.MaxAttempts), cfg.Retry.Backoff.Policy(), b)
+	fn = resilience.WithRetry(fn, uint(cfg.Retry.MaxAttempts), cfg.Retry.Backoff.Policy(), b, shutdown.Draining())
 	fn = resilience.WithStatus(fn, b)
 	fn = resilience.WithFailureMode(fn, cfg.Failure.Mode, b)
 	b.fn = fn

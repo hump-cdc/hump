@@ -36,7 +36,7 @@ func New[T any]() *FanOutStreamer[T] {
 	}
 	go s.run()
 
-	shutdown.OnShutdown("streamer", func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageServers, "streamer", func(_ context.Context) error {
 		s.close()
 		return nil
 	})

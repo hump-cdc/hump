@@ -45,7 +45,7 @@ func (c *TelemetryController) Serve(port uint) error {
 		Handler: mux,
 	}
 
-	shutdown.OnShutdown("telemetry", func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageServers, "telemetry", func(ctx context.Context) error {
 		return server.Shutdown(ctx)
 	})
 

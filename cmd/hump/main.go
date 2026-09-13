@@ -77,7 +77,7 @@ func main() {
 
 		// Run
 		if opts.TelemetryPort != nil {
-			r.Run(
+			r.Serve(
 				// Telemetry
 				func(ctx context.Context) error {
 					t := controller.NewTelemetryController(health.Handler(), metricHandler)
@@ -87,7 +87,7 @@ func main() {
 
 		// Web UI
 		if opts.WebPort != nil {
-			r.Run(
+			r.Serve(
 				// Web UI
 				func(ctx context.Context) error {
 					// configController := getconfig.NewController(opts, configuration, db)

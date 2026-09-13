@@ -102,7 +102,7 @@ func TestStartStopsWhenContextIsCancelled(t *testing.T) {
 	server.waitForStandbyUpdates(t, 1)
 }
 
-func TestStartStopsWhenContextIsCancelledDuringHandler(t *testing.T) {
+func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 	server := usersServer(t)
 	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
 
@@ -110,20 +110,25 @@ func TestStartStopsWhenContextIsCancelledDuringHandler(t *testing.T) {
 	defer cancel()
 
 	entered := make(chan struct{})
+	release := make(chan struct{})
+	var handlerCtxErr error
 	handler := func(ctx context.Context, _ time.Time, _ domain.OperationType, _ domain.DbName, _ domain.TableSchema, _ domain.TableName, _ domain.Headers, _ domain.DbRecord, _ domain.DbRecord) error {
 		close(entered)
-		<-ctx.Done()
+		<-release
+		handlerCtxErr = ctx.Err()
 
-		return ctx.Err()
+		return nil
 	}
 
 	errs := runStart(ctx, w, handler)
 
+	insert := insertMessage(1, textColumn("7"))
 	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
-	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x100, 0x1000, insert))
 
 	<-entered
 	cancel()
+	close(release)
 
 	err := awaitStart(t, errs)
 	if !errors.Is(err, context.Canceled) {
@@ -134,8 +139,62 @@ func TestStartStopsWhenContextIsCancelledDuringHandler(t *testing.T) {
 		t.Errorf("Start() error = %v, want a shutdown rather than a WAL failure", err)
 	}
 
+	if handlerCtxErr != nil {
+		t.Errorf("handler context error = %v, want nil: an in-flight change must finish on shutdown", handlerCtxErr)
+	}
+
 	if failures := health.failures(); len(failures) != 0 {
 		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
+	}
+
+	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(insert)))
+}
+
+func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
+	server := usersServer(t)
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wantErr := errors.New("sink unavailable")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-release
+
+		return wantErr
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	relation := relationMessage(1, "public", "users", idColumn())
+	server.stream(xLogData(0x10, 0x1000, relation))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+
+	<-entered
+	cancel()
+	close(release)
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Start() error = %v, want %v", err, wantErr)
+	}
+
+	if errors.Is(err, context.Canceled) {
+		t.Errorf("Start() error = %v, want the handler failure rather than a shutdown", err)
+	}
+
+	if failures := health.failures(); len(failures) != 1 {
+		t.Errorf("MarkUnhealthy() called %d times, want 1", len(failures))
+	}
+
+	last := pglogrepl.LSN(0x10 + len(relation))
+	for _, update := range server.waitForStandbyUpdates(t, 1) {
+		if update.WALWritePosition > last {
+			t.Errorf("standby update reports %s, want at most %s: the failed change must not be confirmed", update.WALWritePosition, last)
+		}
 	}
 }
 

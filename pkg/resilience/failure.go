@@ -1,6 +1,9 @@
 package resilience
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // FailureMode selects what happens once every retry attempt is exhausted.
 type FailureMode string
@@ -24,7 +27,8 @@ func (noopSkipHooks) OnSkip(error) {}
 
 // WithFailureMode wraps fn so a failing call is dropped instead of reported
 // when mode is FailureModeSkip: the error goes to hooks and nil is returned.
-// Any other mode disables the wrapper, and fn is returned as is.
+// A cancelled ctx or ErrRetryAborted is still reported, since the item never
+// got its full retry budget. Any other mode returns fn as is.
 func WithFailureMode[T any](fn Handler[T], mode FailureMode, hooks SkipHooks) Handler[T] {
 	if mode != FailureModeSkip {
 		return fn
@@ -40,7 +44,7 @@ func WithFailureMode[T any](fn Handler[T], mode FailureMode, hooks SkipHooks) Ha
 			return nil
 		}
 
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || errors.Is(err, ErrRetryAborted) {
 			return err
 		}
 

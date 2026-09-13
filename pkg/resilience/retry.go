@@ -2,6 +2,8 @@ package resilience
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -36,29 +38,11 @@ var timerPool = sync.Pool{
 	},
 }
 
-// pause waits for d or until ctx is done, whichever comes first, returning
-// ctx.Err() when the wait was cut short. The timer it waits on comes from
-// timerPool and goes back as soon as the wait is over.
-func pause(ctx context.Context, d time.Duration) error {
-	timer := timerPool.Get().(*time.Timer)
-	timer.Reset(d)
-
-	select {
-	case <-ctx.Done():
-		timer.Stop()
-		timerPool.Put(timer)
-
-		return ctx.Err()
-	case <-timer.C:
-		timerPool.Put(timer)
-
-		return nil
-	}
-}
-
 // WithRetry wraps fn so a failing call is retried up to attempts times, pausing
-// between attempts per backoff and reporting each one to hooks.
-func WithRetry[T any](fn Handler[T], attempts uint, backoff Backoff, hooks RetryHooks) Handler[T] {
+// between attempts per backoff and reporting each one to hooks. A stop closing
+// mid-pause triggers one immediate last attempt; a stop already closed when an
+// attempt fails ends the retries. A nil stop never closes.
+func WithRetry[T any](fn Handler[T], attempts uint, backoff Backoff, hooks RetryHooks, stop <-chan struct{}) Handler[T] {
 	if attempts == 0 {
 		attempts = 1
 	}
@@ -85,10 +69,12 @@ func WithRetry[T any](fn Handler[T], attempts uint, backoff Backoff, hooks Retry
 			}
 
 			if i+1 < attempts {
-				if d := delay(i + 1); d > 0 {
-					if ctxErr := pause(ctx, d); ctxErr != nil {
-						return ctxErr
+				if pauseErr := pause(ctx, stop, delay(i+1)); pauseErr != nil {
+					if errors.Is(pauseErr, ErrRetryAborted) {
+						return fmt.Errorf("%w: %w", ErrRetryAborted, err)
 					}
+
+					return pauseErr
 				}
 
 				hooks.OnRetry()
@@ -96,5 +82,40 @@ func WithRetry[T any](fn Handler[T], attempts uint, backoff Backoff, hooks Retry
 		}
 
 		return err
+	}
+}
+
+// pause waits for d, returning ErrRetryAborted when stop is already closed and
+// ctx.Err() when ctx is done first. A stop closing mid-wait cuts it short with
+// nil, so the caller retries at once. The timer comes from timerPool.
+func pause(ctx context.Context, stop <-chan struct{}, d time.Duration) error {
+	select {
+	case <-stop:
+		return ErrRetryAborted
+	default:
+	}
+
+	if d <= 0 {
+		return nil
+	}
+
+	timer := timerPool.Get().(*time.Timer)
+	timer.Reset(d)
+
+	select {
+	case <-stop:
+		timer.Stop()
+		timerPool.Put(timer)
+
+		return nil
+	case <-ctx.Done():
+		timer.Stop()
+		timerPool.Put(timer)
+
+		return ctx.Err()
+	case <-timer.C:
+		timerPool.Put(timer)
+
+		return nil
 	}
 }

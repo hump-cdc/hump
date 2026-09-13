@@ -81,7 +81,7 @@ func getEnvironment(url string) (*envEntry, error) {
 	}
 	envs[envKey{url: url}] = entry
 
-	shutdown.OnShutdown(fmt.Sprintf("rabbitmq_stream_sink_env(%s)", url), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_env(%s)", url), func(_ context.Context) error {
 		envsMu.Lock()
 		delete(envs, envKey{url: url})
 		envsMu.Unlock()
@@ -141,7 +141,7 @@ func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationC
 
 	go watchProducerClose(key, streamProd)
 
-	shutdown.OnShutdown(fmt.Sprintf("rabbitmq_stream_sink_producer(%s,%s)", url, streamName), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_producer(%s,%s)", url, streamName), func(_ context.Context) error {
 		producersMu.Lock()
 		delete(producers, key)
 		producersMu.Unlock()

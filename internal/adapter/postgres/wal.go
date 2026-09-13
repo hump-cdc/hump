@@ -49,6 +49,9 @@ type wal struct {
 	// the keepAlive ticker and spin the receive loop.
 	standbyInterval time.Duration
 
+	// shutdownAt is when Start noticed a shutdown; zero when it ended otherwise.
+	shutdownAt time.Time
+
 	health  Health
 	metrics *metrics
 }
@@ -94,11 +97,12 @@ func newWal(
 }
 
 // Start begins streaming from the configured slot at LSN 0 and blocks until
-// ctx is cancelled or a fatal protocol error occurs. It maintains the relation
-// cache, dispatches decoded rows to the process handler, and flushes the WAL
-// position every time the standby window closes and on every exit path.
+// ctx is cancelled or a fatal protocol error occurs. Cancelling ctx stops the
+// receive only: a change already received is processed to the end on a
+// detached context. The WAL position is flushed on every standby tick and exit.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
+	workCtx := context.WithoutCancel(ctx)
 
 	err := pglogrepl.StartReplication(ctx, w.session, w.slotName, walPosition, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments})
 	if err != nil {
@@ -198,7 +202,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			err = w.processMessage(ctx, xld.WALData, xld.ServerTime, walPosition, handler)
+			err = w.processMessage(workCtx, xld.WALData, xld.ServerTime, walPosition, handler)
 			if err == nil {
 				recordEnd := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 				if recordEnd > walPosition {
@@ -216,10 +220,20 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 }
 
 // Stop marks the WAL sender as unhealthy and closes the underlying
-// replication connection. It is safe to call once Start has returned.
+// replication connection, logging the stop when Start ended on a shutdown.
+// It is safe to call once Start has returned.
 func (w *wal) Stop(ctx context.Context) error {
 	w.health.MarkUnhealthy(database.ErrWalClosed)
-	return w.connection.Close(ctx)
+
+	if err := w.connection.Close(ctx); err != nil {
+		return err
+	}
+
+	if !w.shutdownAt.IsZero() {
+		logger.Info("Service stopped", "name", "wal", "duration", time.Since(w.shutdownAt))
+	}
+
+	return nil
 }
 
 // flush sends a standby status update reporting position as both the write
@@ -246,11 +260,12 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 // why the stream is ending. A finished ctx is the exception — err then only
 // restates the shutdown, so health is left alone and ctx.Err() is returned.
 func (w *wal) fail(ctx context.Context, position pglogrepl.LSN, err error) error {
-	// The stream is ending because the process is, and the same shutdown reaches
-	// here in several shapes: pgx normalizes a cancelled receive into a bare
-	// context.Canceled, and the worker pool returns one through the handler. Requiring
-	// err to carry the context error keeps a real fault racing the cancel visible.
+	// The stream is ending because the process is: pgx normalizes a cancelled
+	// receive into a bare context.Canceled. Requiring err to carry the context
+	// error keeps a real fault, such as a handler failing during drain, visible.
 	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+		w.shutdownAt = time.Now()
+
 		// Detached so the last position still goes out. It reaches the socket today
 		// because pglogrepl.SendStandbyStatusUpdate ignores the context it takes.
 		_ = w.flush(context.WithoutCancel(ctx), position)

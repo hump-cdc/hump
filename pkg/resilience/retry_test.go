@@ -23,7 +23,7 @@ func TestWithRetry_nilHooks(t *testing.T) {
 			calls++
 			return nil
 		}
-		handler := WithRetry(fn, 1, Backoff{}, nil)
+		handler := WithRetry(fn, 1, Backoff{}, nil, nil)
 
 		if err := handler(context.Background(), 1); err != nil {
 			t.Fatalf("got error %v, want nil", err)
@@ -39,7 +39,7 @@ func TestWithRetry_nilHooks(t *testing.T) {
 		h := WithRetry(func(context.Context, int) error {
 			cancel()
 			return errors.New("boom")
-		}, 3, Backoff{Type: BackoffTypeLinear}, nil)
+		}, 3, Backoff{Type: BackoffTypeLinear}, nil, nil)
 
 		if err := h(ctx, 1); !errors.Is(err, context.Canceled) {
 			t.Fatalf("got error %v, want context.Canceled", err)
@@ -58,7 +58,7 @@ func TestWithRetry_backoffApplied(t *testing.T) {
 		Initial:   time.Millisecond,
 		Increment: time.Millisecond,
 		Jitter:    JitterModeNone,
-	}, hooks)
+	}, hooks, nil)
 
 	start := time.Now()
 	err := h(context.Background(), 1)
@@ -84,7 +84,7 @@ func TestWithRetry_zeroDelayStillReportsRetry(t *testing.T) {
 
 	h := WithRetry(func(context.Context, int) error {
 		return wantErr
-	}, 3, Backoff{}, hooks)
+	}, 3, Backoff{}, hooks, nil)
 
 	if err := h(context.Background(), 1); !errors.Is(err, wantErr) {
 		t.Fatalf("got error %v, want %v", err, wantErr)
@@ -105,7 +105,7 @@ func TestWithRetry_zeroAttemptsRunsOnce(t *testing.T) {
 	h := WithRetry(func(context.Context, int) error {
 		calls++
 		return wantErr
-	}, 0, Backoff{}, hooks)
+	}, 0, Backoff{}, hooks, nil)
 
 	if err := h(context.Background(), 1); !errors.Is(err, wantErr) {
 		t.Fatalf("got error %v, want %v", err, wantErr)
@@ -131,7 +131,7 @@ func TestWithRetry_cancelledDuringBackoffPause(t *testing.T) {
 		calls++
 		cancel()
 		return errors.New("boom")
-	}, 3, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, hooks)
+	}, 3, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, hooks, nil)
 
 	if err := h(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got error %v, want context.Canceled", err)
@@ -153,7 +153,7 @@ func TestWithRetry_pooledTimerNotStale(t *testing.T) {
 	cancelled := WithRetry(func(context.Context, int) error {
 		cancel()
 		return errors.New("boom")
-	}, 3, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, nil)
+	}, 3, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, nil, nil)
 
 	if err := cancelled(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got error %v, want context.Canceled", err)
@@ -168,7 +168,7 @@ func TestWithRetry_pooledTimerNotStale(t *testing.T) {
 		Type:    BackoffTypeLinear,
 		Initial: pause,
 		Jitter:  JitterModeNone,
-	}, nil)
+	}, nil, nil)
 
 	start := time.Now()
 	err := h(context.Background(), 1)
@@ -192,7 +192,7 @@ func TestWithRetry_concurrentPauses(t *testing.T) {
 		Type:    BackoffTypeLinear,
 		Initial: time.Millisecond,
 		Jitter:  JitterModeNone,
-	}, nil)
+	}, nil, nil)
 
 	errs := make(chan error, goroutines)
 
@@ -216,5 +216,98 @@ func TestWithRetry_concurrentPauses(t *testing.T) {
 	}
 	if got != goroutines {
 		t.Fatalf("%d calls returned, want %d", got, goroutines)
+	}
+}
+
+func TestWithRetry_stopBeforeFirstAttemptStillRunsIt(t *testing.T) {
+	stop := make(chan struct{})
+	close(stop)
+
+	calls := 0
+	h := WithRetry(func(context.Context, int) error {
+		calls++
+		return nil
+	}, 3, Backoff{}, nil, stop)
+
+	if err := h(context.Background(), 1); err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if calls != 1 {
+		t.Fatalf("fn called %d times, want 1", calls)
+	}
+}
+
+func TestWithRetry_stopAbortsRetries(t *testing.T) {
+	hooks := &countingHooks{}
+	wantErr := errors.New("boom")
+	stop := make(chan struct{})
+
+	calls := 0
+	h := WithRetry(func(context.Context, int) error {
+		calls++
+		close(stop)
+		return wantErr
+	}, 3, Backoff{}, hooks, stop)
+
+	err := h(context.Background(), 1)
+	if !errors.Is(err, ErrRetryAborted) || !errors.Is(err, wantErr) {
+		t.Fatalf("got error %v, want ErrRetryAborted wrapping %v", err, wantErr)
+	}
+	if calls != 1 {
+		t.Fatalf("fn called %d times, want 1", calls)
+	}
+	if hooks.durations != 1 {
+		t.Fatalf("OnDuration called %d times, want 1", hooks.durations)
+	}
+	if hooks.retries != 0 {
+		t.Fatalf("OnRetry called %d times, want 0", hooks.retries)
+	}
+}
+
+func TestWithRetry_stopDuringBackoffPauseRetriesOnce(t *testing.T) {
+	hooks := &countingHooks{}
+	wantErr := errors.New("boom")
+	stop := make(chan struct{})
+
+	calls := 0
+	// The pause is long enough that only the stop can end it.
+	h := WithRetry(func(context.Context, int) error {
+		calls++
+		if calls == 1 {
+			time.AfterFunc(10*time.Millisecond, func() { close(stop) })
+		}
+		return wantErr
+	}, 5, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, hooks, stop)
+
+	err := h(context.Background(), 1)
+	if !errors.Is(err, ErrRetryAborted) || !errors.Is(err, wantErr) {
+		t.Fatalf("got error %v, want ErrRetryAborted wrapping %v", err, wantErr)
+	}
+	if calls != 2 {
+		t.Fatalf("fn called %d times, want 2", calls)
+	}
+	if hooks.retries != 1 {
+		t.Fatalf("OnRetry called %d times, want 1", hooks.retries)
+	}
+}
+
+func TestWithRetry_stopDuringBackoffPauseRetrySucceeds(t *testing.T) {
+	stop := make(chan struct{})
+
+	calls := 0
+	h := WithRetry(func(context.Context, int) error {
+		calls++
+		if calls == 1 {
+			time.AfterFunc(10*time.Millisecond, func() { close(stop) })
+			return errors.New("boom")
+		}
+		return nil
+	}, 5, Backoff{Type: BackoffTypeLinear, Initial: time.Hour}, nil, stop)
+
+	if err := h(context.Background(), 1); err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if calls != 2 {
+		t.Fatalf("fn called %d times, want 2", calls)
 	}
 }

@@ -110,7 +110,7 @@ func getClient(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) (*k
 
 	clients[key] = client
 
-	shutdown.OnShutdown(fmt.Sprintf("kafka_sink(%s)", url), func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("kafka_sink(%s)", url), func(ctx context.Context) error {
 		client.Close()
 		return nil
 	})

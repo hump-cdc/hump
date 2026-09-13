@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -66,6 +67,20 @@ func TestWithFailureMode_skipPropagatesCancelledContext(t *testing.T) {
 
 	if err := h(ctx, 1); !errors.Is(err, wantErr) {
 		t.Fatalf("got error %v, want %v", err, wantErr)
+	}
+
+	if hooks.calls != 0 {
+		t.Errorf("got %d OnSkip calls, want 0", hooks.calls)
+	}
+}
+
+func TestWithFailureMode_skipPropagatesAbortedRetry(t *testing.T) {
+	wantErr := fmt.Errorf("%w: %w", ErrRetryAborted, errors.New("boom"))
+	hooks := &recordingSkipHooks{}
+	h := WithFailureMode(func(context.Context, int) error { return wantErr }, FailureModeSkip, hooks)
+
+	if err := h(context.Background(), 1); !errors.Is(err, ErrRetryAborted) {
+		t.Fatalf("got error %v, want ErrRetryAborted", err)
 	}
 
 	if hooks.calls != 0 {

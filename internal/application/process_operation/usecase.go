@@ -72,7 +72,7 @@ func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.
 		}
 	}()
 
-	shutdown.OnShutdown("process_operation", func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageWorkers, "process_operation", func(ctx context.Context) error {
 		return wp.Shutdown()
 	})
 

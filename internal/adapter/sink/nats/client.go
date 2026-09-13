@@ -126,7 +126,7 @@ func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*nat
 	}
 	clients[key] = c
 
-	shutdown.OnShutdown(fmt.Sprintf("nats_sink(%s)", url), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("nats_sink(%s)", url), func(_ context.Context) error {
 		return connection.Drain()
 	})
 

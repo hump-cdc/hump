@@ -56,7 +56,7 @@ func BenchmarkResilience(b *testing.B) {
 				Max:        30 * time.Second,
 				Multiplier: 2,
 				Jitter:     JitterModeFull,
-			}, hooks)
+			}, hooks, nil)
 			fn = WithStatus(fn, hooks)
 
 			ctx := context.Background()

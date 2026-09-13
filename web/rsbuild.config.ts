@@ -25,7 +25,7 @@ const routeManifestPlugin: RsbuildPlugin = {
     },
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     plugins: [pluginReact(), routeManifestPlugin],
     html: {
         template: './index.html',
@@ -43,7 +43,7 @@ export default defineConfig({
     },
     output: {
         distPath: { root: '../internal/controller/webui' },
-        cleanDistPath: true,
+        cleanDistPath: command === 'build', // Dev keeps output in memory; cleaning there would wipe the committed embedded build.
         legalComments: 'none',
     },
     server: { port: 3000 },
@@ -65,4 +65,4 @@ export default defineConfig({
             ],
         },
     },
-})
+}))

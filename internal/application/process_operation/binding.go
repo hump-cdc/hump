@@ -31,7 +31,10 @@ func newBinding(
 	sinkMessagesCounter *prometheus.CounterVec,
 	sinkDurationHistogram *prometheus.HistogramVec,
 ) *binding {
-	host, target := cfg.Sink.Metadata(sink.SinkContext{})
+	host, target := cfg.Sink.Metadata(sink.SinkContext{
+		Schema: schema,
+		Table:  tableName,
+	})
 	b := &binding{
 		sinkName:              string(cfg.Sink.Type()),
 		table:                 fmt.Sprintf("%s.%s", schema, tableName),

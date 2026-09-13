@@ -18,7 +18,6 @@ const childRouteConfig = [
     { to: '/configuration', label: 'Configuration' },
     { to: '/flows', label: 'Flows' },
     { to: '/operations', label: 'Operations' },
-    { to: '/stats', label: 'Stats' },
 ]
 
 const rootRoute = createRootRoute({

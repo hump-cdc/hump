@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import {
-    BarChart3,
     BookOpen,
     ChevronsLeft,
     ExternalLink,
@@ -35,7 +34,6 @@ const navItems = [
     { key: 'configuration', label: 'Configuration', icon: SlidersHorizontal },
     { key: 'flows', label: 'Flows', icon: GitBranch },
     { key: 'operations', label: 'Operations', icon: ListChecks },
-    { key: 'stats', label: 'Stats', icon: BarChart3 },
 ] as const
 
 type StoryArgs = {

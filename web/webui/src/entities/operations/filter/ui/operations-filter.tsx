@@ -3,7 +3,7 @@ import { type FC, useEffect, useMemo } from 'react'
 import { Search } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useConfig } from '@/entities/config/config'
+import { useConfig } from '@/entities/config/config/@x/operations'
 import { MultiComboBox, type MultiComboBoxItem } from '@/shared/ui/multi-combo-box'
 import { TextInput } from '@/shared/ui/text-input'
 

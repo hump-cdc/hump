@@ -17,6 +17,341 @@
             "!**/src/shared/api/generated"
         ]
     },
+    "overrides": [
+        {
+            "includes": ["src/shared/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": [
+                                            "@/app",
+                                            "@/app/**",
+                                            "@/pages",
+                                            "@/pages/**",
+                                            "@/widgets",
+                                            "@/widgets/**",
+                                            "@/features",
+                                            "@/features/**",
+                                            "@/entities",
+                                            "@/entities/**"
+                                        ],
+                                        "message": "FSD layer direction: app > pages > widgets > features > entities > shared. A layer may only import from layers below it."
+                                    },
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["src/entities/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": [
+                                            "@/app",
+                                            "@/app/**",
+                                            "@/pages",
+                                            "@/pages/**",
+                                            "@/widgets",
+                                            "@/widgets/**",
+                                            "@/features",
+                                            "@/features/**"
+                                        ],
+                                        "message": "FSD layer direction: app > pages > widgets > features > entities > shared. A layer may only import from layers below it."
+                                    },
+                                    {
+                                        "group": ["@/entities/**", "!@/entities/*/@x/*", "!@/entities/*/*/@x/*"],
+                                        "message": "FSD: slices on the same layer are isolated. Expose a cross-import API at '<slice>/@x/<consumer>.ts' and import that."
+                                    },
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["src/features/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": [
+                                            "@/app",
+                                            "@/app/**",
+                                            "@/pages",
+                                            "@/pages/**",
+                                            "@/widgets",
+                                            "@/widgets/**"
+                                        ],
+                                        "message": "FSD layer direction: app > pages > widgets > features > entities > shared. A layer may only import from layers below it."
+                                    },
+                                    {
+                                        "group": ["@/features/**", "!@/features/*/@x/*"],
+                                        "message": "FSD: slices on the same layer are isolated. Expose a cross-import API at '<slice>/@x/<consumer>.ts' and import that."
+                                    },
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["src/widgets/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": ["@/app", "@/app/**", "@/pages", "@/pages/**"],
+                                        "message": "FSD layer direction: app > pages > widgets > features > entities > shared. A layer may only import from layers below it."
+                                    },
+                                    {
+                                        "group": ["@/widgets/**", "!@/widgets/*/@x/*"],
+                                        "message": "FSD: slices on the same layer are isolated. Expose a cross-import API at '<slice>/@x/<consumer>.ts' and import that."
+                                    },
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["src/pages/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": ["@/app", "@/app/**"],
+                                        "message": "FSD layer direction: app > pages > widgets > features > entities > shared. A layer may only import from layers below it."
+                                    },
+                                    {
+                                        "group": ["@/pages/**", "!@/pages/*/@x/*"],
+                                        "message": "FSD: slices on the same layer are isolated. Expose a cross-import API at '<slice>/@x/<consumer>.ts' and import that."
+                                    },
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["src/app/**", "app/**"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": [
+                                            "@/app/**",
+                                            "@/entities/*/*/**",
+                                            "!@/entities/*/@x/*",
+                                            "!@/entities/*/*/@x/*",
+                                            "@/features/*/**",
+                                            "!@/features/*/@x/*",
+                                            "@/widgets/*/**",
+                                            "!@/widgets/*/@x/*",
+                                            "@/pages/*/**",
+                                            "!@/pages/*/@x/*",
+                                            "@/shared/api/**",
+                                            "@/shared/prometheus/**",
+                                            "@/shared/state/**",
+                                            "@/shared/storage/**",
+                                            "@/shared/theme/**",
+                                            "@/shared/utils/**",
+                                            "@/shared/ui/*/**",
+                                            "!@/shared/ui/charts/*"
+                                        ],
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                    },
+                                    {
+                                        "group": ["../../*", "../../**"],
+                                        "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["**/src/shared/api/generated/**", "**/openapi.json"],
+            "linter": {
+                "enabled": false
+            },
+            "formatter": {
+                "enabled": false
+            },
+            "assist": {
+                "enabled": false
+            }
+        }
+    ],
     "formatter": {
         "enabled": true,
         "lineWidth": 120,
@@ -58,7 +393,20 @@
     "linter": {
         "enabled": true,
         "rules": {
-            "recommended": true
+            "recommended": true,
+            "style": {
+                "useImportType": "off"
+            },
+            "nursery": {
+                "useSortedClasses": {
+                    "level": "on",
+                    "fix": "safe",
+                    "options": {
+                        "attributes": ["classList"],
+                        "functions": ["clsx", "cva", "cn", "tw", "tw.*"]
+                    }
+                }
+            }
         }
     },
     "javascript": {

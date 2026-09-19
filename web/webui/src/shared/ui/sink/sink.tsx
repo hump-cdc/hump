@@ -37,7 +37,7 @@ export const Sink: FC<SinkProps> = ({ className, type, host, ...props }) => {
 
     return (
         <div className={cn('flex items-center gap-1 text-sm', className)} {...props}>
-            <span className="bg-surface-3 rounded-full p-1">
+            <span className="rounded-full bg-surface-3 p-1">
                 <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-3">{icon}</span>
             </span>
             <span className="text-ink">{label}</span>

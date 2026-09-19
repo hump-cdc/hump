@@ -17,7 +17,7 @@ export const HeapInUse: FC = () => {
             value={
                 value === undefined ? undefined : (
                     <div className="flex flex-nowrap items-end gap-1">
-                        {value} <span className="pb-1 font-sans text-base font-medium text-ink-subtle">MB</span>
+                        {value} <span className="pb-1 font-medium font-sans text-base text-ink-subtle">MB</span>
                     </div>
                 )
             }

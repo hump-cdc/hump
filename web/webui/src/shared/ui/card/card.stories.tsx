@@ -13,7 +13,7 @@ import { CardHeader } from './card-header'
 
 const headerAsides = {
     none: null,
-    link: <span className="text-sm font-medium text-ink-subtle">View all</span>,
+    link: <span className="font-medium text-ink-subtle text-sm">View all</span>,
     badge: (
         <Badge variant="healthy" dot>
             Healthy
@@ -68,7 +68,7 @@ const meta: Meta<StoryArgs> = {
     render: ({ title, headerAside, separated, withFooter }) => (
         <Card separated={separated} className="w-90">
             <CardHeader aside={headerAsides[headerAside]}>
-                <span className="text-md font-semibold text-ink">{title}</span>
+                <span className="font-semibold text-ink text-md">{title}</span>
             </CardHeader>
 
             <CardContent>
@@ -79,7 +79,7 @@ const meta: Meta<StoryArgs> = {
                                 key={row.label}
                                 className={cn(
                                     'flex items-center justify-between px-4 py-2.75',
-                                    index < rows.length - 1 && 'border-b border-hairline',
+                                    index < rows.length - 1 && 'border-hairline border-b',
                                 )}
                             >
                                 <span className="text-base text-ink-subtle">{row.label}</span>
@@ -90,7 +90,7 @@ const meta: Meta<StoryArgs> = {
                 ) : (
                     <div className="flex flex-col gap-2">
                         <p className="text-base text-ink-muted">Content slot — drop any generic content here.</p>
-                        <p className="text-sm text-ink-subtle">
+                        <p className="text-ink-subtle text-sm">
                             With a non-separated card the body shares the card's even inset on every side.
                         </p>
                     </div>
@@ -99,7 +99,7 @@ const meta: Meta<StoryArgs> = {
 
             {withFooter ? (
                 <CardFooter aside={<Button variant="secondary">Action</Button>}>
-                    <span className="text-sm text-ink-subtle">Footer slot</span>
+                    <span className="text-ink-subtle text-sm">Footer slot</span>
                 </CardFooter>
             ) : null}
         </Card>

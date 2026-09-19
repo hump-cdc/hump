@@ -14,7 +14,7 @@ export const DropdownMenuRadioItem: FC<DropdownMenuRadioItemProps> = ({ classNam
     <DropdownMenuRadioItemPrimitive
         data-slot="dropdown-menu-radio-item"
         className={cn(
-            'relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm text-ink-muted outline-none transition-colors data-[highlighted]:bg-surface-1 data-[highlighted]:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:shrink-0',
+            'relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-ink-muted text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[highlighted]:bg-surface-1 data-[highlighted]:text-ink data-[disabled]:opacity-50 [&_svg]:shrink-0',
             className,
         )}
         {...props}

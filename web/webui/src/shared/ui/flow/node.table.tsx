@@ -38,12 +38,12 @@ export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected })
         <div className={cn(tableNodeVariants({ selected: Boolean(selected) }))}>
             <div className="flex items-center gap-2.5">
                 <Table2 className={cn('size-4', selected ? 'text-primary' : 'text-ink-subtle')} />
-                <span className="font-mono text-base font-medium text-ink">{data.name}</span>
+                <span className="font-medium font-mono text-base text-ink">{data.name}</span>
             </div>
 
             <div className="flex items-end">
-                <span className="font-mono text-2xl font-semibold text-ink">{data.rate}</span>
-                <span className="text-sm font-medium text-ink-subtle pb-0.5">/s</span>
+                <span className="font-mono font-semibold text-2xl text-ink">{data.rate}</span>
+                <span className="pb-0.5 font-medium text-ink-subtle text-sm">/s</span>
                 <div className="flex-1" />
                 <Trend className={cn('size-3.5', data.trend === 'down' ? 'text-danger' : 'text-success')} />
             </div>

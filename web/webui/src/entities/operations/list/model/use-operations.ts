@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useOperationsFilter } from '@/entities/operations/filter'
+import { useOperationsFilter } from '@/entities/operations/filter/@x/list'
 import { db, deriveOperationStatus, getOperations, type OperationDto } from '@/shared/storage'
 import { useDebounce } from '@/shared/utils'
 

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { useConfig } from '@/entities/config/config'
+import { useConfig } from '@/entities/config/config/@x/dashboard'
 
 /** A single row of the tables card: the qualified name plus its configured sink count. */
 type Item = { name: string; sinks: number }

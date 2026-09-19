@@ -12,8 +12,8 @@ export const TopologyToolbar: FC = () => {
     const [selectedSinks, setSelectedSinks] = useState(sinkOptions.map((option) => option.value))
 
     return (
-        <div className="flex h-26 md:h-13 shrink-0 items-center justify-between border-b border-hairline bg-canvas px-5">
-            <div className="flex flex-col md:flex-row md:items-center gap-2 w-full">
+        <div className="flex h-26 shrink-0 items-center justify-between border-hairline border-b bg-canvas px-5 md:h-13">
+            <div className="flex w-full flex-col gap-2 md:flex-row md:items-center">
                 <MultiComboBox
                     items={tableOptions}
                     value={selectedTables}

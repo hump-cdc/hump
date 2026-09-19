@@ -9,7 +9,7 @@ type SheetDescriptionProps = ComponentProps<typeof SheetDescriptionPrimitive>
 export const SheetDescription: FC<SheetDescriptionProps> = ({ className, ...props }) => (
     <SheetDescriptionPrimitive
         data-slot="sheet-description"
-        className={cn('text-sm text-ink-muted', className)}
+        className={cn('text-ink-muted text-sm', className)}
         {...props}
     />
 )

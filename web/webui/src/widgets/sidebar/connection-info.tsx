@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 export const ConnectionInfo: FC = () => {
     const { data: config, isSuccess } = useConfig()
     return (
-        <div className="flex flex-wrap items-center gap-2.5 max-w-full">
+        <div className="flex max-w-full flex-wrap items-center gap-2.5">
             {isSuccess && (
                 <>
                     <Tooltip>

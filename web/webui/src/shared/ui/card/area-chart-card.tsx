@@ -68,7 +68,7 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
                         {series.map(({ dataKey, label, variant }) => (
                             <span
                                 key={dataKey}
-                                className="flex items-center gap-1.5 text-xs font-medium text-ink-subtle"
+                                className="flex items-center gap-1.5 font-medium text-ink-subtle text-xs"
                             >
                                 <span className={swatchVariants({ variant })} />
                                 {label ?? dataKey}
@@ -80,7 +80,7 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
         >
             <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                    <span className="font-semibold text-ink text-sm tracking-tight">{title}</span>
                     {hint && (
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -92,13 +92,13 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
                         </Tooltip>
                     )}
                 </span>
-                {subtitle && <span className="font-mono text-xs text-ink-tertiary">{subtitle}</span>}
+                {subtitle && <span className="font-mono text-ink-tertiary text-xs">{subtitle}</span>}
             </div>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-3 p-4">
             {value !== null && value !== undefined && value !== '' && (
-                <div className="flex items-center gap-2 font-mono text-3xl font-semibold tracking-tight text-ink">
+                <div className="flex items-center gap-2 font-mono font-semibold text-3xl text-ink tracking-tight">
                     {value}
                 </div>
             )}

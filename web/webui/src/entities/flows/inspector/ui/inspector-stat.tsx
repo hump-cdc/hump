@@ -9,10 +9,10 @@ export const InspectorStat: FC<{ label: string; value: string; tone?: 'default' 
     tone = 'default',
 }) => (
     <div className="flex flex-1 flex-col gap-1 rounded-lg border border-hairline bg-surface-2 p-3">
-        <span className="text-2xs font-medium text-ink-tertiary">{label}</span>
+        <span className="font-medium text-2xs text-ink-tertiary">{label}</span>
         <span
             className={cn(
-                'font-mono text-base font-semibold',
+                'font-mono font-semibold text-base',
                 tone === 'success' && 'text-success',
                 tone === 'danger' && 'text-danger',
                 tone === 'default' && 'text-ink',

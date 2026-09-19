@@ -38,7 +38,7 @@ const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
         header: 'Rows',
         className: 'w-30 text-right',
         cell: (d) => (
-            <span className="font-mono text-sm text-ink-muted">{formatNumber(d.progress?.rowsRead ?? 0)}</span>
+            <span className="font-mono text-ink-muted text-sm">{formatNumber(d.progress?.rowsRead ?? 0)}</span>
         ),
         mobile: {
             zone: 'meta',
@@ -50,7 +50,7 @@ const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
         header: 'Items',
         className: 'w-30 text-right',
         cell: (d) => (
-            <span className="font-mono text-sm text-ink-muted">{formatNumber(d.progress?.itemsSent ?? 0)}</span>
+            <span className="font-mono text-ink-muted text-sm">{formatNumber(d.progress?.itemsSent ?? 0)}</span>
         ),
         mobile: {
             zone: 'meta',
@@ -94,9 +94,9 @@ export const CompleteTables: FC = () => {
         <Table
             columns={RESULT_COLUMNS}
             className="lg:flex-1"
-            header={<span className="text-md font-semibold text-ink">Snapshotted tables</span>}
+            header={<span className="font-semibold text-ink text-md">Snapshotted tables</span>}
             headerAside={
-                <span className="text-sm font-medium text-ink-subtle">{tables.length} tables · all delivered</span>
+                <span className="font-medium text-ink-subtle text-sm">{tables.length} tables · all delivered</span>
             }
         >
             {tables.map((table) => (

@@ -55,7 +55,7 @@ const columns: DataTableColumn<Operation>[] = [
         header: 'Operation',
         width: 104,
         render: (r) => (
-            <Badge className="leading-4 px-1" variant={opVariant[r.op]}>
+            <Badge className="px-1 leading-4" variant={opVariant[r.op]}>
                 {r.op}
             </Badge>
         ),
@@ -65,7 +65,7 @@ const columns: DataTableColumn<Operation>[] = [
         header: 'Status',
         width: 116,
         render: (r) => (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex h-full items-center justify-center">
                 <StatusCell row={r} />
             </div>
         ),
@@ -89,7 +89,7 @@ const columns: DataTableColumn<Operation>[] = [
         header: 'Error',
         flex: 2,
         minWidth: 160,
-        render: (r) => (r.error ? <span className="text-sm text-danger">{r.error}</span> : null),
+        render: (r) => (r.error ? <span className="text-danger text-sm">{r.error}</span> : null),
     },
 ]
 
@@ -97,7 +97,7 @@ const columns: DataTableColumn<Operation>[] = [
 const OperationRetries: FC<{ row: Operation }> = ({ row }) => (
     <table className="w-full border-collapse">
         <thead>
-            <tr className="border-b border-hairline bg-surface-1 text-left text-2xs font-semibold tracking-caps text-ink-subtle uppercase">
+            <tr className="border-hairline border-b bg-surface-1 text-left font-semibold text-2xs text-ink-subtle uppercase tracking-caps">
                 {['Attempt', 'Started', 'Duration', 'Result', 'Error'].map((h) => (
                     <th key={h} className="px-3.5 py-2 font-semibold">
                         {h}
@@ -109,15 +109,15 @@ const OperationRetries: FC<{ row: Operation }> = ({ row }) => (
             {row.retries?.map((a, index) => (
                 <tr
                     key={a.attempt}
-                    className={index < (row.retries?.length ?? 0) - 1 ? 'border-b border-hairline' : undefined}
+                    className={index < (row.retries?.length ?? 0) - 1 ? 'border-hairline border-b' : undefined}
                 >
                     <td className="px-3.5 py-2.5 font-mono text-ink-muted">#{a.attempt}</td>
-                    <td className="px-3.5 py-2.5 font-mono text-sm text-ink-subtle">{a.started}</td>
+                    <td className="px-3.5 py-2.5 font-mono text-ink-subtle text-sm">{a.started}</td>
                     <td className="px-3.5 py-2.5 font-mono text-ink-muted">{a.duration}</td>
                     <td className="px-3.5 py-2.5">
                         <Badge variant={a.result === 'failed' ? 'failed' : 'healthy'}>{a.result}</Badge>
                     </td>
-                    <td className="px-3.5 py-2.5 text-sm text-danger">{a.error}</td>
+                    <td className="px-3.5 py-2.5 text-danger text-sm">{a.error}</td>
                 </tr>
             ))}
         </tbody>

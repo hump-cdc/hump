@@ -31,7 +31,7 @@ const COLUMNS: TableRowColumn<Item>[] = [
         key: 'count',
         header: 'Count',
         className: 'w-32 text-right',
-        cell: (item) => <span className="font-mono text-sm text-ink-muted">{item.count.toLocaleString('en-US')}</span>,
+        cell: (item) => <span className="font-mono text-ink-muted text-sm">{item.count.toLocaleString('en-US')}</span>,
         mobile: {
             zone: 'meta',
             render: (item) => <span>{item.count.toLocaleString('en-US')} rows</span>,
@@ -89,8 +89,8 @@ const meta: Meta<StoryArgs> = {
                 <Table
                     columns={COLUMNS}
                     selectable={selectable}
-                    header={<span className="text-md font-semibold text-ink">Items</span>}
-                    headerAside={<span className="text-sm text-ink-subtle">{ITEMS.length} total</span>}
+                    header={<span className="font-semibold text-ink text-md">Items</span>}
+                    headerAside={<span className="text-ink-subtle text-sm">{ITEMS.length} total</span>}
                 >
                     {ITEMS.map((item) => (
                         <TableRow

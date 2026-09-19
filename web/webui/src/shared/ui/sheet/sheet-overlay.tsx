@@ -10,7 +10,7 @@ export const SheetOverlay: FC<SheetOverlayProps> = ({ className, ...props }) => 
     <SheetOverlayPrimitive
         data-slot="sheet-overlay"
         className={cn(
-            'fixed inset-0 z-50 bg-black/50 fade-in-0 animate-in data-[state=closed]:fade-out-0 data-[state=closed]:animate-out',
+            'fade-in-0 data-[state=closed]:fade-out-0 fixed inset-0 z-50 animate-in bg-black/50 data-[state=closed]:animate-out',
             className,
         )}
         {...props}

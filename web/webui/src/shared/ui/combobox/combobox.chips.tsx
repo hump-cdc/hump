@@ -27,7 +27,7 @@ const ComboboxChip: FC<ComboboxChipProps> = ({ className, children, showRemove =
     <ComboboxPrimitive.Chip
         data-slot="combobox-chip"
         className={cn(
-            'flex h-5.5 shrink-0 items-center gap-1 rounded-md bg-primary-soft pl-2 text-sm font-medium whitespace-nowrap text-primary select-none',
+            'flex h-5.5 shrink-0 select-none items-center gap-1 whitespace-nowrap rounded-md bg-primary-soft pl-2 font-medium text-primary text-sm',
             showRemove ? 'pr-1' : 'pr-2',
             className,
         )}

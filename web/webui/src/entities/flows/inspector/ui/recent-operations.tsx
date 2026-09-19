@@ -14,11 +14,11 @@ const RECENT_OPERATIONS = [
 /** Compact recent-operations activity list (desktop-only in the inspector). */
 export const RecentOperations: FC = () => (
     <div className="flex flex-col">
-        <span className="pb-1 text-2xs font-semibold tracking-widest text-ink-tertiary">RECENT OPERATIONS</span>
+        <span className="pb-1 font-semibold text-2xs text-ink-tertiary tracking-widest">RECENT OPERATIONS</span>
         {RECENT_OPERATIONS.map((entry) => (
-            <div key={entry.id} className="flex items-center gap-2.5 border-b border-hairline py-2">
+            <div key={entry.id} className="flex items-center gap-2.5 border-hairline border-b py-2">
                 <span className={cn('size-1.5 rounded-full', entry.ok ? 'bg-success' : 'bg-danger')} />
-                <span className="font-mono text-xs font-medium text-ink-muted">{entry.op}</span>
+                <span className="font-medium font-mono text-ink-muted text-xs">{entry.op}</span>
                 <span className="flex-1" />
                 <span className="font-mono text-2xs text-ink-tertiary">{entry.time}</span>
             </div>

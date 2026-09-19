@@ -8,7 +8,7 @@ import { InspectorMetrics } from './inspector-metrics'
 export const TableDetails: FC<{ selected: Extract<SelectedItem, { kind: 'table' }> }> = ({ selected }) => (
     <>
         <IdentityCard eyebrow="TABLE">
-            <span className="font-mono text-md font-medium text-ink">{selected.data.name}</span>
+            <span className="font-medium font-mono text-ink text-md">{selected.data.name}</span>
         </IdentityCard>
         <InspectorMetrics throughput={`${selected.data.rate}/s`} successRate={98.2} totalEvents="1.24M" failures="2" />
     </>

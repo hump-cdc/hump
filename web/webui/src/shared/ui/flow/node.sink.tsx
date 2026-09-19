@@ -37,12 +37,12 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ data, selected }) =
         <div className={cn(sinkNodeVariants({ selected: Boolean(selected) }))}>
             <div className="flex flex-1 items-center justify-between px-4 py-3">
                 <div className="flex flex-col gap-1">
-                    <span className="font-mono text-md font-medium text-ink">{data.name}</span>
-                    {data.subtitle ? <span className="text-xs text-ink-subtle">{data.subtitle}</span> : null}
+                    <span className="font-medium font-mono text-ink text-md">{data.name}</span>
+                    {data.subtitle ? <span className="text-ink-subtle text-xs">{data.subtitle}</span> : null}
                 </div>
 
                 <div className="flex flex-col items-start gap-1.5">
-                    <span className={cn('font-mono text-base font-medium', isError ? 'text-danger' : 'text-ink')}>
+                    <span className={cn('font-medium font-mono text-base', isError ? 'text-danger' : 'text-ink')}>
                         {data.rate}
                     </span>
                 </div>

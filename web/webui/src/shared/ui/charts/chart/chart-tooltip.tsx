@@ -186,12 +186,12 @@ export const ChartTooltipContent: FC<ChartTooltipContentProps> = ({
                                             >
                                                 <div className="grid min-w-0 gap-1.5">
                                                     {nestLabel ? tooltipLabel : null}
-                                                    <span className="max-w-24 truncate leading-4 text-ink-subtle">
+                                                    <span className="max-w-24 truncate text-ink-subtle leading-4">
                                                         {itemConfig?.label ?? item.name}
                                                     </span>
                                                 </div>
                                                 {item.value != null && (
-                                                    <span className="shrink-0 font-mono font-medium text-ink tabular-nums">
+                                                    <span className="shrink-0 font-medium font-mono text-ink tabular-nums">
                                                         {formattedValue}
                                                     </span>
                                                 )}

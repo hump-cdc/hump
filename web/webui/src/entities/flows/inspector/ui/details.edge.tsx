@@ -11,9 +11,9 @@ export const EdgeDetails: FC<{ selected: Extract<SelectedItem, { kind: 'edge' }>
     <>
         <IdentityCard eyebrow="EDGE">
             <div className="flex items-center gap-2">
-                <span className="font-mono text-md font-medium text-ink">{selected.sourceLabel}</span>
+                <span className="font-medium font-mono text-ink text-md">{selected.sourceLabel}</span>
                 <ArrowRight className="size-3.5 shrink-0 text-primary" />
-                <span className="font-mono text-md font-medium text-ink">{selected.targetLabel}</span>
+                <span className="font-medium font-mono text-ink text-md">{selected.targetLabel}</span>
             </div>
         </IdentityCard>
         <InspectorMetrics throughput="842/s" successRate={98.2} totalEvents="1.24M" failures="2" />

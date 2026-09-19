@@ -26,8 +26,8 @@ export const InspectorMetrics: FC<{
 
             <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-ink-subtle">Success rate</span>
-                    <span className="font-mono text-xs font-medium text-success">{successLabel}</span>
+                    <span className="font-medium text-ink-subtle text-xs">Success rate</span>
+                    <span className="font-medium font-mono text-success text-xs">{successLabel}</span>
                 </div>
                 <div className="flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-surface-3">
                     <div

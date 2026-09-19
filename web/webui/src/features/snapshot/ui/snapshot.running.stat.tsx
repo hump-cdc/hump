@@ -13,7 +13,7 @@ export const RunningStats: FC = () => {
     const { rowsRead, itemsSent } = aggregate(tables, progress)
 
     return (
-        <div className="flex flex-col md:flex-row gap-2.5">
+        <div className="flex flex-col gap-2.5 md:flex-row">
             <MetricCard title="Elapsed" value={formatDuration(elapsedSec)} className="flex-1" />
             <MetricCard title="Rows read" value={formatNumberCompact(rowsRead)} className="flex-1" />
             <MetricCard title="Items sent" value={formatNumberCompact(itemsSent)} className="flex-1" />

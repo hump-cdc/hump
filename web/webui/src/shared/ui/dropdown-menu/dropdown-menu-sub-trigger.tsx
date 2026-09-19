@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from '@/shared/utils'
 
 const dropdownMenuSubTriggerVariants = cva(
-    'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink-muted outline-none transition-colors data-[highlighted]:bg-surface-1 data-[highlighted]:text-ink data-[state=open]:bg-surface-1 data-[state=open]:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
+    'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-ink-muted text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[highlighted]:bg-surface-1 data-[state=open]:bg-surface-1 data-[highlighted]:text-ink data-[state=open]:text-ink data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
     {
         variants: {
             inset: {

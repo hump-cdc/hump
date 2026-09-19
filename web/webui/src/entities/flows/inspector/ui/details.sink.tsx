@@ -9,9 +9,9 @@ export const SinkDetails: FC<{ selected: Extract<SelectedItem, { kind: 'sink' }>
     <>
         <IdentityCard eyebrow="SINK">
             <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-md font-medium text-ink">{selected.data.name}</span>
+                <span className="font-medium font-mono text-ink text-md">{selected.data.name}</span>
                 {selected.data.subtitle ? (
-                    <span className="text-xs text-ink-subtle">{selected.data.subtitle}</span>
+                    <span className="text-ink-subtle text-xs">{selected.data.subtitle}</span>
                 ) : null}
             </div>
         </IdentityCard>

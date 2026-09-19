@@ -7,7 +7,7 @@ type DropdownMenuShortcutProps = ComponentProps<'span'>
 export const DropdownMenuShortcut: FC<DropdownMenuShortcutProps> = ({ className, ...props }) => (
     <span
         data-slot="dropdown-menu-shortcut"
-        className={cn('ml-auto text-xs tracking-widest text-ink-subtle', className)}
+        className={cn('ml-auto text-ink-subtle text-xs tracking-widest', className)}
         {...props}
     />
 )

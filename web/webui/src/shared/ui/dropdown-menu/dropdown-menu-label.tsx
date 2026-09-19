@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/shared/utils'
 
-const dropdownMenuLabelVariants = cva('px-2 py-1.5 text-sm font-medium text-ink-subtle', {
+const dropdownMenuLabelVariants = cva('px-2 py-1.5 font-medium text-ink-subtle text-sm', {
     variants: {
         inset: {
             false: '',

@@ -35,7 +35,7 @@ const meta: Meta<StoryArgs> = {
     render: ({ title, description, side }) => (
         <div className="flex min-h-60 items-center justify-center">
             <Sheet>
-                <SheetTrigger className="rounded-lg bg-primary px-3.5 py-2 text-base font-medium text-on-primary">
+                <SheetTrigger className="rounded-lg bg-primary px-3.5 py-2 font-medium text-base text-on-primary">
                     Open sheet
                 </SheetTrigger>
                 <SheetContent side={side}>

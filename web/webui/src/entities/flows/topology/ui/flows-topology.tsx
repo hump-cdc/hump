@@ -1,6 +1,6 @@
 import { type FC, type ReactNode, useMemo } from 'react'
 
-import { useFlowInspectorStore } from '@/entities/flows/inspector'
+import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/topology'
 import { Flow, SinkNode, TableNode } from '@/shared/ui/flow'
 
 import { edges, sinks, tables } from '../model/mock'

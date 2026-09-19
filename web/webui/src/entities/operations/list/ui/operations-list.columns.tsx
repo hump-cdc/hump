@@ -55,7 +55,7 @@ export const columns: DataTableColumn<Operation>[] = [
         header: 'Operation',
         width: 104,
         render: (r) => (
-            <Badge className="leading-4 px-1 uppercase" variant={opVariant[r.op]}>
+            <Badge className="px-1 uppercase leading-4" variant={opVariant[r.op]}>
                 {r.op}
             </Badge>
         ),
@@ -71,7 +71,7 @@ export const columns: DataTableColumn<Operation>[] = [
         header: 'Status',
         width: 116,
         render: (r) => (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex h-full items-center justify-center">
                 <StatusCell row={r} />
             </div>
         ),
@@ -104,7 +104,7 @@ export const columns: DataTableColumn<Operation>[] = [
             r.error ? (
                 <Tooltip>
                     <TooltipTrigger>
-                        <span className="text-sm text-danger">{r.error}</span>
+                        <span className="text-danger text-sm">{r.error}</span>
                     </TooltipTrigger>
                     <TooltipContent variant="primary">{r.error}</TooltipContent>
                 </Tooltip>

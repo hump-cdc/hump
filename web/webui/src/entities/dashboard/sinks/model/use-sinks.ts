@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 
 import { useLiveQuery } from 'dexie-react-hooks'
 
-import { useConfig } from '@/entities/config/config'
+import { useConfig } from '@/entities/config/config/@x/dashboard'
 import { getFlowSinks } from '@/shared/storage'
 
 /** A single row of the sinks card. */

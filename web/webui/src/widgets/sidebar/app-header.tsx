@@ -15,7 +15,7 @@ export const AppHeader: FC = () => {
 
     return (
         <Header>
-            <div className="flex flex-nowrap min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 flex-nowrap items-center gap-2.5">
                 <SidebarTrigger className="lg:hidden" />
                 {!isMobile && state === 'collapsed' && (
                     <SidebarTrigger className="hidden lg:inline-flex">
@@ -24,8 +24,8 @@ export const AppHeader: FC = () => {
                 )}
                 <HeaderTitle>{title ?? ''}</HeaderTitle>
 
-                <div className="lg:flex flex-nowrap items-center gap-2.5 hidden">
-                    <span className="text-ink-tertiary font-medium">·</span>
+                <div className="hidden flex-nowrap items-center gap-2.5 lg:flex">
+                    <span className="font-medium text-ink-tertiary">·</span>
                     <ConnectionInfo />
                 </div>
             </div>

@@ -35,7 +35,7 @@ export function TableRow<T>({ row, columns, selectable, mobileZoneClasses }: Tab
             <label
                 htmlFor={id}
                 className={cn(
-                    'flex cursor-pointer items-start gap-3 border-b border-hairline px-4 py-3 transition-colors last:border-0 hover:bg-surface-2 lg:items-center',
+                    'flex cursor-pointer items-start gap-3 border-hairline border-b px-4 py-3 transition-colors last:border-0 hover:bg-surface-2 lg:items-center',
                     checked && 'bg-primary-soft/40',
                 )}
             >
@@ -50,7 +50,7 @@ export function TableRow<T>({ row, columns, selectable, mobileZoneClasses }: Tab
     }
 
     return (
-        <div className="border-b border-hairline px-4 py-3 last:border-0">
+        <div className="border-hairline border-b px-4 py-3 last:border-0">
             <div className="hidden items-center gap-4 lg:flex">
                 {columns.map((col) => (
                     <div key={col.key} className={col.className}>

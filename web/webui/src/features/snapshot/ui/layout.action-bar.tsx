@@ -26,7 +26,7 @@ export const ActionBar: FC<ActionBarProps> = ({
     return (
         <>
             <div className="h-0 md:h-0.5"></div>
-            <div className="sticky bottom-0 z-10 mt-auto -mx-6 -mb-6 bg-canvas px-6 pt-1 pb-6">
+            <div className="sticky bottom-0 z-10 -mx-6 mt-auto -mb-6 bg-canvas px-6 pt-1 pb-6">
                 <div className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-linear-to-b from-transparent to-canvas" />
                 <div
                     className={cn(
@@ -43,8 +43,8 @@ export const ActionBar: FC<ActionBarProps> = ({
                                 </div>
                             )}
                             <div className="flex flex-col gap-0.5">
-                                {asideTitle && <span className="text-base font-semibold text-ink">{asideTitle}</span>}
-                                {asideSubTitle && <span className="text-sm text-ink-subtle">{asideSubTitle}</span>}
+                                {asideTitle && <span className="font-semibold text-base text-ink">{asideTitle}</span>}
+                                {asideSubTitle && <span className="text-ink-subtle text-sm">{asideSubTitle}</span>}
                             </div>
                         </div>
                     )}

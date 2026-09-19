@@ -25,7 +25,7 @@ export const LiveControls: FC = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="flex w-56 flex-col gap-3 p-3">
                 <div className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold tracking-wide text-ink-subtle uppercase">Chart step</span>
+                    <span className="font-semibold text-ink-subtle text-xs uppercase tracking-wide">Chart step</span>
                     <Tabs value={chartStep} onValueChange={(value) => setChartStep(value as ChartStep)}>
                         <TabsList className="w-full">
                             {CHART_STEPS.map((option) => (

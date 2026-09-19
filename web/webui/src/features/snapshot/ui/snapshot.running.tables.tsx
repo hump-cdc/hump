@@ -86,7 +86,7 @@ const RUNNING_COLUMNS: TableRowColumn<RunningRowData>[] = [
         cell: (d) => {
             const rowsRead = d.progress?.rowsRead ?? 0
             return (
-                <span className="font-mono text-sm text-ink-muted">
+                <span className="font-mono text-ink-muted text-sm">
                     {formatNumber(rowsRead)} / {formatNumber(d.table.totalRows)}
                 </span>
             )
@@ -96,7 +96,7 @@ const RUNNING_COLUMNS: TableRowColumn<RunningRowData>[] = [
             render: (d) => {
                 const rowsRead = d.progress?.rowsRead ?? 0
                 return (
-                    <span className="font-mono text-sm text-ink-subtle">
+                    <span className="font-mono text-ink-subtle text-sm">
                         {formatNumber(rowsRead)} / {formatNumber(d.table.totalRows)} rows
                     </span>
                 )
@@ -115,12 +115,12 @@ export const RunningTables: FC = () => {
             columns={RUNNING_COLUMNS}
             header={
                 <div className="flex items-center gap-2.5">
-                    <span className="text-md font-semibold text-ink">Tables</span>
+                    <span className="font-semibold text-ink text-md">Tables</span>
                     <Badge variant="neutral">{tables.length}</Badge>
                 </div>
             }
             headerAside={
-                <div className="flex items-center gap-3.5 text-sm text-ink-subtle">
+                <div className="flex items-center gap-3.5 text-ink-subtle text-sm">
                     <span className="flex items-center gap-1.5">
                         <span className="size-1.5 rounded-full bg-ink-subtle" />
                         waiting

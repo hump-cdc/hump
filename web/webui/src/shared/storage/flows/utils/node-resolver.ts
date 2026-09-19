@@ -1,4 +1,4 @@
-import { db } from '../../db'
+import { db } from '@/shared/storage'
 
 /** Success rate a sink starts at before any delivery has been observed. */
 const INITIAL_SUCCESS_RATE = 100

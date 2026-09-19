@@ -1,4 +1,5 @@
-import { db } from '../../db'
+import { db } from '@/shared/storage'
+
 import { FLOW_STORES } from '../schema'
 import { NodeResolver } from './node-resolver'
 

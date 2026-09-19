@@ -27,7 +27,7 @@ export function Table<T>({
     return (
         <Card className={className}>
             <CardHeader aside={headerAside}>{header}</CardHeader>
-            {toolbar && <div className="border-b border-hairline p-4">{toolbar}</div>}
+            {toolbar && <div className="border-hairline border-b p-4">{toolbar}</div>}
             <TableRowHeader columns={columns} selectable={selectable} />
             <div>{children}</div>
         </Card>

@@ -9,7 +9,7 @@ import { useCardContext } from './card-context'
 const cardFooterVariants = cva('flex shrink-0 items-center justify-between gap-2', {
     variants: {
         separated: {
-            true: 'border-t border-hairline p-4',
+            true: 'border-hairline border-t p-4',
             false: '',
         },
     },

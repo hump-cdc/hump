@@ -6,7 +6,7 @@ import { SheetClose, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 
 /** Static inspector header: icon, title and the sheet close button. */
 export const InspectorHeader: FC = () => (
-    <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-hairline p-4">
+    <SheetHeader className="flex-row items-center justify-between gap-2 border-hairline border-b p-4">
         <div className="flex items-center gap-2">
             <GitCompareArrows className="size-4 text-ink-subtle" />
             <SheetTitle className="text-base">Inspector</SheetTitle>

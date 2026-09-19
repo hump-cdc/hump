@@ -1,0 +1,105 @@
+# adapter/metrics_collector — how this package hangs together
+
+The dashboard's metrics source. It scrapes the process registry on demand and answers one
+question per request: what has the pipeline been doing, both over the last few minutes and
+since it started. It is the only consumer of the registry inside the process — everything else
+goes out over `/metrics`.
+
+## Layout
+
+| File | Role |
+|---|---|
+| `metrics_collector.go` | the `Collector`: lifecycle, the scrape loop, `Record`, `Dump` |
+| `scrape.go` | gathered families → deltas plus the absolute readings (`latest`) |
+| `bucket.go` | `aggregate` / `bucket` / `series` / `histogram` — the windowed side |
+| `snapshot.go` | topology + readings + window → `port.Snapshot` |
+| `logger.go` | the package logger scope |
+
+## Idle by default
+
+The collector does nothing until a client calls `Connect`, which the SSE handler at `/api/live`
+does per connection. `Disconnect` on the last client arms the idle timer, and `deactivate`
+**drops every aggregate**: `scraper`, `series` and `lastTick` all go back to zero. A `Dump`
+after that is not an error — `snapshot` reports the configured topology with zero counts, which
+is the same shape an active collector with no traffic returns. Do not remove that guard; the
+tests dump an idle collector on purpose.
+
+`generation` exists so an idle timer armed before a reconnect cannot deactivate the collector
+after it. `Scrape` requests an out-of-schedule scrape and is debounced in `run`.
+
+## Two clocks in one response
+
+This is the thing to get right before touching `snapshot.go`.
+
+- **`Points` are windowed deltas.** Counters and histograms contribute how far they advanced
+  since the previous scrape, folded into `Truncate`d buckets, `pointsMax` of them per width. A
+  series seen for the first time only records a baseline, so the first scrape after activation
+  contributes nothing but gauges.
+- **`Tables`, `Sinks` and `Connections` are lifetime counts.** They report the absolute counter
+  readings of the most recent scrape (`scraper.latest`), so they do not depend on the requested
+  duration. `latest` is rebuilt wholesale on every scrape, which is how a series the registry
+  stopped exposing disappears.
+- **`p95` is windowed anyway**, because a lifetime latency quantile says nothing useful. It
+  comes from `series.total()` — every retained bucket of the requested width merged into one
+  aggregate — and is reported in **milliseconds**, while the histograms observe seconds.
+
+## What it reads, and what it cannot
+
+Four families, named in `scrape.go`:
+
+| Family | Used for |
+|---|---|
+| `hump_sink_messages_total{status,type,host,target}` | `Points.Delivered`/`Failed`, `Sinks`, `Targets` |
+| `hump_sink_duration_seconds{type,host,target}` | every `p95` |
+| `hump_processed_rows_duration_seconds{db,operation,schema,table}` | `Tables`, via `SampleCount` |
+| `hump_replication_lag_bytes`, `go_memstats_alloc_bytes` | the gauge readings on a point |
+
+`status` has three values, not two: `success`, `retry` and `failure` — the vocabulary is
+`domain.DeliveryStatus`, shared with `process_operation`, which is what writes the labels. A
+retry is an attempt rather than an outcome, so it is left out of every operation count and
+every success rate.
+
+Three caveats that are properties of the source metrics, not of this package:
+
+- **Row counts miss failed rows.** `postgres.observeRow` only fires when the handler returned
+  `nil`, so a row whose delivery ultimately failed never reaches `Tables`. Partitions also roll
+  up into the configured parent, so `Tables` keys are configured tables, not relations.
+- **`p95` is per attempt.** `OnDuration` is called inside the retry loop
+  (`pkg/resilience/retry.go`), once per attempt including the ones that failed — the metric's
+  own help text claims otherwise.
+- **The sink metrics carry no table.** Two tables routed to the same `(type, host, target)`
+  collapse into one series, which is why `Connections` cannot be scraped at all.
+
+## Topology comes from outside, counts for it come from the pipeline
+
+`WithTopology` takes the configured `table → sink → target` edges, resolved at wiring in
+`cmd/hump/main.go`. The adapter must not import `hump/config`; it takes plain `port.Connection`
+values. The resolver there renders host and target with
+`Metadata(SinkContext{Schema, Table})` — **the same call `newBinding` makes** — because the
+strings have to match the metric labels byte for byte. Change one side and the snapshot goes
+silently empty.
+
+The topology is also the key set: a configured table or target with no traffic is still
+reported, with zeros.
+
+`Connections` counts are pushed in through `Record`, called from `process_operation.binding`
+next to the Prometheus counters. Two consequences:
+
+- `recorded` has **its own mutex**. `Record` runs per delivery on every worker goroutine, while
+  `Dump` holds `c.mu` long enough to merge twenty buckets per sink key. Lock order is `c.mu`
+  then `recordedMu`, never the reverse.
+- `recorded` **survives deactivation**, unlike everything else the collector holds. It sits next
+  to lifetime counters in the response and would be confusing if it reset on an idle timeout.
+  Only `close` clears it.
+
+## Tests
+
+`newTestMetrics` registers the four families on a fresh registry; `countingGatherer` wraps it
+and counts calls so a test can assert the loop is or is not running. `mustDump` returns points,
+`mustSnapshot` the whole snapshot, `waitFor` polls a condition for a second.
+
+A latency test has to **observe once before the collector starts**: the first scrape is the
+baseline, so observations made before it are invisible. Prime the series, wait for the first
+point, then observe what the test measures.
+
+Helpers live below the last test function — see the `go` skill.

@@ -6,6 +6,7 @@ import (
 
 	"hump/config"
 	"hump/internal/domain"
+	metricscollector "hump/internal/port/metrics_collector"
 	"hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/version"
@@ -19,12 +20,20 @@ type Configuration interface {
 	ResolveAll() []config.Table
 }
 
+// Observer counts the deliveries of one connection for the dashboard. It is the
+// part of the metrics collector this package needs, and is nil when telemetry
+// is disabled.
+type Observer interface {
+	Record(conn metricscollector.Connection, status domain.DeliveryStatus, n int)
+}
+
 type UseCase struct {
 	bindings map[domain.TableIdentifier][]*binding
 	wp       *workerpool.WorkerPool[*sink.SinkContext]
 }
 
-func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory) *UseCase {
+// NewUseCase builds the sink bindings of every configured table.
+func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory, observer Observer) *UseCase {
 	workerCount := 0
 
 	// Metrics
@@ -45,7 +54,7 @@ func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.
 
 		tableBindings := make([]*binding, 0, len(table.Sinks))
 		for _, sinkCfg := range table.Sinks {
-			b := newBinding(sinkCfg, table.Schema, table.Name, sinksPort, sinkMessagesCounter, sinkDurationHistogram)
+			b := newBinding(sinkCfg, table.Schema, table.Name, sinksPort, sinkMessagesCounter, sinkDurationHistogram, observer)
 			tableBindings = append(tableBindings, b)
 		}
 

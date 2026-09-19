@@ -12,7 +12,7 @@ export type MetricsPoint = {
     replicationLagBytes: number
     memoryAllocBytes: number
     sinkDelivery: Record<string, number>
-    sinkLatencyP95Seconds: Record<string, number>
+    sinkLatencyP95: Record<string, number>
 }
 
 /** Metrics laid out on a fixed timeline of `METRICS_POINTS_MAX` buckets, oldest first. */

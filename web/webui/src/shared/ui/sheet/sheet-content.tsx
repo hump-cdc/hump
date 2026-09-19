@@ -13,8 +13,10 @@ import { cn } from '@/shared/utils'
 import { SheetOverlay } from './sheet-overlay'
 
 const sheetContentVariants = cva(
-    'fixed z-50 flex flex-col gap-2 overflow-hidden border-hairline bg-canvas text-ink shadow-xl' +
+    [
+        'fixed z-50 flex flex-col gap-2 overflow-hidden border-hairline bg-canvas text-ink shadow-xl',
         'transition ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:duration-200 data-[state=open]:duration-300',
+    ],
     {
         variants: {
             side: {

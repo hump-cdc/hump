@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { MetricsPointModel } from '@/shared/api'
+import type { MetricsPointModel, MetricsResponseBodyModel } from '@/shared/api'
 
 import { METRICS_POINTS_MAX, normalizeMetrics, refetchInterval } from './use-metrics'
 
@@ -18,7 +18,17 @@ const point = (timestamp: number, overrides: Partial<MetricsPointModel> = {}): M
     replicationLagBytes: 0,
     memoryAllocBytes: 0,
     sinkDelivery: {},
-    sinkLatencyP95Seconds: {},
+    sinkLatencyP95: {},
+    ...overrides,
+})
+
+const response = (overrides: Partial<MetricsResponseBodyModel> = {}): MetricsResponseBodyModel => ({
+    duration: '1m',
+    bucketSeconds: 60,
+    points: null,
+    tables: {},
+    sinks: [],
+    connections: [],
     ...overrides,
 })
 
@@ -39,7 +49,7 @@ describe('refetchInterval', () => {
 
 describe('normalizeMetrics', () => {
     test('pads an empty response to zeros ending at the current bucket', () => {
-        const metrics = normalizeMetrics({ duration: '1m', bucketSeconds: 60, points: null }, NOW)
+        const metrics = normalizeMetrics(response(), NOW)
 
         expect(metrics.bucketMs).toBe(MINUTE)
         expect(metrics.sinks).toEqual([])
@@ -51,11 +61,7 @@ describe('normalizeMetrics', () => {
 
     test('keeps skipped buckets as zeros on the timeline', () => {
         const metrics = normalizeMetrics(
-            {
-                duration: '1m',
-                bucketSeconds: 60,
-                points: [point(CURRENT - 2 * MINUTE, { delivered: 5 }), point(CURRENT, { delivered: 7 })],
-            },
+            response({ points: [point(CURRENT - 2 * MINUTE, { delivered: 5 }), point(CURRENT, { delivered: 7 })] }),
             NOW,
         )
 
@@ -64,17 +70,16 @@ describe('normalizeMetrics', () => {
 
     test('converts bigint counters and collects sinks sorted', () => {
         const metrics = normalizeMetrics(
-            {
-                duration: '1m',
+            response({
                 bucketSeconds: 60n as unknown as number,
                 points: [
                     point(CURRENT, {
                         delivered: 3n as unknown as number,
                         sinkDelivery: { webhook: 2n as unknown as number },
-                        sinkLatencyP95Seconds: { kafka: 0.5 },
+                        sinkLatencyP95: { kafka: 500 },
                     }),
                 ],
-            },
+            }),
             NOW,
         )
 

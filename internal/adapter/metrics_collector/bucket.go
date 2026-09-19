@@ -8,8 +8,13 @@ import (
 	port "hump/internal/port/metrics_collector"
 )
 
-// latencyQuantile is the quantile reported as sink latency.
-const latencyQuantile = 0.95
+const (
+	// latencyQuantile is the quantile reported as sink latency.
+	latencyQuantile = 0.95
+	// millisecondsPerSecond converts the seconds the histograms observe into the
+	// milliseconds reported to clients.
+	millisecondsPerSecond = 1000
+)
 
 // aggregate holds what one scrape observed, or what several folded into one bucket.
 type aggregate struct {
@@ -20,15 +25,16 @@ type aggregate struct {
 	memory float64
 	// sinkDelivery counts delivered and failed messages by sink type.
 	sinkDelivery map[string]float64
-	// sinkLatency is the latency distribution by sink type.
-	sinkLatency map[string]*histogram
+	// sinkLatency is the latency distribution by sink destination; it is keyed by
+	// the full label set so a snapshot can report per-target latency too.
+	sinkLatency map[sinkKey]*histogram
 }
 
 // newAggregate returns an empty aggregate with its maps allocated.
 func newAggregate() aggregate {
 	return aggregate{
 		sinkDelivery: make(map[string]float64),
-		sinkLatency:  make(map[string]*histogram),
+		sinkLatency:  make(map[sinkKey]*histogram),
 	}
 }
 
@@ -43,17 +49,17 @@ func (a *aggregate) merge(other aggregate) {
 		a.sinkDelivery[sinkType] += count
 	}
 
-	for sinkType, h := range other.sinkLatency {
-		a.addLatency(sinkType, *h)
+	for key, h := range other.sinkLatency {
+		a.addLatency(key, *h)
 	}
 }
 
-// addLatency adds h to the distribution of sinkType.
-func (a *aggregate) addLatency(sinkType string, h histogram) {
-	existing, ok := a.sinkLatency[sinkType]
+// addLatency adds h to the distribution of key.
+func (a *aggregate) addLatency(key sinkKey, h histogram) {
+	existing, ok := a.sinkLatency[key]
 	if !ok {
 		existing = &histogram{buckets: make(map[float64]float64)}
-		a.sinkLatency[sinkType] = existing
+		a.sinkLatency[key] = existing
 	}
 
 	existing.add(h)
@@ -70,13 +76,13 @@ type bucket struct {
 // point renders b for the port.
 func (b *bucket) point() port.Point {
 	p := port.Point{
-		Timestamp:             b.start,
-		Delivered:             b.delivered,
-		Failed:                b.failed,
-		ReplicationLagBytes:   b.lag,
-		MemoryAllocBytes:      b.memory,
-		SinkDelivery:          make(map[string]float64, len(b.sinkDelivery)),
-		SinkLatencyP95Seconds: make(map[string]float64, len(b.sinkLatency)),
+		Timestamp:           b.start,
+		Delivered:           b.delivered,
+		Failed:              b.failed,
+		ReplicationLagBytes: b.lag,
+		MemoryAllocBytes:    b.memory,
+		SinkDelivery:        make(map[string]float64, len(b.sinkDelivery)),
+		SinkLatencyP95:      make(map[string]float64, len(b.sinkLatency)),
 	}
 
 	if b.covered > 0 {
@@ -87,9 +93,22 @@ func (b *bucket) point() port.Point {
 		p.SinkDelivery[sinkType] = count
 	}
 
-	for sinkType, h := range b.sinkLatency {
+	// Points report latency per sink type, so the per-destination distributions
+	// are folded back together before the quantile is taken.
+	byType := make(map[string]*histogram, len(b.sinkLatency))
+	for key, h := range b.sinkLatency {
+		merged, ok := byType[key.sinkType]
+		if !ok {
+			merged = &histogram{buckets: make(map[float64]float64)}
+			byType[key.sinkType] = merged
+		}
+
+		merged.add(*h)
+	}
+
+	for sinkType, h := range byType {
 		if value, ok := h.quantile(latencyQuantile); ok {
-			p.SinkLatencyP95Seconds[sinkType] = value
+			p.SinkLatencyP95[sinkType] = value * millisecondsPerSecond
 		}
 	}
 
@@ -118,6 +137,17 @@ func (s *series) add(now time.Time, elapsed time.Duration, observed aggregate) {
 	current := s.buckets[len(s.buckets)-1]
 	current.covered += elapsed
 	current.merge(observed)
+}
+
+// total merges every retained bucket into one aggregate, which is what the flat
+// views of a snapshot are computed over.
+func (s *series) total() aggregate {
+	result := newAggregate()
+	for _, b := range s.buckets {
+		result.merge(b.aggregate)
+	}
+
+	return result
 }
 
 // dump renders every bucket for the port, oldest first.

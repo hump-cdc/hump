@@ -3,27 +3,59 @@ package metricscollector
 import (
 	"strings"
 
+	"hump/internal/domain"
+	port "hump/internal/port/metrics_collector"
+
 	dto "github.com/prometheus/client_model/go"
 )
 
 const (
 	familySinkMessages   = "hump_sink_messages_total"
 	familySinkDuration   = "hump_sink_duration_seconds"
+	familyProcessedRows  = "hump_processed_rows_duration_seconds"
 	familyReplicationLag = "hump_replication_lag_bytes"
 	familyMemoryAlloc    = "go_memstats_alloc_bytes"
 
-	labelStatus = "status"
-	labelType   = "type"
-
-	statusSuccess = "success"
-	statusFailure = "failure"
+	labelStatus    = "status"
+	labelType      = "type"
+	labelHost      = "host"
+	labelTarget    = "target"
+	labelOperation = "operation"
+	labelSchema    = "schema"
+	labelTable     = "table"
 )
+
+// sinkKey identifies one rendered destination of one sink endpoint, matching the
+// label set the pipeline writes its sink metrics with.
+type sinkKey struct {
+	sinkType string
+	host     string
+	target   string
+}
+
+// latest holds the absolute counter readings of the most recent scrape, which is
+// what the flat views of a snapshot report.
+type latest struct {
+	tables map[domain.TableIdentifier]port.TableOps
+	sinks  map[sinkKey]map[domain.DeliveryStatus]float64
+}
+
+// newLatest returns an empty latest with its maps allocated.
+func newLatest() latest {
+	return latest{
+		tables: make(map[domain.TableIdentifier]port.TableOps),
+		sinks:  make(map[sinkKey]map[domain.DeliveryStatus]float64),
+	}
+}
 
 // scraper turns gathered metric families into the aggregate observed since the
 // previous scrape, keeping the cumulative readings of every series as baselines.
 type scraper struct {
 	counters   map[string]float64
 	histograms map[string]histogram
+	// latest is replaced wholesale on every scrape, so a series the registry
+	// stopped exposing disappears with it.
+	latest latest
 }
 
 // newScraper returns a scraper with no baselines.
@@ -31,14 +63,17 @@ func newScraper() *scraper {
 	return &scraper{
 		counters:   make(map[string]float64),
 		histograms: make(map[string]histogram),
+		latest:     newLatest(),
 	}
 }
 
-// scrape reads families into an aggregate. Counters and histograms contribute how
-// far they advanced since the previous scrape; a series seen for the first time
-// only records its baseline. Gauges contribute their current reading.
+// scrape reads families into an aggregate and refreshes the absolute readings.
+// Counters and histograms contribute how far they advanced since the previous
+// scrape; a series seen for the first time only records its baseline. Gauges
+// contribute their current reading.
 func (s *scraper) scrape(families []*dto.MetricFamily) aggregate {
 	observed := newAggregate()
+	current := newLatest()
 
 	for _, family := range families {
 		name := family.GetName()
@@ -46,18 +81,26 @@ func (s *scraper) scrape(families []*dto.MetricFamily) aggregate {
 		switch name {
 		case familySinkMessages:
 			for _, m := range family.GetMetric() {
-				status := labelValue(m, labelStatus)
-				if status != statusSuccess && status != statusFailure {
+				status := domain.DeliveryStatus(labelValue(m, labelStatus))
+				key := sinkKeyOf(m)
+
+				value := m.GetCounter().GetValue()
+				if current.sinks[key] == nil {
+					current.sinks[key] = make(map[domain.DeliveryStatus]float64, 3)
+				}
+				current.sinks[key][status] += value
+
+				if status != domain.DeliveryStatusSuccess && status != domain.DeliveryStatusFailure {
 					continue
 				}
 
-				delta, ok := s.counterDelta(seriesKey(name, m), m.GetCounter().GetValue())
+				delta, ok := s.counterDelta(seriesKey(name, m), value)
 				if !ok {
 					continue
 				}
 
-				observed.sinkDelivery[labelValue(m, labelType)] += delta
-				if status == statusSuccess {
+				observed.sinkDelivery[key.sinkType] += delta
+				if status == domain.DeliveryStatusSuccess {
 					observed.delivered += delta
 				} else {
 					observed.failed += delta
@@ -68,8 +111,19 @@ func (s *scraper) scrape(families []*dto.MetricFamily) aggregate {
 			for _, m := range family.GetMetric() {
 				delta, ok := s.histogramDelta(seriesKey(name, m), histogramOf(m.GetHistogram()))
 				if ok {
-					observed.addLatency(labelValue(m, labelType), delta)
+					observed.addLatency(sinkKeyOf(m), delta)
 				}
+			}
+
+		case familyProcessedRows:
+			for _, m := range family.GetMetric() {
+				key := domain.TableIdentifier{
+					Schema: domain.TableSchema(labelValue(m, labelSchema)),
+					Name:   domain.TableName(labelValue(m, labelTable)),
+				}
+				ops := current.tables[key]
+				addOperation(&ops, labelValue(m, labelOperation), float64(m.GetHistogram().GetSampleCount()))
+				current.tables[key] = ops
 			}
 
 		case familyReplicationLag:
@@ -83,6 +137,8 @@ func (s *scraper) scrape(families []*dto.MetricFamily) aggregate {
 			}
 		}
 	}
+
+	s.latest = current
 
 	return observed
 }
@@ -104,6 +160,21 @@ func (s *scraper) histogramDelta(key string, value histogram) (histogram, bool) 
 	s.histograms[key] = value
 
 	return value.sub(baseline), ok
+}
+
+// addOperation adds count to the field of ops that operation names, ignoring an
+// operation the domain does not define.
+func addOperation(ops *port.TableOps, operation string, count float64) {
+	switch domain.OperationType(operation) {
+	case domain.OperationTypeInsert:
+		ops.Insert += count
+	case domain.OperationTypeUpdate:
+		ops.Update += count
+	case domain.OperationTypeDelete:
+		ops.Delete += count
+	case domain.OperationTypeTruncate:
+		ops.Truncate += count
+	}
 }
 
 // histogramOf converts a gathered histogram into its cumulative distribution.
@@ -134,6 +205,15 @@ func seriesKey(family string, m *dto.Metric) string {
 	}
 
 	return b.String()
+}
+
+// sinkKeyOf reads the sink destination m belongs to off its labels.
+func sinkKeyOf(m *dto.Metric) sinkKey {
+	return sinkKey{
+		sinkType: labelValue(m, labelType),
+		host:     labelValue(m, labelHost),
+		target:   labelValue(m, labelTarget),
+	}
 }
 
 // labelValue returns the value of label name on m, or "" when m has no such label.

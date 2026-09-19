@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"hump/internal/domain"
 	port "hump/internal/port/metrics_collector"
 	"hump/pkg/app/shutdown"
 
@@ -33,6 +34,11 @@ type Collector struct {
 	interval    time.Duration
 	idleTimeout time.Duration
 	debounce    time.Duration
+	topology    []port.Connection // topology is the configured set of edges the flat views are keyed by; it never changes.
+	// recordedMu guards recorded on its own, keeping Record off the lock Dump
+	// holds while it merges buckets.
+	recordedMu  sync.Mutex
+	recorded    map[port.Connection]map[domain.DeliveryStatus]float64
 	mu          sync.Mutex
 	connections int
 	generation  uint64 // generation changes on every Connect, so an idle timer armed before it does not deactivate the collector.
@@ -64,6 +70,12 @@ func WithDebounce(debounce time.Duration) Option {
 	return func(c *Collector) { c.debounce = debounce }
 }
 
+// WithTopology sets the configured table-to-sink-target edges a snapshot reports,
+// so an edge with no traffic is still listed.
+func WithTopology(conns []port.Connection) Option {
+	return func(c *Collector) { c.topology = conns }
+}
+
 // New returns an idle collector over gatherer and registers a shutdown hook
 // that stops it.
 func New(gatherer prometheus.Gatherer, opts ...Option) *Collector {
@@ -72,6 +84,7 @@ func New(gatherer prometheus.Gatherer, opts ...Option) *Collector {
 		interval:    defaultInterval,
 		idleTimeout: defaultIdleTimeout,
 		debounce:    defaultDebounce,
+		recorded:    make(map[port.Connection]map[domain.DeliveryStatus]float64),
 	}
 
 	for _, opt := range opts {
@@ -149,21 +162,36 @@ func (c *Collector) Scrape() {
 	}
 }
 
-// Dump returns the newest points aggregated by d, oldest first.
-func (c *Collector) Dump(d port.Duration) ([]port.Point, error) {
+// Record counts n deliveries over conn that ended with status. Unlike the
+// scraped counts it survives an idle period, so it stays comparable with the
+// process-lifetime counters it is reported next to.
+func (c *Collector) Record(conn port.Connection, status domain.DeliveryStatus, n int) {
+	c.recordedMu.Lock()
+	defer c.recordedMu.Unlock()
+
+	if c.recorded == nil {
+		return
+	}
+
+	byStatus, ok := c.recorded[conn]
+	if !ok {
+		byStatus = make(map[domain.DeliveryStatus]float64, 3)
+		c.recorded[conn] = byStatus
+	}
+
+	byStatus[status] += float64(n)
+}
+
+// Dump returns the newest snapshot aggregated by d.
+func (c *Collector) Dump(d port.Duration) (port.Snapshot, error) {
 	if _, err := d.Duration(); err != nil {
-		return nil, err
+		return port.Snapshot{}, err
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	s, ok := c.series[d]
-	if !ok {
-		return []port.Point{}, nil
-	}
-
-	return s.dump(), nil
+	return c.snapshot(d), nil
 }
 
 // activate resets the aggregates and starts the scrape loop. c.mu must be held.
@@ -206,6 +234,10 @@ func (c *Collector) close() {
 
 	c.closed = true
 	c.stop()
+
+	c.recordedMu.Lock()
+	c.recorded = nil
+	c.recordedMu.Unlock()
 }
 
 // stop cancels the scrape loop and the idle timer and drops every aggregate.

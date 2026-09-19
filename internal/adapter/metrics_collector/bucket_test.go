@@ -106,11 +106,11 @@ func TestPointOmitsLatencyWithoutEstimate(t *testing.T) {
 	s := &series{duration: time.Minute}
 
 	observed := newAggregate()
-	observed.addLatency("kafka", histogram{buckets: map[float64]float64{0.1: 10}, count: 10})
-	observed.addLatency("http", histogram{buckets: map[float64]float64{0.1: 0}})
+	observed.addLatency(sinkKey{sinkType: "kafka"}, histogram{buckets: map[float64]float64{0.1: 10}, count: 10})
+	observed.addLatency(sinkKey{sinkType: "http"}, histogram{buckets: map[float64]float64{0.1: 0}})
 	s.add(bucketBase, time.Second, observed)
 
-	latency := s.dump()[0].SinkLatencyP95Seconds
+	latency := s.dump()[0].SinkLatencyP95
 	if _, ok := latency["http"]; ok || len(latency) != 1 {
 		t.Fatalf("got latency %v, want kafka only", latency)
 	}

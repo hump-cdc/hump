@@ -5,6 +5,7 @@ import (
 	"fmt"
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
+	metricscollector "hump/internal/port/metrics_collector"
 	"hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/resilience"
@@ -16,6 +17,8 @@ import (
 type binding struct {
 	sinkName              string
 	table                 string
+	observer              Observer // observer is nil when telemetry is disabled.
+	conn                  metricscollector.Connection
 	fn                    func(ctx context.Context, operationContext *sink.SinkContext) error
 	messageCounterSuccess prometheus.Counter
 	messageCounterRetry   prometheus.Counter
@@ -30,17 +33,25 @@ func newBinding(
 	sinksPort sink.Sink,
 	sinkMessagesCounter *prometheus.CounterVec,
 	sinkDurationHistogram *prometheus.HistogramVec,
+	observer Observer,
 ) *binding {
 	host, target := cfg.Sink.Metadata(sink.SinkContext{
 		Schema: schema,
 		Table:  tableName,
 	})
 	b := &binding{
-		sinkName:              string(cfg.Sink.Type()),
-		table:                 fmt.Sprintf("%s.%s", schema, tableName),
-		messageCounterSuccess: sinkMessagesCounter.WithLabelValues("success", string(cfg.Sink.Type()), host, target),
-		messageCounterRetry:   sinkMessagesCounter.WithLabelValues("retry", string(cfg.Sink.Type()), host, target),
-		messageCounterFailure: sinkMessagesCounter.WithLabelValues("failure", string(cfg.Sink.Type()), host, target),
+		sinkName: string(cfg.Sink.Type()),
+		table:    fmt.Sprintf("%s.%s", schema, tableName),
+		observer: observer,
+		conn: metricscollector.Connection{
+			Table:    domain.TableIdentifier{Schema: schema, Name: tableName},
+			SinkType: string(cfg.Sink.Type()),
+			Host:     host,
+			Target:   target,
+		},
+		messageCounterSuccess: sinkMessagesCounter.WithLabelValues(string(domain.DeliveryStatusSuccess), string(cfg.Sink.Type()), host, target),
+		messageCounterRetry:   sinkMessagesCounter.WithLabelValues(string(domain.DeliveryStatusRetry), string(cfg.Sink.Type()), host, target),
+		messageCounterFailure: sinkMessagesCounter.WithLabelValues(string(domain.DeliveryStatusFailure), string(cfg.Sink.Type()), host, target),
 		durationHistogram:     sinkDurationHistogram.WithLabelValues(string(cfg.Sink.Type()), host, target),
 	}
 
@@ -68,19 +79,32 @@ func (b *binding) OnDuration(elapsed time.Duration) {
 // OnSuccess reports a delivery that finished without an error.
 func (b *binding) OnSuccess() {
 	b.messageCounterSuccess.Add(1)
+	b.record(domain.DeliveryStatusSuccess)
 }
 
 // OnRetry reports that a failed attempt is about to be repeated.
 func (b *binding) OnRetry() {
 	b.messageCounterRetry.Add(1)
+	b.record(domain.DeliveryStatusRetry)
 }
 
 // OnFailure reports a delivery that exhausted its attempts.
 func (b *binding) OnFailure() {
 	b.messageCounterFailure.Add(1)
+	b.record(domain.DeliveryStatusFailure)
 }
 
 // OnSkip reports a failed delivery dropped by the sink's skip failure mode.
 func (b *binding) OnSkip(err error) {
 	logger.Error("Skipping failed delivery", "sink", b.sinkName, "table", b.table, "error", err)
+}
+
+// record reports one delivery with status to the observer. The sink metrics
+// carry no table, so the dashboard reads its per-connection counts from here.
+func (b *binding) record(status domain.DeliveryStatus) {
+	if b.observer == nil {
+		return
+	}
+
+	b.observer.Record(b.conn, status, 1)
 }

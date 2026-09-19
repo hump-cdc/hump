@@ -48,7 +48,7 @@ export const normalizeMetrics = (response: MetricsResponseBodyModel, now: number
     const sinks = new Set<string>()
     for (const point of points) {
         for (const sink of Object.keys(point.sinkDelivery)) sinks.add(sink)
-        for (const sink of Object.keys(point.sinkLatencyP95Seconds)) sinks.add(sink)
+        for (const sink of Object.keys(point.sinkLatencyP95)) sinks.add(sink)
     }
 
     return {
@@ -77,7 +77,7 @@ const toPoint = (point: MetricsPointModel): MetricsPoint => ({
     replicationLagBytes: point.replicationLagBytes,
     memoryAllocBytes: point.memoryAllocBytes,
     sinkDelivery: toNumbers(point.sinkDelivery),
-    sinkLatencyP95Seconds: toNumbers(point.sinkLatencyP95Seconds),
+    sinkLatencyP95: toNumbers(point.sinkLatencyP95),
 })
 
 /** All-zero point standing in for a bucket the response has no data for. */
@@ -89,5 +89,5 @@ const emptyPoint = (timestamp: number): MetricsPoint => ({
     replicationLagBytes: 0,
     memoryAllocBytes: 0,
     sinkDelivery: {},
-    sinkLatencyP95Seconds: {},
+    sinkLatencyP95: {},
 })

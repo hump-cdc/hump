@@ -63,7 +63,7 @@ func TestScraperReadsGaugesAndLatency(t *testing.T) {
 	}
 
 	// Series "b" was first seen on this scrape, so only "a" contributes.
-	latency := observed.sinkLatency["kafka"]
+	latency := observed.sinkLatency[sinkKey{sinkType: "kafka", host: "a", target: "t"}]
 	if latency == nil || latency.count != 10 {
 		t.Fatalf("got latency %+v, want 10 observations", latency)
 	}
@@ -80,9 +80,9 @@ func TestCollectorIdleUntilConnect(t *testing.T) {
 		t.Fatalf("gathered %d times while idle", g.calls.Load())
 	}
 
-	points, err := c.Dump(port.Duration1m)
-	if err != nil || len(points) != 0 {
-		t.Fatalf("got %v, %v, want no points", points, err)
+	snapshot, err := c.Dump(port.Duration1m)
+	if err != nil || len(snapshot.Points) != 0 {
+		t.Fatalf("got %v, %v, want no points", snapshot.Points, err)
 	}
 }
 
@@ -330,6 +330,7 @@ type testMetrics struct {
 	registry *prometheus.Registry
 	messages *prometheus.CounterVec
 	duration *prometheus.HistogramVec
+	rows     *prometheus.HistogramVec
 	lag      prometheus.Gauge
 	memory   prometheus.Gauge
 }
@@ -340,10 +341,11 @@ func newTestMetrics() *testMetrics {
 		registry: prometheus.NewRegistry(),
 		messages: prometheus.NewCounterVec(prometheus.CounterOpts{Name: familySinkMessages}, []string{"status", "type", "host", "target"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: familySinkDuration}, []string{"type", "host", "target"}),
+		rows:     prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: familyProcessedRows}, []string{"operation", "schema", "table"}),
 		lag:      prometheus.NewGauge(prometheus.GaugeOpts{Name: familyReplicationLag}),
 		memory:   prometheus.NewGauge(prometheus.GaugeOpts{Name: familyMemoryAlloc}),
 	}
-	m.registry.MustRegister(m.messages, m.duration, m.lag, m.memory)
+	m.registry.MustRegister(m.messages, m.duration, m.rows, m.lag, m.memory)
 
 	return m
 }
@@ -382,12 +384,19 @@ func (g *countingGatherer) Gather() ([]*dto.MetricFamily, error) {
 func mustDump(t *testing.T, c *Collector, d port.Duration) []port.Point {
 	t.Helper()
 
-	points, err := c.Dump(d)
+	return mustSnapshot(t, c, d).Points
+}
+
+// mustSnapshot returns the snapshot of c for d, failing t on error.
+func mustSnapshot(t *testing.T, c *Collector, d port.Duration) port.Snapshot {
+	t.Helper()
+
+	snapshot, err := c.Dump(d)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return points
+	return snapshot
 }
 
 // waitFor polls cond until it holds, failing t after a second.

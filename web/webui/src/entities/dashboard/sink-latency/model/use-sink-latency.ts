@@ -15,8 +15,8 @@ type Series = {
 /** A single point on the sink-latency bar chart: a bucket label plus one p95 per sink, in milliseconds. */
 type Item = Record<string, number | string> & { time: string }
 
-/** Convert seconds to milliseconds, rounded to 2 fraction digits. */
-const toMilliseconds = (seconds: number): number => Math.round(seconds * 1000 * 100) / 100
+/** Round a latency in milliseconds to 2 fraction digits. */
+const round = (milliseconds: number): number => Math.round(milliseconds * 100) / 100
 
 /**
  * Sink-latency chart at the chart step from the live controls. One series per sink type seen in
@@ -36,9 +36,9 @@ export const useSinkLatency = (): { series: Series[]; values: Item[] } => {
 
     return {
         series,
-        values: (data?.points ?? []).map(({ timestamp, sinkLatencyP95Seconds }) => ({
+        values: (data?.points ?? []).map(({ timestamp, sinkLatencyP95 }) => ({
             time: formatTimeCompact(timestamp),
-            ...Object.fromEntries(sinks.map((sink) => [sink, toMilliseconds(sinkLatencyP95Seconds[sink] ?? 0)])),
+            ...Object.fromEntries(sinks.map((sink) => [sink, round(sinkLatencyP95[sink] ?? 0)])),
         })),
     }
 }

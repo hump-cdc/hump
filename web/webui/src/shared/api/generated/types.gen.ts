@@ -137,6 +137,29 @@ export type ErrorModelModel = {
     type?: string;
 };
 
+export type MetricsConnectionModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Deliveries finished over the connection since start, retries excluded
+     */
+    operations: number;
+    /**
+     * Sink type
+     */
+    sink: string;
+    /**
+     * Schema-qualified source table
+     */
+    table: string;
+    /**
+     * Rendered target the table is delivered to
+     */
+    target: string;
+};
+
 export type MetricsPointModel = {
     /**
      * Messages delivered successfully during the bucket
@@ -161,9 +184,9 @@ export type MetricsPointModel = {
         [key: string]: number;
     };
     /**
-     * P95 sink write latency in seconds by sink type; a type without an estimate is absent
+     * P95 sink write latency in milliseconds by sink type; a type without an estimate is absent
      */
-    sinkLatencyP95Seconds: {
+    sinkLatencyP95: {
         [key: string]: number;
     };
     /**
@@ -189,6 +212,10 @@ export type MetricsResponseBodyModel = {
      */
     bucketSeconds: number;
     /**
+     * Configured table-to-target edges of the pipeline
+     */
+    connections: Array<MetricsConnectionModel> | null;
+    /**
      * Width of the buckets the points are aggregated into
      */
     duration: string;
@@ -196,6 +223,81 @@ export type MetricsResponseBodyModel = {
      * Newest points, oldest first
      */
     points: Array<MetricsPointModel> | null;
+    /**
+     * Configured sinks, with the targets they render to
+     */
+    sinks: Array<MetricsSinkModel> | null;
+    /**
+     * Row operations by configured table, keyed by schema-qualified name
+     */
+    tables: {
+        [key: string]: MetricsTableOpsModel;
+    };
+};
+
+export type MetricsSinkModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Deliveries finished since start, retries excluded
+     */
+    operations: number;
+    /**
+     * P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+    /**
+     * Share of deliveries that succeeded, 0 to 1; absent without an operation
+     */
+    success?: number;
+    /**
+     * Distinct targets the sink renders to; tables sharing a target collapse into one entry
+     */
+    targets: Array<MetricsSinkTargetModel> | null;
+    /**
+     * Sink type
+     */
+    type: string;
+};
+
+export type MetricsSinkTargetModel = {
+    /**
+     * Deliveries finished since start, retries excluded
+     */
+    operations: number;
+    /**
+     * P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+    /**
+     * Share of deliveries that succeeded, 0 to 1; absent without an operation
+     */
+    success?: number;
+    /**
+     * Rendered target: topic, subject, exchange, stream or HTTP method
+     */
+    target: string;
+};
+
+export type MetricsTableOpsModel = {
+    /**
+     * Rows deleted since start
+     */
+    d: number;
+    /**
+     * Rows inserted since start
+     */
+    i: number;
+    /**
+     * Tables truncated since start
+     */
+    t: number;
+    /**
+     * Rows updated since start
+     */
+    u: number;
 };
 
 export type PingEventModel = {

@@ -39,6 +39,9 @@ export default defineConfig({
             requests: true,
             responses: true,
             metadata: true,
+            dates: {
+                offset: true,
+            },
             definitions: {
                 case: 'PascalCase',
                 name: '{{name}}Schema',

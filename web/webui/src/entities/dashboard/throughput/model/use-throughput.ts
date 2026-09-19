@@ -1,31 +1,21 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-
 import { useLiveControlsChartStep } from '@/entities/config/state/@x/dashboard'
-import { getScalar, METRIC_BUCKET_MS } from '@/shared/storage'
+import { useMetrics } from '@/entities/metrics/@x/dashboard'
 import { formatTimeCompact } from '@/shared/utils'
 
 /** A single point on the throughput area chart. */
 type Item = { time: string; rowsPerSec: number }
 
-/**
- * Convert a `bucketMs`-wide bucket row count to a rows-per-second rate, rounded to
- * 2 decimals. Samples are folded with `sum`, so a stored value is the number of rows
- * processed during the whole bucket.
- */
-const toRate = (value: number, bucketMs: number): number => Math.round((value / (bucketMs / 1000)) * 100) / 100
+/** Round a rate to 2 fraction digits. */
+const round2 = (value: number): number => Math.round(value * 100) / 100
 
-/**
- * Live throughput chart data, sourced reactively from the `metric_scalar_*` store
- * matching the chart step selected in the live controls.
- */
+/** Throughput chart at the chart step from the live controls. */
 export const useThroughput = (): { values: Item[] } => {
     const chartStep = useLiveControlsChartStep()
-    const bucketMs = METRIC_BUCKET_MS[chartStep]
-    const items = useLiveQuery(() => getScalar('rows', chartStep), [chartStep])
+    const { data } = useMetrics(chartStep)
 
-    const values: Item[] = (items ?? []).map(({ timestamp, value }) => ({
+    const values: Item[] = (data?.points ?? []).map(({ timestamp, throughput }) => ({
         time: formatTimeCompact(timestamp),
-        rowsPerSec: toRate(value, bucketMs),
+        rowsPerSec: round2(throughput),
     }))
 
     return { values }

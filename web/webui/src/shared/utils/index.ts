@@ -1,5 +1,6 @@
 export * from './cn'
 export * from './debounce'
+export * from './format.bytes'
 export * from './format.datetime'
 export * from './format.duration'
 export * from './format.latency'

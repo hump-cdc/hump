@@ -131,7 +131,7 @@ export const MetricsPointSchema = z.object({
     throughput: z.number().register(z.globalRegistry, {
         description: 'Messages delivered successfully per second'
     }),
-    timestamp: z.iso.datetime().register(z.globalRegistry, {
+    timestamp: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
         description: 'Start of the bucket'
     })
 });
@@ -163,7 +163,7 @@ export const MetricsResponseBodySchema = z.object({
 export type MetricsResponseBody = z.infer<typeof MetricsResponseBodySchema>;
 
 export const PingEventSchema = z.object({
-    timestamp: z.iso.datetime().register(z.globalRegistry, {
+    timestamp: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
         description: 'Time the ping was sent'
     })
 });

@@ -1,7 +1,5 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-
 import { useLiveControlsChartStep } from '@/entities/config/state/@x/dashboard'
-import { getScalar } from '@/shared/storage'
+import { useMetrics } from '@/entities/metrics/@x/dashboard'
 import { formatTimeCompact } from '@/shared/utils'
 
 /** A single point on the heap area chart, in megabytes. */
@@ -10,21 +8,18 @@ type Item = { time: string; heapInUse: number }
 /** Convert a byte reading to megabytes, rounded to 2 fraction digits. */
 const toMegabytes = (bytes: number): number => Math.round((bytes / 1024 / 1024) * 100) / 100
 
-/**
- * Live heap chart data, sourced reactively from the `metric_scalar_*` store matching
- * the chart step selected in the live controls. `value` is the latest reading in
- * megabytes.
- */
+/** Heap chart at the chart step from the live controls. `value` is the latest reading in megabytes. */
 export const useHeapInUse = (): { value: number | undefined; values: Item[] } => {
     const chartStep = useLiveControlsChartStep()
-    const items = useLiveQuery(() => getScalar('heap', chartStep), [chartStep])
+    const { data } = useMetrics(chartStep)
+    const points = data?.points
 
-    // `items` is oldest → newest and zero-padded at the front; the last entry is the latest sample.
-    const latest = items?.at(-1)?.value
+    // Points run oldest → newest, so the last one is the newest bucket the response reported.
+    const latest = points?.at(-1)?.memoryAllocBytes
     const value = latest === undefined ? undefined : toMegabytes(latest)
-    const values: Item[] = (items ?? []).map(({ timestamp, value }) => ({
+    const values: Item[] = (points ?? []).map(({ timestamp, memoryAllocBytes }) => ({
         time: formatTimeCompact(timestamp),
-        heapInUse: toMegabytes(value),
+        heapInUse: toMegabytes(memoryAllocBytes),
     }))
 
     return { value, values }

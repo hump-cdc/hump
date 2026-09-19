@@ -13,7 +13,7 @@ export const SinkDelivery: FC = () => {
     return (
         <BarChartCard
             title="Sink delivery"
-            hint="Change events successfully written to their destinations by sink type."
+            hint="Change events delivered to their destinations by sink type, including failed attempts."
             data={values}
             series={series}
             xAxisKey="time"

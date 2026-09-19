@@ -1,26 +1,23 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-
 import { useLiveControlsChartStep } from '@/entities/config/state/@x/dashboard'
-import { getScalar } from '@/shared/storage'
+import { useMetrics } from '@/entities/metrics/@x/dashboard'
 import { formatNumber, formatTimeCompact } from '@/shared/utils'
 
 /** A single point on the failed bar chart. */
 type Item = { date: string; value: number }
 
 /**
- * Live failed-operations card data, sourced reactively from the `metric_scalar_*`
- * store matching the chart step selected in the live controls. The card value is the
- * total failed across the charted window, not a cumulative all-time count.
+ * Failed-operations card at the chart step from the live controls. `value` is the total
+ * across the charted window, not a cumulative all-time count.
  */
 export const useFailed = (): { value: string | undefined; values: Item[] } => {
     const chartStep = useLiveControlsChartStep()
-    const items = useLiveQuery(() => getScalar('operationsFailed', chartStep), [chartStep])
+    const { data } = useMetrics(chartStep)
+    const points = data?.points
 
-    // Samples are folded with `sum`, so each stored value is the count that failed during one bucket.
-    const value = formatNumber(items?.reduce((total, { value }) => total + value, 0))
-    const values: Item[] = (items ?? []).map(({ timestamp, value }) => ({
+    const value = formatNumber(points?.reduce((total, { failed }) => total + failed, 0))
+    const values: Item[] = (points ?? []).map(({ timestamp, failed }) => ({
         date: formatTimeCompact(timestamp),
-        value,
+        value: failed,
     }))
 
     return { value, values }

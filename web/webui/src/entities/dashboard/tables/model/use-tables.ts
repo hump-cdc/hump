@@ -6,9 +6,8 @@ import { useConfig } from '@/entities/config/config'
 type Item = { name: string; sinks: number }
 
 /**
- * Tables card rows, sourced from the backend configuration in the order it declares
- * them. `ConfigProvider` resolves the config before the dashboard mounts, so the list
- * is populated on first render.
+ * Tables card rows, in the order the backend configuration declares them. `ConfigProvider`
+ * resolves the config before the dashboard mounts, so the list is populated on first render.
  */
 export const useTables = (): Item[] => {
     const { data: config } = useConfig()

@@ -383,6 +383,10 @@ export const OperationsResponseBodySchema = z.object({
 
 export type OperationsResponseBody = z.infer<typeof OperationsResponseBodySchema>;
 
+export const WelcomeEventSchema = z.record(z.string(), z.never());
+
+export type WelcomeEvent = z.infer<typeof WelcomeEventSchema>;
+
 /**
  * OK
  */
@@ -391,7 +395,10 @@ export const zGetApiConfigResponse = ConfigResponseBodySchema;
 /**
  * OK
  */
-export const zGetApiLiveResponse = OperationsEventSchema;
+export const zGetApiLiveResponse = z.union([
+    OperationsEventSchema,
+    WelcomeEventSchema
+]);
 
 export const zPostApiMetricsBody = MetricsRequestBodySchema;
 

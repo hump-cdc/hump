@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { OperationsEventModel } from '@/shared/api'
+import type { GetApiLiveResponse } from '@/shared/api'
 
 import { STABLE_ATTEMPT_MS } from './backoff'
 import { createLiveStream, type LiveStream } from './stream'
@@ -10,14 +10,14 @@ const OPERATION = { schema: 'public', table: 'users', sink: 'kafka', host: 'loca
 
 /** One attempt's event source, driven by the test. */
 type Channel = {
-    iterable: AsyncIterable<OperationsEventModel>
-    push: (event: OperationsEventModel) => void
+    iterable: AsyncIterable<GetApiLiveResponse>
+    push: (event: GetApiLiveResponse) => void
     end: () => void
     fail: (error: unknown) => void
 }
 
 const createChannel = (): Channel => {
-    const queue: OperationsEventModel[] = []
+    const queue: GetApiLiveResponse[] = []
     let wake: (() => void) | undefined
     let done = false
     let failure: unknown
@@ -32,7 +32,7 @@ const createChannel = (): Channel => {
             async *[Symbol.asyncIterator]() {
                 while (true) {
                     while (queue.length > 0) {
-                        yield queue.shift() as OperationsEventModel
+                        yield queue.shift() as GetApiLiveResponse
                     }
                     if (failure !== undefined) {
                         throw failure
@@ -107,7 +107,7 @@ const tick = (times = 4): Promise<void> =>
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-const event = (count: number): OperationsEventModel => ({
+const event = (count: number): GetApiLiveResponse => ({
     operations: Array.from({ length: count }, () => ({ ...OPERATION })),
 })
 
@@ -181,7 +181,7 @@ describe('createLiveStream fan-out', () => {
         await tick()
 
         attempts[0].push({ operations: [] })
-        attempts[0].push({ operations: null } as unknown as OperationsEventModel)
+        attempts[0].push({ operations: null } as unknown as GetApiLiveResponse)
         await tick()
 
         expect(seen).toHaveLength(0)
@@ -309,6 +309,21 @@ describe('createLiveStream status', () => {
         await tick()
 
         expect(seen).toEqual(['connecting', 'live', 'reconnecting', 'connecting'])
+
+        stream.stop()
+    })
+
+    test('goes live on the welcome event, before any delivery', async () => {
+        const { stream, attempts } = setup()
+
+        stream.retain()
+        await tick()
+        expect(stream.getStatus()).toBe('connecting')
+
+        attempts[0].push({})
+        await tick()
+
+        expect(stream.getStatus()).toBe('live')
 
         stream.stop()
     })

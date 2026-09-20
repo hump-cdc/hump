@@ -4,7 +4,6 @@ const timeFormatter = new Intl.DateTimeFormat('en-US', {
     second: '2-digit',
     fractionalSecondDigits: 3,
     hour12: false,
-    timeZone: 'UTC',
 })
 
 /** Formats a `Date` as `HH:mm:ss.SSS` (UTC). */

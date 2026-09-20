@@ -33,7 +33,12 @@ func main() {
 		streamwebuiupdates.NewController(nil, nil, nil),
 	).Api(chi.NewMux())
 
-	if err := flattenSSESchema(api.OpenAPI(), "/api/live", "#/components/schemas/OperationsEvent"); err != nil {
+	if err := flattenSSESchema(
+		api.OpenAPI(),
+		"/api/live",
+		"#/components/schemas/OperationsEvent",
+		"#/components/schemas/WelcomeEvent",
+	); err != nil {
 		log.Fatalf("flatten sse schema: %v", err)
 	}
 
@@ -58,14 +63,14 @@ func main() {
 	log.Printf("done: %s", out)
 }
 
-// flattenSSESchema replaces the SSE response schema of path with a reference to ref.
+// flattenSSESchema replaces the SSE response schema of path with a oneOf of refs.
 //
 // huma documents an SSE response as an array of {data, event, id, retry} envelopes, but the
 // generated TypeScript client applies the response schema to the `data` of a single event.
-// Reducing the schema to the event payload is what makes that client validate and type events
-// correctly. The trade-off is that the spec no longer describes the envelope, which only works
-// while the stream carries one event name.
-func flattenSSESchema(spec *huma.OpenAPI, path string, ref string) error {
+// Reducing the schema to a union of event payloads is what makes that client validate and type
+// events correctly. The trade-off is that the spec drops the event names, so the payloads must
+// stay distinguishable by shape alone.
+func flattenSSESchema(spec *huma.OpenAPI, path string, refs ...string) error {
 	item := spec.Paths[path]
 	if item == nil || item.Get == nil {
 		return fmt.Errorf("no GET operation on %s", path)
@@ -81,7 +86,12 @@ func flattenSSESchema(spec *huma.OpenAPI, path string, ref string) error {
 		return fmt.Errorf("GET %s has no %s response content", path, sseMediaType)
 	}
 
-	media.Schema = &huma.Schema{Ref: ref}
+	oneOf := make([]*huma.Schema, 0, len(refs))
+	for _, ref := range refs {
+		oneOf = append(oneOf, &huma.Schema{Ref: ref})
+	}
+
+	media.Schema = &huma.Schema{OneOf: oneOf}
 
 	return nil
 }

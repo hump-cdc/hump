@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { Live, type OperationsEventModel } from '@/shared/api'
+import { type GetApiLiveResponse, Live } from '@/shared/api'
 
 const OPERATION = { schema: 'public', table: 'users', sink: 'kafka', host: 'localhost', target: 'users' }
 
@@ -25,9 +25,11 @@ const serveFrames = (frames: string[]): ReturnType<typeof Bun.serve> =>
 
 const frame = (operations: object[]): string => `event: operations\ndata: ${JSON.stringify({ operations })}\n\n`
 
+const WELCOME_FRAME = 'event: welcome\ndata: {}\n\n'
+
 describe('Live.stream against a real server', () => {
     test('yields parsed events and ends when the server closes the stream', async () => {
-        const server = serveFrames([frame([OPERATION]), frame([OPERATION, OPERATION])])
+        const server = serveFrames([WELCOME_FRAME, frame([OPERATION]), frame([OPERATION, OPERATION])])
 
         try {
             const { stream } = await Live.stream({
@@ -35,14 +37,12 @@ describe('Live.stream against a real server', () => {
                 sseMaxRetryAttempts: 1,
             })
 
-            const received: OperationsEventModel[] = []
+            const received: GetApiLiveResponse[] = []
             for await (const event of stream) {
                 received.push(event)
             }
 
-            expect(received).toHaveLength(2)
-            expect(received[0].operations).toEqual([OPERATION])
-            expect(received[1].operations).toHaveLength(2)
+            expect(received).toEqual([{}, { operations: [OPERATION] }, { operations: [OPERATION, OPERATION] }])
         } finally {
             await server.stop(true)
         }
@@ -59,7 +59,7 @@ describe('Live.stream against a real server', () => {
                 onSseError: (error) => errors.push(error),
             })
 
-            const received: OperationsEventModel[] = []
+            const received: GetApiLiveResponse[] = []
             for await (const event of stream) {
                 received.push(event)
             }

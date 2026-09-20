@@ -9,6 +9,10 @@ type OperationEvent struct {
 	Target string `json:"target" doc:"Target the sink rendered for this row: topic, subject, exchange, stream or HTTP method"`
 }
 
+// WelcomeEvent opens every stream, so the client learns it is connected before
+// the first delivery arrives.
+type WelcomeEvent struct{}
+
 // OperationsEvent carries every delivery the pipeline made since the previous
 // one, so a busy pipeline reaches the client as a couple of events per second.
 type OperationsEvent struct {

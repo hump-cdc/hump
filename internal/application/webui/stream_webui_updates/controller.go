@@ -37,6 +37,7 @@ func NewController(
 // Events maps every event name the stream sends to its payload type.
 func (c *Controller) Events() map[string]any {
 	return map[string]any{
+		"welcome":    WelcomeEvent{},
 		"operations": OperationsEvent{},
 	}
 }
@@ -61,6 +62,10 @@ func (c *Controller) Handler() func(ctx context.Context, _ *struct{}, send sse.S
 			id, ch := c.stream.Subscribe()
 			defer c.stream.Unsubscribe(id)
 			batches = ch
+		}
+
+		if err := send.Data(WelcomeEvent{}); err != nil {
+			return
 		}
 
 		for {

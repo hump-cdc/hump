@@ -1,4 +1,4 @@
-import { Live, type OperationsEventModel } from '@/shared/api'
+import { type GetApiLiveResponse, Live } from '@/shared/api'
 import { sleep } from '@/shared/utils'
 
 import { createBackoff, STABLE_ATTEMPT_MS } from './backoff'
@@ -15,7 +15,7 @@ import type {
 const LINGER_MS = 1_000
 
 /** Opens one attempt at the live feed. Reconnecting is the caller's job. */
-export type LiveStreamOpen = (signal: AbortSignal) => Promise<AsyncIterable<OperationsEventModel>>
+export type LiveStreamOpen = (signal: AbortSignal) => Promise<AsyncIterable<GetApiLiveResponse>>
 
 /** Injection points for tests; every one falls back to the production implementation. */
 export type LiveStreamDeps = {
@@ -79,12 +79,14 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
 
             try {
                 for await (const event of await open(signal)) {
-                    const operations = event.operations ?? []
+                    // Any event, the welcome one included, proves the connection is up.
+                    setStatus('live')
+
+                    const operations = 'operations' in event ? (event.operations ?? []) : []
                     if (operations.length === 0) {
                         continue
                     }
 
-                    setStatus('live')
                     notify(operationsListeners, (listener) => listener(operations))
                 }
             } catch (error) {

@@ -480,6 +480,10 @@ export type OperationsResponseBodyModel = {
     written: number;
 };
 
+export type WelcomeEventModel = {
+    [key: string]: never;
+};
+
 export type GetApiConfigData = {
     body?: never;
     path?: never;
@@ -525,7 +529,7 @@ export type GetApiLiveResponses = {
     /**
      * OK
      */
-    200: OperationsEventModel;
+    200: OperationsEventModel | WelcomeEventModel;
 };
 
 export type GetApiLiveResponse = GetApiLiveResponses[keyof GetApiLiveResponses];

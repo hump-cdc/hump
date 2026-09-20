@@ -11,9 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SidebarRouteRouteImport } from './routes/_sidebar/route'
 import { Route as SidebarIndexRouteImport } from './routes/_sidebar/index'
+import { Route as SidebarStatisticsRouteImport } from './routes/_sidebar/statistics'
 import { Route as SidebarSnapshotRouteImport } from './routes/_sidebar/snapshot'
 import { Route as SidebarOperationsRouteImport } from './routes/_sidebar/operations'
-import { Route as SidebarFlowsRouteImport } from './routes/_sidebar/flows'
 import { Route as SidebarConfigurationRouteImport } from './routes/_sidebar/configuration'
 
 const SidebarRouteRoute = SidebarRouteRouteImport.update({
@@ -23,6 +23,11 @@ const SidebarRouteRoute = SidebarRouteRouteImport.update({
 const SidebarIndexRoute = SidebarIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => SidebarRouteRoute,
+} as any)
+const SidebarStatisticsRoute = SidebarStatisticsRouteImport.update({
+  id: '/statistics',
+  path: '/statistics',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
 const SidebarSnapshotRoute = SidebarSnapshotRouteImport.update({
@@ -35,11 +40,6 @@ const SidebarOperationsRoute = SidebarOperationsRouteImport.update({
   path: '/operations',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
-const SidebarFlowsRoute = SidebarFlowsRouteImport.update({
-  id: '/flows',
-  path: '/flows',
-  getParentRoute: () => SidebarRouteRoute,
-} as any)
 const SidebarConfigurationRoute = SidebarConfigurationRouteImport.update({
   id: '/configuration',
   path: '/configuration',
@@ -49,38 +49,43 @@ const SidebarConfigurationRoute = SidebarConfigurationRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof SidebarIndexRoute
   '/configuration': typeof SidebarConfigurationRoute
-  '/flows': typeof SidebarFlowsRoute
   '/operations': typeof SidebarOperationsRoute
   '/snapshot': typeof SidebarSnapshotRoute
+  '/statistics': typeof SidebarStatisticsRoute
 }
 export interface FileRoutesByTo {
   '/configuration': typeof SidebarConfigurationRoute
-  '/flows': typeof SidebarFlowsRoute
   '/operations': typeof SidebarOperationsRoute
   '/snapshot': typeof SidebarSnapshotRoute
+  '/statistics': typeof SidebarStatisticsRoute
   '/': typeof SidebarIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_sidebar': typeof SidebarRouteRouteWithChildren
   '/_sidebar/configuration': typeof SidebarConfigurationRoute
-  '/_sidebar/flows': typeof SidebarFlowsRoute
   '/_sidebar/operations': typeof SidebarOperationsRoute
   '/_sidebar/snapshot': typeof SidebarSnapshotRoute
+  '/_sidebar/statistics': typeof SidebarStatisticsRoute
   '/_sidebar/': typeof SidebarIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/configuration' | '/flows' | '/operations' | '/snapshot'
+  fullPaths:
+    | '/'
+    | '/configuration'
+    | '/operations'
+    | '/snapshot'
+    | '/statistics'
   fileRoutesByTo: FileRoutesByTo
-  to: '/configuration' | '/flows' | '/operations' | '/snapshot' | '/'
+  to: '/configuration' | '/operations' | '/snapshot' | '/statistics' | '/'
   id:
     | '__root__'
     | '/_sidebar'
     | '/_sidebar/configuration'
-    | '/_sidebar/flows'
     | '/_sidebar/operations'
     | '/_sidebar/snapshot'
+    | '/_sidebar/statistics'
     | '/_sidebar/'
   fileRoutesById: FileRoutesById
 }
@@ -104,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SidebarIndexRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
+    '/_sidebar/statistics': {
+      id: '/_sidebar/statistics'
+      path: '/statistics'
+      fullPath: '/statistics'
+      preLoaderRoute: typeof SidebarStatisticsRouteImport
+      parentRoute: typeof SidebarRouteRoute
+    }
     '/_sidebar/snapshot': {
       id: '/_sidebar/snapshot'
       path: '/snapshot'
@@ -118,13 +130,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SidebarOperationsRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
-    '/_sidebar/flows': {
-      id: '/_sidebar/flows'
-      path: '/flows'
-      fullPath: '/flows'
-      preLoaderRoute: typeof SidebarFlowsRouteImport
-      parentRoute: typeof SidebarRouteRoute
-    }
     '/_sidebar/configuration': {
       id: '/_sidebar/configuration'
       path: '/configuration'
@@ -137,17 +142,17 @@ declare module '@tanstack/react-router' {
 
 interface SidebarRouteRouteChildren {
   SidebarConfigurationRoute: typeof SidebarConfigurationRoute
-  SidebarFlowsRoute: typeof SidebarFlowsRoute
   SidebarOperationsRoute: typeof SidebarOperationsRoute
   SidebarSnapshotRoute: typeof SidebarSnapshotRoute
+  SidebarStatisticsRoute: typeof SidebarStatisticsRoute
   SidebarIndexRoute: typeof SidebarIndexRoute
 }
 
 const SidebarRouteRouteChildren: SidebarRouteRouteChildren = {
   SidebarConfigurationRoute: SidebarConfigurationRoute,
-  SidebarFlowsRoute: SidebarFlowsRoute,
   SidebarOperationsRoute: SidebarOperationsRoute,
   SidebarSnapshotRoute: SidebarSnapshotRoute,
+  SidebarStatisticsRoute: SidebarStatisticsRoute,
   SidebarIndexRoute: SidebarIndexRoute,
 }
 

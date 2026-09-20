@@ -16,8 +16,9 @@ import { AppLayout } from './app-layout'
 
 const childRouteConfig = [
     { to: '/configuration', label: 'Configuration' },
-    { to: '/flows', label: 'Flows' },
     { to: '/operations', label: 'Operations' },
+    { to: '/snapshot', label: 'Snapshot' },
+    { to: '/statistics', label: 'Statistics' },
 ]
 
 const rootRoute = createRootRoute({
@@ -32,7 +33,7 @@ const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
     staticData: {
-        title: 'Overview',
+        title: 'Flows',
         headerAside: (
             <Button variant="outline">
                 <RefreshCw />

@@ -63,7 +63,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],
@@ -123,7 +123,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],
@@ -181,7 +181,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],
@@ -232,7 +232,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],
@@ -283,7 +283,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],
@@ -326,7 +326,7 @@
                                             "@/shared/ui/*/**",
                                             "!@/shared/ui/charts/*"
                                         ],
-                                        "message": "FSD public API: import a slice through its barrel ('@/entities/dashboard/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
+                                        "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
                                         "group": ["../../*", "../../**"],

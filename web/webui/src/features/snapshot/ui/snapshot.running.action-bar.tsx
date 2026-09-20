@@ -15,7 +15,7 @@ export const RunningActionBar: FC = () => {
     return (
         <ActionBar className="lg:justify-end">
             <Button variant="outline" className="w-full lg:w-auto" asChild>
-                <Link to="/flows">
+                <Link to="/">
                     <GitBranch />
                     View flows
                 </Link>

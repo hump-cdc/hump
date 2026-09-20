@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 
 import { SiGithub as Github } from '@icons-pack/react-simple-icons'
-import { BookOpen, ChevronsLeft, ExternalLink, Trash2 } from 'lucide-react'
+import { BookOpen, ChevronsLeft, ExternalLink } from 'lucide-react'
 
 import { Badge } from '@/shared/ui/badge'
 import {
@@ -56,12 +56,6 @@ export const AppSidebar: FC = () => {
 
             <SidebarFooter>
                 <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton tooltip="Clear data">
-                            <Trash2 />
-                            <span>Clear data</span>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
                     <AppSidebarTheme />
                 </SidebarMenu>
                 <SidebarSeparator />

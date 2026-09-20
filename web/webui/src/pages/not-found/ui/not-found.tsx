@@ -19,7 +19,7 @@ export const NotFound: FC = () => {
             action={
                 <Button asChild>
                     <Link to="/" replace>
-                        Go to Dashboard
+                        Go to Flows
                     </Link>
                 </Button>
             }

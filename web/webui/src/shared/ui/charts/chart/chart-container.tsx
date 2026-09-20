@@ -1,29 +1,42 @@
-import { type ComponentProps, type FC, useId } from 'react'
-
-import { ResponsiveContainer } from 'recharts'
+import { type ComponentProps, type CSSProperties, type FC, type ReactNode, useId } from 'react'
 
 import { cn } from '@/shared/utils'
 
 import { type ChartConfig, ChartContext } from './chart-context'
+import { ChartLegend } from './chart-legend'
 import { ChartStyle } from './chart-style'
 
-const INITIAL_DIMENSION = { width: 320, height: 200 } as const
+/**
+ * Strips the native tooltip chrome so the React card rendered into it is the only visible surface.
+ * Set on the container because the portaled tooltip stays its DOM descendant and inherits them.
+ */
+const tooltipSurfaceStyle = {
+    '--ts-chart-tooltip-background': 'transparent',
+    '--ts-chart-tooltip-border': 'none',
+    '--ts-chart-tooltip-shadow': 'none',
+    '--ts-chart-tooltip-padding': '0',
+    '--ts-chart-tooltip-max-width': 'none',
+    '--ts-chart-tooltip-color': 'var(--ink)',
+} as CSSProperties
 
-type ChartContainerProps = ComponentProps<'div'> & {
+type ChartContainerProps = Omit<ComponentProps<'div'>, 'children'> & {
     config: ChartConfig
-    children: ComponentProps<typeof ResponsiveContainer>['children']
-    initialDimension?: {
-        width: number
-        height: number
-    }
+    legend?: boolean
+    /** Renders the chart with the resource id prefix it must pass to keep gradients unique per chart. */
+    children: (chartId: string) => ReactNode
 }
 
+/**
+ * Sized frame of a chart: injects the per-series `--color-<key>` variables, lets the plot fill
+ * the height the consumer sets through `className`, and appends the legend below it.
+ */
 export const ChartContainer: FC<ChartContainerProps> = ({
     id,
     className,
-    children,
+    style,
     config,
-    initialDimension = INITIAL_DIMENSION,
+    legend = false,
+    children,
     ...props
 }) => {
     const uniqueId = useId()
@@ -34,14 +47,15 @@ export const ChartContainer: FC<ChartContainerProps> = ({
             <div
                 data-slot="chart"
                 data-chart={chartId}
-                className={cn(
-                    "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-ink-subtle [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-hairline [&_.recharts-curve.recharts-tooltip-cursor]:stroke-hairline [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-hairline [&_.recharts-radial-bar-background-sector]:fill-surface-2 [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-surface-2 [&_.recharts-reference-line_[stroke='#ccc']]:stroke-hairline [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-hidden [&_.recharts-surface]:outline-hidden",
-                    className,
-                )}
+                className={cn('flex aspect-video flex-col text-xs', className)}
+                style={{ ...tooltipSurfaceStyle, ...style }}
                 {...props}
             >
                 <ChartStyle id={chartId} config={config} />
-                <ResponsiveContainer initialDimension={initialDimension}>{children}</ResponsiveContainer>
+                <div className="min-h-0 flex-1 [&_.ts-chart-host]:outline-hidden [&_svg]:outline-hidden">
+                    {children(chartId)}
+                </div>
+                {legend && <ChartLegend />}
             </div>
         </ChartContext.Provider>
     )

@@ -8,15 +8,16 @@ import (
 	sink "hump/internal/port/sink"
 	"io"
 	nethttp "net/http"
+	"strconv"
 )
 
 var defaultClient = &nethttp.Client{}
 
 // Process delivers a single WAL operation to an HTTP sink by rendering the
 // configured URL, method, body, and headers from operationContext and issuing
-// the request with ctx. When streamEvent is non-nil the rendered request fields are
-// recorded on it for the operations stream.
-func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sink.SinkContext) error {
+// the request with ctx. When capture is non-nil the request and the response
+// status are recorded on it for the operations log.
+func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -36,6 +37,20 @@ func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sin
 	}
 
 	resp, err := defaultClient.Do(req)
+
+	// The capture is filled on both paths: a delivery that failed is the one a
+	// reader most wants the request for.
+	if capture != nil {
+		capture.Target = message.url
+		capture.SetPayload([]byte(message.body))
+		requestHeaders(req.Header, capture)
+		capture.Set("method", message.method)
+
+		if resp != nil {
+			capture.Set("status", strconv.Itoa(resp.StatusCode))
+		}
+	}
+
 	if err != nil {
 		return wrapError(fmt.Errorf("http request to %s: %w", message.url, err))
 	}

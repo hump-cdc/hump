@@ -11,5 +11,7 @@ type Definition interface {
 }
 
 type Sink interface {
-	Process(ctx context.Context, config Definition, operationContext *SinkContext) error
+	// Process delivers operationContext to the sink described by config. A
+	// non-nil capture is filled with what actually went on the wire.
+	Process(ctx context.Context, config Definition, operationContext *SinkContext, capture *Capture) error
 }

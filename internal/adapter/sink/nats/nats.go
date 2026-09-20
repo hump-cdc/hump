@@ -3,8 +3,10 @@ package nats
 
 import (
 	"context"
+	"strconv"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	sinkcfg "hump/config/sink"
@@ -13,10 +15,10 @@ import (
 
 // ProcessCore delivers a single WAL operation to a Core NATS sink by acquiring
 // (or reusing) the configured client, building a message from
-// operationContext, and publishing it with a synchronous flush. When streamEvent is
+// operationContext, and publishing it with a synchronous flush. When capture is
 // non-nil the built message's rendered fields are recorded on it for the
-// operations stream.
-func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext *sink.SinkContext) error {
+// operations log.
+func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -31,10 +33,14 @@ func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext
 		return wrapError(err)
 	}
 
-	if err := nc.conn.PublishMsg(msg); err != nil {
-		return wrapError(err)
+	err = nc.conn.PublishMsg(msg)
+	if err == nil {
+		err = nc.conn.FlushTimeout(flushTimeout(ctx))
 	}
-	if err := nc.conn.FlushTimeout(flushTimeout(ctx)); err != nil {
+
+	captureMessage(capture, msg)
+
+	if err != nil {
 		return wrapError(err)
 	}
 
@@ -44,8 +50,9 @@ func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext
 // ProcessJetStream delivers a single WAL operation to a JetStream sink. It
 // builds the message, applies the JetStream control headers, runs the
 // per-(connection, stream) reconcile guard, and publishes asserting the
-// expected stream.
-func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext) error {
+// expected stream. When capture is non-nil the built message's rendered fields
+// are recorded on it for the operations log.
+func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -68,11 +75,37 @@ func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operat
 		return wrapError(err)
 	}
 
-	if _, err := nc.js.PublishMsg(ctx, msg, jetstream.WithExpectStream(cfg.Stream.Name)); err != nil {
+	ack, err := nc.js.PublishMsg(ctx, msg, jetstream.WithExpectStream(cfg.Stream.Name))
+
+	captureMessage(capture, msg)
+	if capture != nil {
+		capture.Set("stream", cfg.Stream.Name)
+
+		if ack != nil {
+			capture.Set("sequence", strconv.FormatUint(ack.Sequence, 10))
+		}
+	}
+
+	if err != nil {
 		return wrapError(err)
 	}
 
 	return nil
+}
+
+// captureMessage records the subject, payload and headers of msg on capture,
+// which is nil unless a client is watching the operations log.
+func captureMessage(capture *sink.Capture, msg *nats.Msg) {
+	if capture == nil {
+		return
+	}
+
+	capture.Target = msg.Subject
+	capture.SetPayload(msg.Data)
+
+	for name := range msg.Header {
+		capture.Set("header."+name, msg.Header.Get(name))
+	}
 }
 
 // flushTimeout returns the remaining deadline on ctx, falling back to a small

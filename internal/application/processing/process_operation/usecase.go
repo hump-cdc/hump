@@ -7,6 +7,7 @@ import (
 	"hump/config"
 	"hump/internal/domain"
 	metricscollector "hump/internal/port/metrics_collector"
+	operationscollector "hump/internal/port/operations_collector"
 	"hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/version"
@@ -27,13 +28,22 @@ type Observer interface {
 	Record(conn metricscollector.Connection, status domain.DeliveryStatus, n int)
 }
 
+// OperationLog records finished sink deliveries, retries and all, for the
+// dashboard's operations view. It is nil when the web UI is disabled.
+type OperationLog interface {
+	// Connected reports whether anything is watching, so a delivery can skip
+	// the work of describing itself when nothing is.
+	Connected() bool
+	Record(rec *operationscollector.Record)
+}
+
 type UseCase struct {
 	bindings map[domain.TableIdentifier][]*binding
 	wp       *workerpool.WorkerPool[*sink.SinkContext]
 }
 
 // NewUseCase builds the sink bindings of every configured table.
-func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory, observer Observer) *UseCase {
+func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory, observer Observer, opLog OperationLog) *UseCase {
 	workerCount := 0
 
 	// Metrics
@@ -54,7 +64,7 @@ func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.
 
 		tableBindings := make([]*binding, 0, len(table.Sinks))
 		for _, sinkCfg := range table.Sinks {
-			b := newBinding(sinkCfg, table.Schema, table.Name, sinksPort, sinkMessagesCounter, sinkDurationHistogram, observer)
+			b := newBinding(sinkCfg, table.Schema, table.Name, sinksPort, sinkMessagesCounter, sinkDurationHistogram, observer, opLog)
 			tableBindings = append(tableBindings, b)
 		}
 

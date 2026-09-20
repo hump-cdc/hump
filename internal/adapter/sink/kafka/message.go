@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"fmt"
-	"hump/internal/domain"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	sinkcfg "hump/config/sink"
@@ -49,16 +48,10 @@ func buildMessage(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) 
 	return record, nil
 }
 
-// recordHeaders converts Kafka record headers into a plain string map for the
-// operations stream. It returns nil when there are no headers.
-func recordHeaders(headers []kgo.RecordHeader) domain.Headers {
-	if len(headers) == 0 {
-		return nil
-	}
-
-	out := make(domain.Headers, len(headers))
+// recordHeaders records the Kafka record headers on capture, prefixed so they
+// do not collide with the sink's own metadata.
+func recordHeaders(headers []kgo.RecordHeader, capture *sink.Capture) {
 	for _, h := range headers {
-		out[h.Key] = string(h.Value)
+		capture.Set("header."+h.Key, string(h.Value))
 	}
-	return out
 }

@@ -5,7 +5,6 @@ import (
 	nethttp "net/http"
 
 	sinkcfg "hump/config/sink"
-	"hump/internal/domain"
 	sink "hump/internal/port/sink"
 	"hump/pkg/version"
 )
@@ -41,18 +40,13 @@ func buildMessage(config sinkcfg.HTTPSink, operationContext *sink.SinkContext) (
 	}, nil
 }
 
-// requestHeaders flattens the request headers into a plain string map (first
-// value per key) for the operations stream. It returns nil when there are none.
-func requestHeaders(header nethttp.Header) domain.Headers {
-	if len(header) == 0 {
-		return nil
-	}
-
-	out := make(domain.Headers, len(header))
+// requestHeaders records the request headers on capture, one entry per key
+// holding the first value, prefixed so they do not collide with the sink's own
+// metadata.
+func requestHeaders(header nethttp.Header, capture *sink.Capture) {
 	for name := range header {
-		out[name] = header.Get(name)
+		capture.Set("header."+name, header.Get(name))
 	}
-	return out
 }
 
 // fillHeaders sets the User-Agent to "hump/<version>" and applies each

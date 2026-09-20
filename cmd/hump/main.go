@@ -10,6 +10,7 @@ import (
 	cfg "hump/config"
 	sinkcfg "hump/config/sink"
 	metricsCollectorAdapter "hump/internal/adapter/metrics_collector"
+	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
 	processOperationFeature "hump/internal/application/processing/process_operation"
@@ -17,8 +18,10 @@ import (
 	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
 	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
+	"hump/internal/domain"
 	databasePort "hump/internal/port/database"
 	metricsCollectorPort "hump/internal/port/metrics_collector"
+	operationsCollectorPort "hump/internal/port/operations_collector"
 	sinkPort "hump/internal/port/sink"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
@@ -67,7 +70,15 @@ func main() {
 	var sink sinkPort.Sink = sinkAdapter.New()
 	var collector metricsCollectorPort.Collector
 	if opts.TelemetryPort != nil {
-		collector = metricsCollectorAdapter.New(metricGatherer)
+		collector = metricsCollectorAdapter.New(metricGatherer,
+			metricsCollectorAdapter.WithTopology(topology(configuration)))
+	}
+
+	// The operations log only serves the web UI, and it stays idle, holding no
+	// buffer at all, until a client connects.
+	var operations operationsCollectorPort.Collector
+	if opts.WebPort != nil {
+		operations = operationsCollectorAdapter.New()
 	}
 
 	// Application
@@ -110,7 +121,7 @@ func main() {
 		// WAL
 		r.Run(
 			func(ctx context.Context) error {
-				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics)
+				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics, collector, operations)
 				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
 
 				return controller.Listen(ctx)
@@ -144,4 +155,28 @@ func formatSinks(sinks []sinkcfg.Config) string {
 		parts = append(parts, s.Sink.DisplayName())
 	}
 	return strings.Join(parts, ", ")
+}
+
+// topology resolves every table-to-sink-target edge of configuration, rendering
+// host and target the way the bindings do, so both match the metric labels.
+func topology(configuration cfg.Configuration) []metricsCollectorPort.Connection {
+	conns := make([]metricsCollectorPort.Connection, 0, len(configuration.Tables))
+
+	for _, table := range configuration.ResolveAll() {
+		for _, sc := range table.Sinks {
+			if sc.Sink == nil {
+				continue
+			}
+
+			host, target := sc.Sink.Metadata(sinkPort.SinkContext{Schema: table.Schema, Table: table.Name})
+			conns = append(conns, metricsCollectorPort.Connection{
+				Table:    domain.TableIdentifier{Schema: table.Schema, Name: table.Name},
+				SinkType: string(sc.Sink.Type()),
+				Host:     host,
+				Target:   target,
+			})
+		}
+	}
+
+	return conns
 }

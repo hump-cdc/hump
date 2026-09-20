@@ -7,7 +7,6 @@ import { db } from './db'
 export const schema = (): void => {
     db.version(1).stores({
         meta: 'key',
-        operations: 'id, timestamp, schema, table, operation, sinkType, host, target, success, durationMs',
         flow_tables: '++id, &[schema+table], schema, table',
         flow_sinks: '++id, &[sinkType+host], sinkType, host',
         flow_sink_targets: '++id, &[sinkId+target], sinkId, target',
@@ -23,4 +22,6 @@ export const schema = (): void => {
         metric_sink_latency_5m: '[sink+timestamp], timestamp',
         metric_sink_latency_10m: '[sink+timestamp], timestamp',
     })
+    // The operations log moved to `/api/operations`; drop the store a version 1 database still has.
+    db.version(2).stores({ operations: null })
 }

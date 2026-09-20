@@ -122,11 +122,15 @@ so a window past the end is an empty page rather than an error.
 The whole ring is walked even once the window is full, because `Total` has to be honest — it is
 what tells a client how far it can page.
 
-`newMatcher` splits `Query.Table` and lowercases `Query.Text` once, before the scan, so matching
-a record allocates nothing — the `schema + "." + name` a naive comparison would build is exactly
-the allocation this avoids. `containsFold` is generic over `~string | ~[]byte` for the same
-reason: a payload needs no conversion, and `strings.Contains(strings.ToLower(…))` would allocate
-per record. `TestRingSearchDoesNotAllocateWhenNothingMatches` pins that at 0.
+Every filter but `Text` is a list, and a record matches when it carries any one of its values;
+an empty list matches everything. `newMatcher` lowercases `Query.Text` once, before the scan, and
+`matchesTable` compares each `"schema.name"` in place against the record's schema, a dot and
+its name, so matching a record allocates nothing — the `schema + "." + name` a naive comparison
+would build is exactly the allocation this avoids. `containsFold` is generic over
+`~string | ~[]byte` for the same reason: a payload needs no conversion, and
+`strings.Contains(strings.ToLower(…))` would allocate per record.
+`TestRingSearchDoesNotAllocateWhenNothingMatches` and
+`TestRingSearchDoesNotAllocateWithListFilters` pin that at 0.
 
 The cost is the lock: `Search` holds `mu` for the full walk, and with a `Text` set that is up to
 `capacity × payloadLimit` bytes scanned while `Record` waits. Acceptable for a dashboard query,

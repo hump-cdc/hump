@@ -1,6 +1,6 @@
 import type { FC, PropsWithChildren } from 'react'
 
-import { CircleCheck, CircleX, RotateCcw } from 'lucide-react'
+import { CircleCheck, CircleX } from 'lucide-react'
 
 import { Badge } from '@/shared/ui/badge'
 import type { DataTableColumn } from '@/shared/ui/data-table'
@@ -8,19 +8,18 @@ import { Sink } from '@/shared/ui/sink'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { formatLatency, formatTime } from '@/shared/utils'
 
-import type { Operation } from '../model/use-operations'
+import type { Operation } from '../model/types'
 
 const opVariant = {
     insert: 'healthy',
     update: 'active',
     delete: 'failed',
-    select: 'lag',
-} as const
+    truncate: 'lag',
+} as const satisfies Record<Operation['op'], string>
 
 const statusIcon: Record<Operation['status'], FC> = {
     delivered: () => <CircleCheck className="size-3.75 text-success" />,
     failed: () => <CircleX className="size-3.75 text-danger" />,
-    retrying: () => <RotateCcw className="size-3.75 text-amber" />,
 }
 
 /** Custom React component used as a cell renderer. */
@@ -31,7 +30,7 @@ const StatusCell: FC<{ row: Operation }> = ({ row }) => {
 
 const TextFromStatus: FC<
     PropsWithChildren<{
-        status: 'delivered' | 'failed' | 'retrying'
+        status: Operation['status']
         attempts: number
     }>
 > = ({ children, status, attempts }) => (

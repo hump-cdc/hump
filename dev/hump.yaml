@@ -39,7 +39,7 @@ sinks:
               name: "hump.{{.Schema}}.{{.Table}}"
     - name: http1
       http:
-          url: "http://localhost:3050/submit"
+          url: "http://localhost:5050/submit1"
           method: "POST"
       failure: skip
 
@@ -48,7 +48,7 @@ tables:
           - schema: public
             table: users
       sinks:
-          # - preset: http1
+          - preset: http1
           - preset: kafka1
           # - preset: nats-core
           # - preset: nats-jetstream
@@ -62,7 +62,7 @@ tables:
           - schema: public
             table: events
       sinks:
-          # - preset: http1
+          - preset: http1
           # - preset: kafka1
           - preset: nats-core
           # - preset: nats-jetstream

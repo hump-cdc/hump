@@ -29,7 +29,7 @@ func TestOperationsRouteAnswersTheMatchingRecords(t *testing.T) {
 	record(collector, "users", domain.DeliveryStatusSuccess)
 	record(collector, "orders", domain.DeliveryStatusFailure)
 
-	body := post(t, router, `{"from":0,"to":50,"status":"failure"}`)
+	body := post(t, router, `{"from":0,"to":50,"statuses":["failure"]}`)
 
 	if body.Total != 1 || len(body.Items) != 1 {
 		t.Fatalf("body = %+v, want one failed delivery", body)
@@ -123,7 +123,7 @@ func TestOperationsRouteClampsAWindowPastTheEnd(t *testing.T) {
 func TestOperationsRouteRejectsAWindowlessBody(t *testing.T) {
 	router := newTestRouter(newTestOperationsCollector(t))
 
-	resp := request(router, `{"status":"failure"}`)
+	resp := request(router, `{"statuses":["failure"]}`)
 
 	if resp.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422 for a body without a window", resp.Code)

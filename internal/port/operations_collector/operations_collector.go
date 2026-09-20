@@ -41,13 +41,14 @@ type Record struct {
 	Attempts    []Attempt
 }
 
-// Query selects a window of the log. Every filter is optional: a zero one
+// Query selects a window of the log. Every filter is optional: an empty one
 // matches every record, so the zero Query is the first page of the whole ring.
+// A list filter matches a record carrying any one of its values.
 type Query struct {
-	SinkType   string                 // SinkType must match the record's exactly.
-	Table      string                 // Table is the schema-qualified name, "schema.name".
-	Operations []domain.OperationType // Operations matches a record carrying any one of them.
-	Status     domain.DeliveryStatus
+	SinkTypes  []string // SinkTypes must contain the record's sink type exactly.
+	Tables     []string // Tables are schema-qualified names, "schema.name".
+	Operations []domain.OperationType
+	Statuses   []domain.DeliveryStatus
 	Text       string // Text is an ASCII case-insensitive substring of the payload, target, errors or metadata; the payload is only searched as far as the collector kept it.
 	Start, End int    // Start and End are indices into the matching records, counted from the newest, cutting out the half-open window [Start, End).
 }

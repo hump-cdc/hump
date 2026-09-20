@@ -63,8 +63,16 @@ describe('invalidateForLiveReconnect', () => {
         const { client, calls } = spyClient()
         invalidateForLiveReconnect(client)
 
-        expect(calls).toHaveLength(1)
         expect(calls[0].filters).toMatchObject({ queryKey: ['metrics'], refetchType: 'all' })
         expect(calls[0].options).toEqual({ cancelRefetch: false })
+    })
+
+    test('marks operations blocks stale without refetching inactive ones', () => {
+        const { client, calls } = spyClient()
+        invalidateForLiveReconnect(client)
+
+        expect(calls).toHaveLength(2)
+        expect(calls[1].filters).toEqual({ queryKey: ['operations'] })
+        expect(calls[1].options).toEqual({ cancelRefetch: false })
     })
 })

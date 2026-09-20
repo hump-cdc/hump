@@ -436,17 +436,17 @@ export type OperationsRequestBodyModel = {
      */
     operations?: Array<'insert' | 'update' | 'delete' | 'truncate'> | null;
     /**
-     * Sink type to filter by
+     * Sink types to filter by; an empty list matches all of them
      */
-    sink?: string;
+    sinks?: Array<string> | null;
     /**
-     * Terminal outcome to filter by; retry is an attempt status and never a record's
+     * Terminal outcomes to filter by; an empty list matches all of them. Retry is an attempt status and never a record's
      */
-    status?: 'success' | 'failure';
+    statuses?: Array<'success' | 'failure'> | null;
     /**
-     * Schema-qualified table to filter by
+     * Schema-qualified tables to filter by; an empty list matches all of them
      */
-    table?: string;
+    tables?: Array<string> | null;
     /**
      * Case-insensitive substring of the payload, target, error or metadata
      */

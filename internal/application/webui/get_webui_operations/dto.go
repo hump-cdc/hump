@@ -8,10 +8,10 @@ type OperationsRequest struct {
 	Body struct {
 		From       int      `json:"from"                 required:"true" minimum:"0" doc:"Index of the first record to return, counted from the newest match, so 0 is the most recent delivery"`
 		To         int      `json:"to"                   required:"true" minimum:"0" doc:"Index one past the last record to return, so from 0 to 50 asks for the 50 newest matches"`
-		Sink       string   `json:"sink,omitempty"       doc:"Sink type to filter by"`
-		Table      string   `json:"table,omitempty"      doc:"Schema-qualified table to filter by"`
+		Sinks      []string `json:"sinks,omitempty"      doc:"Sink types to filter by; an empty list matches all of them"`
+		Tables     []string `json:"tables,omitempty"     doc:"Schema-qualified tables to filter by; an empty list matches all of them"`
 		Operations []string `json:"operations,omitempty" enum:"insert,update,delete,truncate" doc:"Row operations to filter by; an empty list matches all of them"`
-		Status     string   `json:"status,omitempty"     enum:"success,failure" doc:"Terminal outcome to filter by; retry is an attempt status and never a record's"`
+		Statuses   []string `json:"statuses,omitempty"   enum:"success,failure" doc:"Terminal outcomes to filter by; an empty list matches all of them. Retry is an attempt status and never a record's"`
 		Text       string   `json:"text,omitempty"       doc:"Case-insensitive substring of the payload, target, error or metadata"`
 	}
 }

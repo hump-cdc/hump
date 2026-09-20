@@ -3,7 +3,6 @@ import Dexie, { type Table } from 'dexie'
 import type { FlowSinkDto, FlowSinkTargetDto, FlowTableDto, FlowTableSinkDto, FlowTableTargetDto } from './flows/types'
 import type { MetaDto } from './meta/types'
 import type { ScalarMetricDto, ScalarMetricName, SinkMetricDto } from './metrics/types'
-import type { OperationDto } from './operations/types'
 
 export class HumpDatabase extends Dexie {
     constructor() {
@@ -13,11 +12,6 @@ export class HumpDatabase extends Dexie {
     /** Key/value metadata store (e.g. the persisted config hash); primary key is `key`. */
     get meta(): Table<MetaDto, string> {
         return this.table('meta')
-    }
-
-    /** CDC operations store; primary key is the operation `id`. */
-    get operations(): Table<OperationDto, string> {
-        return this.table('operations')
     }
 
     /** Scalar metric samples bucketed to 1-minute windows; primary key is `[metric+timestamp]`. */

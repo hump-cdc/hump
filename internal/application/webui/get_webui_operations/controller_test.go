@@ -35,10 +35,10 @@ func TestHandlerPassesTheFilterToTheCollector(t *testing.T) {
 	_, err := call(NewController(collector), request{
 		from:       10,
 		to:         35,
-		sink:       "kafka",
-		table:      "public.users",
+		sinks:      []string{"kafka", "nats"},
+		tables:     []string{"public.users"},
 		operations: []string{"insert", "delete"},
-		status:     "failure",
+		statuses:   []string{"failure", "success"},
 		text:       "boom",
 	})
 	if err != nil {
@@ -46,10 +46,10 @@ func TestHandlerPassesTheFilterToTheCollector(t *testing.T) {
 	}
 
 	want := operationscollector.Query{
-		SinkType:   "kafka",
-		Table:      "public.users",
+		SinkTypes:  []string{"kafka", "nats"},
+		Tables:     []string{"public.users"},
 		Operations: []domain.OperationType{domain.OperationTypeInsert, domain.OperationTypeDelete},
-		Status:     domain.DeliveryStatusFailure,
+		Statuses:   []domain.DeliveryStatus{domain.DeliveryStatusFailure, domain.DeliveryStatusSuccess},
 		Text:       "boom",
 		Start:      10,
 		End:        35,
@@ -130,10 +130,10 @@ func TestHandlerRendersARecord(t *testing.T) {
 type request struct {
 	from       int
 	to         int
-	sink       string
-	table      string
+	sinks      []string
+	tables     []string
 	operations []string
-	status     string
+	statuses   []string
 	text       string
 }
 
@@ -142,10 +142,10 @@ func call(c *Controller, req request) (*OperationsResponse, error) {
 	input := &OperationsRequest{}
 	input.Body.From = req.from
 	input.Body.To = req.to
-	input.Body.Sink = req.sink
-	input.Body.Table = req.table
+	input.Body.Sinks = req.sinks
+	input.Body.Tables = req.tables
 	input.Body.Operations = req.operations
-	input.Body.Status = req.status
+	input.Body.Statuses = req.statuses
 	input.Body.Text = req.text
 
 	return c.Handler()(context.Background(), input)
@@ -161,14 +161,11 @@ func status(err error) int {
 	return 0
 }
 
-// queriesEqual compares two queries field by field, the slice of operations
-// included, since a Query holding one cannot be compared with ==.
+// queriesEqual compares two queries field by field, since a Query holding
+// slices cannot be compared with ==.
 func queriesEqual(a, b operationscollector.Query) bool {
-	if !slices.Equal(a.Operations, b.Operations) {
-		return false
-	}
-
-	return a.SinkType == b.SinkType && a.Table == b.Table && a.Status == b.Status &&
+	return slices.Equal(a.SinkTypes, b.SinkTypes) && slices.Equal(a.Tables, b.Tables) &&
+		slices.Equal(a.Operations, b.Operations) && slices.Equal(a.Statuses, b.Statuses) &&
 		a.Text == b.Text && a.Start == b.Start && a.End == b.End
 }
 

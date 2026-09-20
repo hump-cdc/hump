@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { Badge } from '@/shared/ui/badge'
 import { formatLatency, formatTime } from '@/shared/utils'
 
-import type { Operation } from '../model/use-operations'
+import type { Operation } from '../model/types'
 
 type OperationRetriesProps = {
     row: Operation

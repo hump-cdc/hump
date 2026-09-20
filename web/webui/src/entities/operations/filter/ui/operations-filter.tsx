@@ -94,7 +94,7 @@ export const OperationsFilter: FC = () => {
             <TextInput
                 value={search}
                 onValueChange={setSearch}
-                placeholder="Search table, sink, error…"
+                placeholder="Search payload, target, error…"
                 icon={<Search />}
                 font="sans"
                 className="w-full"

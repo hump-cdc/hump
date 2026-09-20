@@ -7,19 +7,18 @@ export type DataTableColumn<T> = {
     /** Column header label. */
     header?: string
     /**
-     * Column width in pixels. Acts as a fixed width in opt-in flex mode (when
-     * any column sets `flex`), or as the flex basis when the table auto-fits all
-     * columns to its width (the default, when no column sets `flex`).
+     * Column width in pixels. Acts as a fixed width when any column sets `flex`,
+     * or as the flex basis when the table auto-fits all columns to its width (the
+     * default, when no column sets `flex`).
      */
     width?: number
-    /** Minimum width in pixels — the floor a flexing column won't shrink below. */
+    /** Minimum width in pixels — the floor a flexing or resized column won't shrink below. */
     minWidth?: number
-    /** Maximum width in pixels — caps how far a flexing column can grow. */
+    /** Maximum width in pixels — caps how far a flexing or resized column can grow. */
     maxWidth?: number
     /**
      * Flex weight: the column fills remaining horizontal space, distributed
-     * proportionally across all flexing columns. Overrides `width`. If no column
-     * sets `flex`, every column auto-fits the grid width by default.
+     * proportionally across all flexing columns. Overrides `width`.
      */
     flex?: number
     /** Whether the column can be resized by dragging its border. Defaults to `true`. */
@@ -28,116 +27,61 @@ export type DataTableColumn<T> = {
     cellClass?: string
     /** Extra class names applied to the header cell. */
     headerClass?: string
-    /**
-     * Renders the cell body as a React node. Receives the row and returns a
-     * `ReactNode`; AG Grid React renders it through its React cellRenderer
-     * pipeline, so hooks, context and other components work as expected.
-     */
+    /** Renders the cell body; the row is always loaded when this is called. */
     render?: (row: T) => ReactNode
 }
 
 /** A detail component mounted under an expanded row, receiving the parent row. */
 export type DetailComponent<T> = ComponentType<{ row: T }>
 
-type DataTableBaseProps<T> = {
+/** Index range of the rendered rows, overscan included; `end` is inclusive. */
+export type DataTableRange = {
+    start: number
+    end: number
+}
+
+/**
+ * Props of the virtualized table. Rows are sparse: the table asks `getRow` for
+ * each rendered index and draws a skeleton for any it gets `undefined` for, so
+ * the owner can load them on demand from `onVisibleRangeChange`.
+ */
+export type DataTableProps<T> = {
     /** Column definitions, left to right. */
     columns: DataTableColumn<T>[]
     /**
      * Stable identifier for this table. When set, user column resizes are
-     * persisted to localStorage under this key and restored on mount. Must be
-     * unique per table and stable for a given column layout.
+     * persisted to localStorage under this key and restored on mount.
      */
     id?: string
-    /** Returns a stable, unique id for a row (used for diffing and expansion). */
+    /** Returns a stable, unique id for a row (used to keep it expanded as it moves). */
     getRowId: (row: T) => string
+    /** Total number of rows; sizes the scrollbar up front. */
+    rowCount: number
+    /** Row at an index, or `undefined` while it is not loaded yet. */
+    getRow: (index: number) => T | undefined
+    /** Called whenever the rendered index range changes. */
+    onVisibleRangeChange?: (range: DataTableRange) => void
+    /** Shows skeleton rows instead of the empty message while `rowCount` is not known yet. */
+    isLoading?: boolean
+    /** Component shown when a row is expanded. Its presence makes rows expandable. */
+    getDetail?: DetailComponent<T>
+    /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
+    isRowExpandable?: (row: T) => boolean
+    /** Height of the expanded detail panel in pixels (or per-row). Defaults to `200`. */
+    detailHeight?: number | ((row: T) => number)
     /** Body row height in pixels. Defaults to `44`. */
     rowHeight?: number
     /** Header row height in pixels. Defaults to `38`. */
     headerHeight?: number
+    /** Rows rendered beyond each edge of the viewport. Defaults to `10`. */
+    overscan?: number
     /**
-     * Class names for the wrapper. The grid needs a bounded height for viewport
-     * virtualization — set it with a Tailwind height class here (e.g.
-     * `h-[560px]`, `h-full`) or via the numeric {@link DataTableBaseProps.height}
-     * prop. Defaults to `h-full`.
+     * Class names for the wrapper. The table needs a bounded height for
+     * virtualization — set it here (e.g. `h-full`) or via `height`.
      */
     className?: string
     /** Explicit wrapper height. Alternative to a height class on `className`. */
     height?: number | string
+    /** Shown in the body when there are no rows. */
+    emptyMessage?: ReactNode
 }
-
-/** In-memory data with optional expandable detail rows. */
-export type DataTableClientProps<T> = DataTableBaseProps<T> & {
-    /** All rows, held in memory. The grid virtualizes the DOM. */
-    data: T[]
-    /** Component shown when a row is expanded. Its presence makes rows expandable. */
-    getDetail?: DetailComponent<T>
-    /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
-    isRowExpandable?: (row: T) => boolean
-    /** Height of the expanded detail row in pixels (or per-row). Defaults to `200`. */
-    detailHeight?: number | ((row: T) => number)
-    fetchRows?: never
-    rowCount?: never
-    blockSize?: never
-    onLoadMore?: never
-}
-
-/**
- * Lazy, server-driven rows on a windowed client-side model. When `rowCount` is
- * known the grid is seeded with that many placeholder rows, giving a stable
- * scrollbar up front; the blocks overlapping the viewport are fetched on scroll
- * and swapped in (skeleton while loading). Because rows live in the client-side
- * model, they support the same expandable detail rows as client mode.
- */
-export type DataTableServerProps<T> = DataTableBaseProps<T> & {
-    /** Fetches the rows for a window. `total`, when returned, finalizes the count. */
-    fetchRows: (params: { startRow: number; endRow: number }) => Promise<{ rows: T[]; total?: number }>
-    /**
-     * Total number of rows. When provided, sizes the scrollbar up front and the
-     * grid shows placeholders until each row loads. Omit for an unknown total
-     * (the list then grows as blocks load).
-     */
-    rowCount?: number
-    /** Rows fetched per request (block/window size). Defaults to `100`. */
-    blockSize?: number
-    /** Changing this clears cached blocks and refetches the visible window in place. */
-    refreshToken?: number | string
-    /** Component shown when a row is expanded. Its presence makes rows expandable. */
-    getDetail?: DetailComponent<T>
-    /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
-    isRowExpandable?: (row: T) => boolean
-    /** Height of the expanded detail row in pixels (or per-row). Defaults to `200`. */
-    detailHeight?: number | ((row: T) => number)
-    data?: never
-    onLoadMore?: never
-}
-
-/**
- * Infinite/paginated rows fed from an external store (e.g. TanStack Query). `data`
- * holds the contiguous prefix of rows loaded so far (`[0 .. data.length-1]`) and
- * `rowCount` is the known total; the grid pads the tail with placeholders for a
- * stable scrollbar and calls `onLoadMore` as the viewport nears the loaded tail.
- * Unlike server mode, fetching/caching lives outside the table.
- */
-export type DataTableInfiniteProps<T> = DataTableBaseProps<T> & {
-    /** Rows loaded so far: a contiguous prefix `[0 .. data.length-1]` of the full list. */
-    data: T[]
-    /** Total number of rows. Sizes the scrollbar and the placeholder tail. */
-    rowCount: number
-    /**
-     * Called when the viewport nears the loaded tail and more rows remain
-     * (`data.length < rowCount`). Presence of this prop selects infinite mode.
-     */
-    onLoadMore: () => void
-    /** When `true`, suppresses `onLoadMore` while a page is in flight. */
-    isFetchingNextPage?: boolean
-    /** Component shown when a row is expanded. Its presence makes rows expandable. */
-    getDetail?: DetailComponent<T>
-    /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
-    isRowExpandable?: (row: T) => boolean
-    /** Height of the expanded detail row in pixels (or per-row). Defaults to `200`. */
-    detailHeight?: number | ((row: T) => number)
-    fetchRows?: never
-    blockSize?: never
-}
-
-export type DataTableProps<T> = DataTableClientProps<T> | DataTableServerProps<T> | DataTableInfiniteProps<T>

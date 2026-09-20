@@ -5,9 +5,13 @@ import { keys } from './keys'
 /** Queries a batch of deliveries makes stale. */
 export const LIVE_EVENT_QUERIES: InvalidateQueryFilters[] = [{ queryKey: keys.prefixes.metrics() }]
 
-/** The same queries after a gap in the stream, refetched even while unmounted: events were missed. */
+/**
+ * The same queries after a gap in the stream, refetched even while unmounted: events were missed.
+ * Operations blocks are only marked stale, since the list refreshes itself while it is mounted.
+ */
 export const LIVE_RECONNECT_QUERIES: InvalidateQueryFilters[] = [
     { queryKey: keys.prefixes.metrics(), refetchType: 'all' },
+    { queryKey: keys.prefixes.operations() },
 ]
 
 /** Marks stale everything a live batch affects. */

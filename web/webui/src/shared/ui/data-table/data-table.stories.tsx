@@ -1,12 +1,13 @@
-import type { FC } from 'react'
+import { type FC, useCallback, useEffect, useRef, useState } from 'react'
 
 import type { Meta, StoryObj } from '@storybook/react'
 import { CircleCheck, CircleX, RotateCcw } from 'lucide-react'
+import { fn } from 'storybook/test'
 
 import { Badge } from '@/shared/ui/badge'
 
 import { DataTable } from './data-table'
-import type { DataTableColumn } from './data-table.types'
+import type { DataTableColumn, DataTableRange } from './data-table.types'
 
 type Attempt = {
     attempt: number
@@ -319,75 +320,105 @@ const operations: Operation[] = [
     },
 ]
 
-// 3× the base set; copies get unique ids but keep their retries (still expandable).
-const expandableRows: Operation[] = Array.from({ length: 3 }, (_, copy) =>
-    operations.map((op) => (copy === 0 ? op : { ...op, id: `${op.id}-${copy}` })),
-).flat()
-
 const detailHeight = (row: Operation) => 53 + (row.retries?.length ?? 0) * 41
 
-const meta: Meta = {
+type StoryArgs = {
+    rowCount: number
+    blockSize: number
+    latency: number
+    isExpandable: boolean
+    onVisibleRangeChange: (range: DataTableRange) => void
+}
+
+/**
+ * Stands in for a server: rows are generated per block after `latency`, so
+ * scrolling shows skeletons until the blocks under the viewport arrive.
+ */
+const useFakeRows = ({ rowCount, blockSize, latency }: Pick<StoryArgs, 'rowCount' | 'blockSize' | 'latency'>) => {
+    const [blocks, setBlocks] = useState<ReadonlyMap<number, Operation[]>>(new Map())
+    const requested = useRef(new Set<number>())
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: any change to the fake server drops what it served.
+    useEffect(() => {
+        requested.current = new Set()
+        setBlocks(new Map())
+    }, [rowCount, blockSize, latency])
+
+    const load = useCallback(
+        ({ start, end }: DataTableRange) => {
+            for (let block = Math.floor(start / blockSize); block <= Math.floor(end / blockSize); block++) {
+                if (requested.current.has(block)) {
+                    continue
+                }
+                requested.current.add(block)
+                setTimeout(() => {
+                    const from = block * blockSize
+                    const rows = Array.from({ length: Math.max(0, Math.min(blockSize, rowCount - from)) }, (_, i) => {
+                        const index = from + i
+                        const template = operations[index % operations.length]
+                        return { ...template, id: String(index), time: `#${index}` }
+                    })
+                    setBlocks((previous) => new Map(previous).set(block, rows))
+                }, latency)
+            }
+        },
+        [rowCount, blockSize, latency],
+    )
+
+    const getRow = useCallback(
+        (index: number) => blocks.get(Math.floor(index / blockSize))?.[index % blockSize],
+        [blocks, blockSize],
+    )
+
+    return { getRow, load }
+}
+
+const meta: Meta<StoryArgs> = {
     title: 'UI Kit/Data Table',
     parameters: { disableSideBySide: true, disablePadding: true },
+    argTypes: {
+        rowCount: { name: 'Rows', control: { type: 'number', min: 0, step: 1000 }, table: { category: 'Content' } },
+        blockSize: {
+            name: 'Block size',
+            control: { type: 'number', min: 10, step: 10 },
+            table: { category: 'Content' },
+        },
+        latency: { name: 'Latency, ms', control: { type: 'number', min: 0, step: 50 }, table: { category: 'State' } },
+        isExpandable: { name: 'Expandable', control: 'boolean', table: { category: 'State' } },
+        onVisibleRangeChange: { table: { disable: true } },
+    },
+    args: { rowCount: 10_000, blockSize: 100, latency: 350, isExpandable: true, onVisibleRangeChange: fn() },
+    render: function Render({ rowCount, blockSize, latency, isExpandable, onVisibleRangeChange }) {
+        const { getRow, load } = useFakeRows({ rowCount, blockSize, latency })
+        const handleRangeChange = useCallback(
+            (range: DataTableRange) => {
+                onVisibleRangeChange(range)
+                load(range)
+            },
+            [onVisibleRangeChange, load],
+        )
+
+        return (
+            <div className="h-screen w-full">
+                <DataTable
+                    id="operations-server"
+                    className="h-full"
+                    columns={columns}
+                    getRowId={(r) => r.id}
+                    rowCount={rowCount}
+                    getRow={getRow}
+                    onVisibleRangeChange={handleRangeChange}
+                    isRowExpandable={(r) => !!r.retries?.length}
+                    getDetail={isExpandable ? OperationRetries : undefined}
+                    detailHeight={detailHeight}
+                />
+            </div>
+        )
+    },
 }
 
 export default meta
 
-/** In-memory data with expandable retry-attempt detail rows. */
-export const Client: StoryObj = {
-    name: 'Client',
-    render: () => (
-        <div className="h-screen w-full">
-            <DataTable
-                id="operations-expandable"
-                className="h-full"
-                columns={columns}
-                data={expandableRows}
-                getRowId={(r) => r.id}
-                isRowExpandable={(r) => !!r.retries?.length}
-                getDetail={OperationRetries}
-                detailHeight={detailHeight}
-            />
-        </div>
-    ),
-}
-
-const TOTAL_ROWS = 10_000
-
-/**
- * Lazy, server-driven rows: `rowCount` sizes the scrollbar to 10k up front and
- * the grid shows placeholders until each block loads on scroll. Each row carries
- * its own `retries`, so rows with retries are expandable just like client mode.
- */
-export const ServerSide: StoryObj = {
-    name: 'Server',
-    render: () => (
-        <div className="h-screen w-full">
-            <DataTable
-                id="operations-server"
-                className="h-full"
-                columns={columns}
-                getRowId={(r) => r.id}
-                rowCount={TOTAL_ROWS}
-                blockSize={100}
-                isRowExpandable={(r) => !!r.retries?.length}
-                getDetail={OperationRetries}
-                detailHeight={detailHeight}
-                fetchRows={({ startRow, endRow }) =>
-                    new Promise((resolve) => {
-                        setTimeout(() => {
-                            const count = Math.max(0, Math.min(endRow, TOTAL_ROWS) - startRow)
-                            const rows: Operation[] = Array.from({ length: count }, (_, i) => {
-                                const index = startRow + i
-                                const template = operations[index % operations.length]
-                                // Keep `retries` from the template so some rows are expandable.
-                                return { ...template, id: String(index), time: `#${index}` }
-                            })
-                            resolve({ rows, total: TOTAL_ROWS })
-                        }, 350)
-                    })
-                }
-            />
-        </div>
-    ),
+export const Default: StoryObj<StoryArgs> = {
+    name: 'Data Table',
 }

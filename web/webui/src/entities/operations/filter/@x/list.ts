@@ -1,5 +1,6 @@
 /**
  * Cross-import API (FSD `@x`) exposed to the `list` slice: the filter store its query
- * reads. Nothing else of this slice is shared.
+ * reads and the option lists that tell a full facet from a narrowed one.
  */
-export { useOperationsFilter } from '../model/store'
+export { operationItems, statusItems } from '../model/options'
+export { type OperationsFilterState, useOperationsFilter } from '../model/store'

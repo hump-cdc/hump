@@ -115,34 +115,27 @@ func (r *ring) index(offset int) int {
 }
 
 // matcher is a Query prepared for the scan: the parts that would otherwise be
-// split or lowercased once per record are done once here instead, so matching
-// a record allocates nothing.
+// lowercased once per record are done once here instead, so matching a record
+// allocates nothing.
 type matcher struct {
-	query  port.Query
-	schema string // schema and name are query.Table split on its dot; both empty when no table was asked for.
-	name   string
-	text   string // text is query.Text lowercased, since containsFold expects a lowercased needle.
+	query port.Query
+	text  string // text is query.Text lowercased, since containsFold expects a lowercased needle.
 }
 
 // newMatcher prepares q for the scan.
 func newMatcher(q port.Query) matcher {
-	m := matcher{query: q, text: strings.ToLower(q.Text)}
-	if q.Table != "" {
-		m.schema, m.name, _ = strings.Cut(q.Table, ".")
-	}
-
-	return m
+	return matcher{query: q, text: strings.ToLower(q.Text)}
 }
 
 // matches reports whether rec satisfies every filter of the query.
 func (m *matcher) matches(rec *port.Record) bool {
 	q := &m.query
 
-	if q.SinkType != "" && rec.SinkType != q.SinkType {
+	if len(q.SinkTypes) > 0 && !slices.Contains(q.SinkTypes, rec.SinkType) {
 		return false
 	}
 
-	if q.Table != "" && (string(rec.Table.Schema) != m.schema || string(rec.Table.Name) != m.name) {
+	if len(q.Tables) > 0 && !m.matchesTable(rec) {
 		return false
 	}
 
@@ -150,11 +143,27 @@ func (m *matcher) matches(rec *port.Record) bool {
 		return false
 	}
 
-	if q.Status != "" && rec.Status != q.Status {
+	if len(q.Statuses) > 0 && !slices.Contains(q.Statuses, rec.Status) {
 		return false
 	}
 
 	return m.text == "" || m.matchesText(rec)
+}
+
+// matchesTable reports whether rec's table is one of the query's. Each name is
+// compared in place against schema, dot and name, since building
+// "schema.name" per record would allocate.
+func (m *matcher) matchesTable(rec *port.Record) bool {
+	schema, name := string(rec.Table.Schema), string(rec.Table.Name)
+
+	for _, table := range m.query.Tables {
+		if len(table) == len(schema)+1+len(name) &&
+			table[:len(schema)] == schema && table[len(schema)] == '.' && table[len(schema)+1:] == name {
+			return true
+		}
+	}
+
+	return false
 }
 
 // matchesText reports whether the prepared needle occurs anywhere a reader

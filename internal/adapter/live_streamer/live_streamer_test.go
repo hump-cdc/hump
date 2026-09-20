@@ -1,6 +1,7 @@
 package livestreamer
 
 import (
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,11 +35,11 @@ func TestStreamerDelegatesToTheWrappedCollector(t *testing.T) {
 		t.Fatalf("Dump total = %d, want 7", got)
 	}
 
-	if got := s.Search(operationscollector.Query{SinkType: "kafka"}).Total; got != 7 {
+	if got := s.Search(operationscollector.Query{SinkTypes: []string{"kafka"}}).Total; got != 7 {
 		t.Fatalf("Search total = %d, want 7", got)
 	}
-	if inner.query.SinkType != "kafka" {
-		t.Fatalf("Search passed %q, want the query it was given", inner.query.SinkType)
+	if !slices.Equal(inner.query.SinkTypes, []string{"kafka"}) {
+		t.Fatalf("Search passed %q, want the query it was given", inner.query.SinkTypes)
 	}
 }
 

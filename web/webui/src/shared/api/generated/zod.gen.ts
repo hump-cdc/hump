@@ -352,15 +352,9 @@ export const OperationsRequestBodySchema = z.object({
         'delete',
         'truncate'
     ])).nullish(),
-    sink: z.string().register(z.globalRegistry, {
-        description: 'Sink type to filter by'
-    }).optional(),
-    status: z.enum(['success', 'failure']).register(z.globalRegistry, {
-        description: 'Terminal outcome to filter by; retry is an attempt status and never a record\'s'
-    }).optional(),
-    table: z.string().register(z.globalRegistry, {
-        description: 'Schema-qualified table to filter by'
-    }).optional(),
+    sinks: z.array(z.string()).nullish(),
+    statuses: z.array(z.enum(['success', 'failure'])).nullish(),
+    tables: z.array(z.string()).nullish(),
     text: z.string().register(z.globalRegistry, {
         description: 'Case-insensitive substring of the payload, target, error or metadata'
     }).optional(),

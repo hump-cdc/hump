@@ -33,10 +33,10 @@ func (c *Controller) Handler() func(ctx context.Context, input *OperationsReques
 		}
 
 		page := c.collector.Search(operationscollector.Query{
-			SinkType:   input.Body.Sink,
-			Table:      input.Body.Table,
-			Operations: c.operations(input.Body.Operations),
-			Status:     domain.DeliveryStatus(input.Body.Status),
+			SinkTypes:  input.Body.Sinks,
+			Tables:     input.Body.Tables,
+			Operations: convert[domain.OperationType](input.Body.Operations),
+			Statuses:   convert[domain.DeliveryStatus](input.Body.Statuses),
 			Text:       input.Body.Text,
 			Start:      input.Body.From,
 			End:        input.Body.To,
@@ -53,15 +53,16 @@ func (c *Controller) Handler() func(ctx context.Context, input *OperationsReques
 	}
 }
 
-// operations converts the requested row operations to the domain vocabulary.
-func (c *Controller) operations(source []string) []domain.OperationType {
+// convert casts a requested list to the domain vocabulary, keeping an empty
+// one nil so it still matches everything.
+func convert[T ~string](source []string) []T {
 	if len(source) == 0 {
 		return nil
 	}
 
-	result := make([]domain.OperationType, 0, len(source))
-	for _, op := range source {
-		result = append(result, domain.OperationType(op))
+	result := make([]T, 0, len(source))
+	for _, value := range source {
+		result = append(result, T(value))
 	}
 
 	return result

@@ -286,10 +286,15 @@ func TestRingSearchFiltersByField(t *testing.T) {
 		query port.Query
 		want  []string
 	}{
-		"sink type":  {port.Query{SinkType: "http"}, []string{"charlie"}},
-		"table":      {port.Query{Table: "public.orders"}, []string{"delta", "bravo"}},
-		"operations": {port.Query{Operations: []domain.OperationType{domain.OperationTypeUpdate, domain.OperationTypeDelete}}, []string{"charlie", "bravo"}},
-		"status":     {port.Query{Status: domain.DeliveryStatusFailure}, []string{"delta"}},
+		"sink type":        {port.Query{SinkTypes: []string{"http"}}, []string{"charlie"}},
+		"sink types":       {port.Query{SinkTypes: []string{"http", "nats"}}, []string{"charlie", "bravo"}},
+		"table":            {port.Query{Tables: []string{"public.orders"}}, []string{"delta", "bravo"}},
+		"tables":           {port.Query{Tables: []string{"public.orders", "billing.users"}}, []string{"delta", "charlie", "bravo"}},
+		"table prefix":     {port.Query{Tables: []string{"public.order"}}, nil},
+		"table other half": {port.Query{Tables: []string{"billing.orders", "publicorders"}}, nil},
+		"operations":       {port.Query{Operations: []domain.OperationType{domain.OperationTypeUpdate, domain.OperationTypeDelete}}, []string{"charlie", "bravo"}},
+		"status":           {port.Query{Statuses: []domain.DeliveryStatus{domain.DeliveryStatusFailure}}, []string{"delta"}},
+		"statuses":         {port.Query{Statuses: []domain.DeliveryStatus{domain.DeliveryStatusFailure, domain.DeliveryStatusSuccess}}, []string{"delta", "charlie", "bravo", "alpha"}},
 	}
 
 	for name, tc := range cases {
@@ -311,7 +316,7 @@ func TestRingSearchFiltersByField(t *testing.T) {
 func TestRingSearchCombinesFilters(t *testing.T) {
 	r := searchRing()
 
-	page := r.search(port.Query{Table: "public.orders", Status: domain.DeliveryStatusSuccess, End: 10})
+	page := r.search(port.Query{Tables: []string{"public.orders"}, Statuses: []domain.DeliveryStatus{domain.DeliveryStatusSuccess}, End: 10})
 
 	if got := targets(page); !equal(got, []string{"bravo"}) {
 		t.Fatalf("targets = %v, want [bravo]", got)
@@ -346,7 +351,7 @@ func TestRingSearchFindsTextWhereverItSits(t *testing.T) {
 func TestRingSearchPagesTheMatchesRatherThanTheRing(t *testing.T) {
 	r := searchRing()
 
-	page := r.search(port.Query{Table: "public.orders", Start: 1, End: 2})
+	page := r.search(port.Query{Tables: []string{"public.orders"}, Start: 1, End: 2})
 
 	// Offset 1 is the second match, not the second record: bravo rather than charlie.
 	if got := targets(page); !equal(got, []string{"bravo"}) {
@@ -361,7 +366,7 @@ func TestRingSearchPagesTheMatchesRatherThanTheRing(t *testing.T) {
 func TestRingSearchClampsOffsetsToTheMatches(t *testing.T) {
 	r := searchRing()
 
-	page := r.search(port.Query{Status: domain.DeliveryStatusFailure, Start: 5, End: 10})
+	page := r.search(port.Query{Statuses: []domain.DeliveryStatus{domain.DeliveryStatusFailure}, Start: 5, End: 10})
 
 	if len(page.Records) != 0 {
 		t.Fatalf("Records = %v, want none past the last match", targets(page))
@@ -504,6 +509,23 @@ func TestRingSearchDoesNotAllocateWhenNothingMatches(t *testing.T) {
 	r := searchRing()
 
 	got := testing.AllocsPerRun(1000, func() { r.search(port.Query{Text: "absent", End: 10}) })
+
+	if got != 0 {
+		t.Fatalf("search allocated %v times per call for an empty result, want 0", got)
+	}
+}
+
+func TestRingSearchDoesNotAllocateWithListFilters(t *testing.T) {
+	r := searchRing()
+	q := port.Query{
+		SinkTypes: []string{"kafka", "nats"},
+		Tables:    []string{"billing.orders", "public.orders"},
+		Statuses:  []domain.DeliveryStatus{domain.DeliveryStatusFailure},
+		Text:      "absent",
+		End:       10,
+	}
+
+	got := testing.AllocsPerRun(1000, func() { r.search(q) })
 
 	if got != 0 {
 		t.Fatalf("search allocated %v times per call for an empty result, want 0", got)

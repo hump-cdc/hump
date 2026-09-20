@@ -2,11 +2,11 @@ import type { FC } from 'react'
 
 import { useShallow } from 'zustand/react/shallow'
 
-import { Badge } from '@/shared/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 import { CHART_STEPS, type ChartStep, useLiveControlsStore } from '../model/store'
+import { LiveStatus } from './live-status'
 
 export const LiveControls: FC = () => {
     const { chartStep, setChartStep } = useLiveControlsStore(
@@ -19,9 +19,7 @@ export const LiveControls: FC = () => {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Badge variant="healthy" dot className="cursor-pointer">
-                    live
-                </Badge>
+                <LiveStatus className="cursor-pointer" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="flex w-56 flex-col gap-3 p-3">
                 <div className="flex flex-col gap-2">

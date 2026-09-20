@@ -48,7 +48,7 @@ tables:
           - schema: public
             table: users
       sinks:
-          - preset: http1
+          # - preset: http1
           - preset: kafka1
           # - preset: nats-core
           # - preset: nats-jetstream
@@ -62,7 +62,7 @@ tables:
           - schema: public
             table: events
       sinks:
-          - preset: http1
+          # - preset: http1
           # - preset: kafka1
           - preset: nats-core
           # - preset: nats-jetstream

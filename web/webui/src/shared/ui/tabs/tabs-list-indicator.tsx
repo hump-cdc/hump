@@ -49,7 +49,14 @@ export const TabsListIndicator: FC<TabsListIndicatorProps> = ({ listRef, variant
         const observer = new MutationObserver(updateIndicator)
         observer.observe(list, { attributes: true, attributeFilter: ['data-state'], subtree: true, childList: true })
 
-        return () => observer.disconnect()
+        // Triggers resize with the list (e.g. full-width tabs across viewport changes), so re-measure on resize too.
+        const resizeObserver = new ResizeObserver(updateIndicator)
+        resizeObserver.observe(list)
+
+        return () => {
+            observer.disconnect()
+            resizeObserver.disconnect()
+        }
     }, [listRef, updateIndicator])
 
     return (

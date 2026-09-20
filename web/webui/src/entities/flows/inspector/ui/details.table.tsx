@@ -10,6 +10,11 @@ export const TableDetails: FC<{ selected: Extract<SelectedItem, { kind: 'table' 
         <IdentityCard eyebrow="TABLE">
             <span className="font-medium font-mono text-ink text-md">{selected.data.name}</span>
         </IdentityCard>
-        <InspectorMetrics throughput={`${selected.data.rate}/s`} successRate={98.2} totalEvents="1.24M" failures="2" />
+        <InspectorMetrics
+            throughput={`${selected.data.ops.insert.count}/s`}
+            successRate={98.2}
+            totalEvents="1.24M"
+            failures="2"
+        />
     </>
 )

@@ -4,21 +4,19 @@ import type { SelectedItem } from '../model/types'
 import { IdentityCard } from './identity-card'
 import { InspectorMetrics } from './inspector-metrics'
 
-/** Inspector details for a selected sink node: name + optional subtitle and sink metrics. */
+/** Inspector details for a selected sink node: name + sink type and sink metrics. */
 export const SinkDetails: FC<{ selected: Extract<SelectedItem, { kind: 'sink' }> }> = ({ selected }) => (
     <>
         <IdentityCard eyebrow="SINK">
             <div className="flex flex-col gap-0.5">
                 <span className="font-medium font-mono text-ink text-md">{selected.data.name}</span>
-                {selected.data.subtitle ? (
-                    <span className="text-ink-subtle text-xs">{selected.data.subtitle}</span>
-                ) : null}
+                <span className="text-ink-subtle text-xs">{selected.data.type}</span>
             </div>
         </IdentityCard>
         <InspectorMetrics
-            throughput={selected.data.rate}
+            throughput="842/s"
             successRate={selected.data.successRate}
-            totalEvents="1.24M"
+            totalEvents={selected.data.operations}
             failures={selected.data.health === 'error' ? '37' : '2'}
         />
     </>

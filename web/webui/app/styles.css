@@ -186,6 +186,12 @@
   --leading-relaxed: 1.6;
 }
 
+/* ── Shadows ── */
+@theme {
+  /* Radial glow (no offset); tint it with a shadow color utility, e.g. `shadow-glow shadow-primary/40` */
+  --shadow-glow: 0 0 24px 2px rgb(0 0 0 / 0.25);
+}
+
 /* ── Tier 3: expose semantic tokens (+ a couple base) as Tailwind utilities ── */
 @theme inline {
   --color-transparent: transparent;

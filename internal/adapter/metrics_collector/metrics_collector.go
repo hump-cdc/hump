@@ -10,6 +10,7 @@ import (
 	"hump/internal/domain"
 	port "hump/internal/port/metrics_collector"
 	"hump/pkg/app/shutdown"
+	idlegate "hump/pkg/idle_gate"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -35,20 +36,17 @@ type Collector struct {
 	idleTimeout time.Duration
 	debounce    time.Duration
 	topology    []port.Connection // topology is the configured set of edges the flat views are keyed by; it never changes.
+	gate        *idlegate.Gate
 	// recordedMu guards recorded on its own, keeping Record off the lock Dump
 	// holds while it merges buckets.
-	recordedMu  sync.Mutex
-	recorded    map[port.Connection]map[domain.DeliveryStatus]float64
-	mu          sync.Mutex
-	connections int
-	generation  uint64 // generation changes on every Connect, so an idle timer armed before it does not deactivate the collector.
-	idle        *time.Timer
-	cancel      context.CancelFunc // cancel stops the scrape loop; it is nil while the collector is idle.
-	requests    chan struct{}      // requests carries Scrape calls to the scrape loop; it is nil while the collector is idle.
-	closed      bool
-	scraper     *scraper
-	series      map[port.Duration]*series
-	lastTick    time.Time
+	recordedMu sync.Mutex
+	recorded   map[port.Connection]map[domain.DeliveryStatus]float64
+	mu         sync.Mutex
+	cancel     context.CancelFunc // cancel stops the scrape loop; it is nil while the collector is idle.
+	requests   chan struct{}      // requests carries Scrape calls to the scrape loop; it is nil while the collector is idle.
+	scraper    *scraper
+	series     map[port.Duration]*series
+	lastTick   time.Time
 }
 
 // Option configures a [Collector].
@@ -91,6 +89,8 @@ func New(gatherer prometheus.Gatherer, opts ...Option) *Collector {
 		opt(c)
 	}
 
+	c.gate = idlegate.New(c.idleTimeout, c.activate, c.stop)
+
 	shutdown.OnShutdown(shutdown.StageWorkers, "metrics_collector", c.onShutdown)
 
 	return c
@@ -105,45 +105,12 @@ func (c *Collector) onShutdown(_ context.Context) error {
 // Connect registers a client, cancels a pending deactivation and starts the
 // scrape loop if the collector is idle.
 func (c *Collector) Connect() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return
-	}
-
-	c.connections++
-	c.generation++
-
-	if c.idle != nil {
-		c.idle.Stop()
-		c.idle = nil
-	}
-
-	if c.cancel == nil {
-		c.activate()
-	}
+	c.gate.Connect()
 }
 
 // Disconnect unregisters a client and, once none is left, arms the idle timer.
 func (c *Collector) Disconnect() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed || c.connections == 0 {
-		return
-	}
-
-	c.connections--
-	if c.connections > 0 {
-		return
-	}
-
-	generation := c.generation
-	c.idle = time.AfterFunc(c.idleTimeout,
-		func() {
-			c.deactivate(generation)
-		})
+	c.gate.Disconnect()
 }
 
 // Scrape asks the scrape loop for an extra scrape. It does nothing while the
@@ -194,8 +161,12 @@ func (c *Collector) Dump(d port.Duration) (port.Snapshot, error) {
 	return c.snapshot(d), nil
 }
 
-// activate resets the aggregates and starts the scrape loop. c.mu must be held.
+// activate resets the aggregates and starts the scrape loop. The gate calls it
+// while holding its own lock, so it must not call back into the gate.
 func (c *Collector) activate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	logger.Info("Metrics collector started", "interval", c.interval)
@@ -214,46 +185,25 @@ func (c *Collector) activate() {
 	go c.run(ctx, c.requests)
 }
 
-// deactivate stops the collector unless a client connected after the idle
-// timer of generation was armed.
-func (c *Collector) deactivate(generation uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed || c.generation != generation || c.connections > 0 {
-		return
-	}
-
-	c.stop()
-}
-
 // close stops the collector for good. It is idempotent.
 func (c *Collector) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.closed = true
-	c.stop()
+	c.gate.Close()
 
 	c.recordedMu.Lock()
 	c.recorded = nil
 	c.recordedMu.Unlock()
 }
 
-// stop cancels the scrape loop and the idle timer and drops every aggregate.
-// c.mu must be held.
+// stop cancels the scrape loop and drops every aggregate. The gate calls it
+// while holding its own lock, so it must not call back into the gate.
 func (c *Collector) stop() {
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-		logger.Info("Metrics collector stopped")
-	}
+	c.cancel()
+	c.cancel = nil
 
-	if c.idle != nil {
-		c.idle.Stop()
-		c.idle = nil
-	}
+	logger.Info("Metrics collector stopped")
 
 	c.requests = nil
 	c.scraper = nil

@@ -9,6 +9,7 @@ import (
 	"hump/config"
 	getwebuiconfig "hump/internal/application/webui/get_webui_config"
 	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
+	getwebuioperations "hump/internal/application/webui/get_webui_operations"
 	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
 	"hump/pkg/app/options"
@@ -23,6 +24,7 @@ func main() {
 	api := controller.NewWebUIController(
 		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
 		getwebuimetrics.NewController(nil),
+		getwebuioperations.NewController(nil),
 		streamwebuiupdates.NewController(nil),
 	).Api(chi.NewMux())
 

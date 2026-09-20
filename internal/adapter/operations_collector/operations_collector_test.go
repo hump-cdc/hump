@@ -92,34 +92,6 @@ func TestCollectorReconnectCancelsIdleTimeout(t *testing.T) {
 	}
 }
 
-func TestCollectorIgnoresDisconnectWithoutConnect(t *testing.T) {
-	c := newTestCollector(t)
-	c.Disconnect()
-
-	if c.connections != 0 {
-		t.Fatalf("connections = %d, want 0", c.connections)
-	}
-
-	c.Connect()
-	c.close()
-	c.Disconnect()
-
-	if c.connections != 1 {
-		t.Fatalf("connections = %d after a disconnect past close, want the count left alone", c.connections)
-	}
-}
-
-func TestCollectorIgnoresStaleDeactivation(t *testing.T) {
-	c := newTestCollector(t)
-	c.Connect()
-
-	c.deactivate(0)
-
-	if !c.Connected() {
-		t.Fatal("Connected() = false, want true after a deactivation of an older generation")
-	}
-}
-
 func TestCollectorIgnoresConnectAfterClose(t *testing.T) {
 	c := newTestCollector(t)
 	c.close()

@@ -18,14 +18,22 @@ goes out over `/metrics`.
 ## Idle by default
 
 The collector does nothing until a client calls `Connect`, which the SSE handler at `/api/live`
-does per connection. `Disconnect` on the last client arms the idle timer, and `deactivate`
-**drops every aggregate**: `scraper`, `series` and `lastTick` all go back to zero. A `Dump`
+does per connection. The refcount, the idle timer and the generation guarding it live in
+`pkg/idle_gate`, shared with `operations_collector`; this package supplies the two callbacks.
+`stop` **drops every aggregate**: `scraper`, `series` and `lastTick` all go back to zero. A `Dump`
 after that is not an error — `snapshot` reports the configured topology with zero counts, which
 is the same shape an active collector with no traffic returns. Do not remove that guard; the
 tests dump an idle collector on purpose.
 
-`generation` exists so an idle timer armed before a reconnect cannot deactivate the collector
-after it. `Scrape` requests an out-of-schedule scrape and is debounced in `run`.
+The gate runs `activate` and `stop` **under its own lock**, so they take `c.mu` themselves and
+must never call back into the gate. `activate` spawns the scrape loop while both locks are held;
+the new goroutine gathers outside any lock, then waits on `c.mu` until `activate` returns.
+
+`close` cannot be folded into `stop`: the gate calls `stop` only when the collector is active,
+while `recorded` has to be cleared even on a collector that never connected — which is what
+`TestRecordIgnoredAfterClose` pins.
+
+`Scrape` requests an out-of-schedule scrape and is debounced in `run`.
 
 ## Two clocks in one response
 
@@ -86,8 +94,9 @@ reported, with zeros.
 next to the Prometheus counters. Two consequences:
 
 - `recorded` has **its own mutex**. `Record` runs per delivery on every worker goroutine, while
-  `Dump` holds `c.mu` long enough to merge twenty buckets per sink key. Lock order is `c.mu`
-  then `recordedMu`, never the reverse.
+  `Dump` holds `c.mu` long enough to merge twenty buckets per sink key. Lock order is `g.mu`
+  (the idle gate) then `c.mu` then `recordedMu`, never the reverse. `close` takes `recordedMu`
+  only after the gate has released `g.mu`.
 - `recorded` **survives deactivation**, unlike everything else the collector holds. It sits next
   to lifetime counters in the response and would be confusing if it reset on an idle timeout.
   Only `close` clears it.

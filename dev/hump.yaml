@@ -47,6 +47,14 @@ tables:
     - tables:
           - schema: public
             table: users
+      sinks:
+          # - preset: http1
+          - preset: kafka1
+          # - preset: nats-core
+          # - preset: nats-jetstream
+          # - preset: rabbitmq1
+          # - preset: rabbitmq-stream
+    - tables:
           - schema: public
             table: posts
           - schema: public
@@ -55,7 +63,7 @@ tables:
             table: events
       sinks:
           # - preset: http1
-          - preset: kafka1
+          # - preset: kafka1
           - preset: nats-core
           # - preset: nats-jetstream
           # - preset: rabbitmq1

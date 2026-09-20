@@ -200,19 +200,6 @@ func TestCollectorStaysActiveWhileClientsRemain(t *testing.T) {
 	}
 }
 
-func TestCollectorIgnoresStaleDeactivation(t *testing.T) {
-	c := New(&countingGatherer{metrics: newTestMetrics()}, WithInterval(5*time.Millisecond), WithIdleTimeout(time.Hour))
-	t.Cleanup(c.close)
-
-	c.Connect()
-	waitFor(t, func() bool { return len(mustDump(t, c, port.Duration1m)) > 0 })
-	c.deactivate(0)
-
-	if len(mustDump(t, c, port.Duration1m)) == 0 {
-		t.Fatal("deactivated by a stale idle timer")
-	}
-}
-
 func TestCollectorSkipsFailedGather(t *testing.T) {
 	g := &countingGatherer{metrics: newTestMetrics(), err: errors.New("gather failed")}
 	c := New(g, WithInterval(5*time.Millisecond), WithIdleTimeout(time.Hour))

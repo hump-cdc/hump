@@ -3,11 +3,11 @@ package operationscollector
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	port "hump/internal/port/operations_collector"
 	"hump/pkg/app/shutdown"
+	idlegate "hump/pkg/idle_gate"
 )
 
 const (
@@ -27,14 +27,10 @@ type Collector struct {
 	capacity     int
 	payloadLimit int
 	idleTimeout  time.Duration
-	active       atomic.Bool // active mirrors whether ring is set. Connected reads it on every delivery and must not take mu to do so.
+	gate         *idlegate.Gate
 	mu           sync.Mutex
 	ring         *ring
-	connections  int
-	generation   uint64 // generation changes on every Connect, so an idle timer armed before it does not deactivate the collector.
 	lastSeq      uint64 // lastSeq carries the record numbering across an idle period, so a reconnecting reader cannot see a sequence it already saw.
-	idle         *time.Timer
-	closed       bool
 }
 
 // Option configures a Collector.
@@ -82,6 +78,8 @@ func New(opts ...Option) *Collector {
 		opt(c)
 	}
 
+	c.gate = idlegate.New(c.idleTimeout, c.activate, c.stop)
+
 	shutdown.OnShutdown(shutdown.StageWorkers, "operations_collector", c.onShutdown)
 
 	return c
@@ -90,49 +88,19 @@ func New(opts ...Option) *Collector {
 // Connect registers a client, cancels a pending deactivation and allocates the
 // ring if the collector is idle.
 func (c *Collector) Connect() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return
-	}
-
-	c.connections++
-	c.generation++
-
-	if c.idle != nil {
-		c.idle.Stop()
-		c.idle = nil
-	}
-
-	if c.ring == nil {
-		c.activate()
-	}
+	c.gate.Connect()
 }
 
 // Disconnect unregisters a client and, once none is left, arms the idle timer.
 func (c *Collector) Disconnect() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed || c.connections == 0 {
-		return
-	}
-
-	c.connections--
-	if c.connections > 0 {
-		return
-	}
-
-	generation := c.generation
-	c.idle = time.AfterFunc(c.idleTimeout, func() { c.deactivate(generation) })
+	c.gate.Disconnect()
 }
 
 // Connected reports whether the collector is recording. It is a hint rather
 // than a guarantee: the last client may leave before the Record that follows,
 // which Record handles by doing nothing.
 func (c *Collector) Connected() bool {
-	return c.active.Load()
+	return c.gate.Active()
 }
 
 // Record stores rec, swapping its buffers for reusable ones. It does nothing
@@ -161,42 +129,28 @@ func (c *Collector) Dump(start, end int) port.Page {
 	return c.ring.page(start, end)
 }
 
-// activate allocates the ring and starts recording. c.mu must be held.
+// activate allocates the ring and starts recording. The gate calls it while
+// holding its own lock, so it must not call back into the gate.
 func (c *Collector) activate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.ring = newRing(c.capacity, c.payloadLimit, c.lastSeq)
-	c.active.Store(true)
 
 	logger.Info("Operations collector started", "capacity", c.capacity, "payloadLimit", c.payloadLimit)
 }
 
-// deactivate drops the ring unless a client connected after the idle timer of
-// generation was armed.
-func (c *Collector) deactivate(generation uint64) {
+// stop drops the ring, returning every buffer to the garbage collector. Only
+// the sequence survives it: an idle collector must cost nothing. The gate calls
+// it while holding its own lock, so it must not call back into the gate.
+func (c *Collector) stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed || c.generation != generation || c.connections > 0 {
-		return
-	}
+	c.lastSeq = c.ring.seq
+	c.ring = nil
 
-	c.stop()
-}
-
-// stop drops the ring and the idle timer, returning every buffer to the
-// garbage collector. Nothing survives it: an idle collector must cost nothing.
-// c.mu must be held.
-func (c *Collector) stop() {
-	if c.ring != nil {
-		c.lastSeq = c.ring.seq
-		c.ring = nil
-		c.active.Store(false)
-		logger.Info("Operations collector stopped")
-	}
-
-	if c.idle != nil {
-		c.idle.Stop()
-		c.idle = nil
-	}
+	logger.Info("Operations collector stopped")
 }
 
 // onShutdown implements the shutdown hook registered by New.
@@ -208,9 +162,5 @@ func (c *Collector) onShutdown(context.Context) error {
 
 // close stops the collector for good; a later Connect does nothing.
 func (c *Collector) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.closed = true
-	c.stop()
+	c.gate.Close()
 }

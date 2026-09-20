@@ -15,19 +15,28 @@ fixed capacity, so the answer is always about the newest traffic and the memory 
 
 ## Nothing at all until a client connects
 
-`Connect` allocates the ring; `Disconnect` on the last client arms the idle timer; `deactivate`
-sets `ring = nil`. **Nothing survives that** — unlike `metrics_collector`, which deliberately
-keeps `recorded` across an idle period. An idle collector here has to cost nothing, so there is
-nothing to keep. `generation` plays the same role as in `metrics_collector`: an idle timer armed
-before a reconnect cannot deactivate the collector after it.
+The refcount, the idle timer and the generation that guards it all live in `pkg/idle_gate`,
+shared with `metrics_collector`. This package supplies only the two callbacks: `activate`
+allocates the ring, `stop` sets `ring = nil`. **Nothing survives that** except `lastSeq` — unlike
+`metrics_collector`, which deliberately keeps `recorded` across an idle period. An idle collector
+here has to cost nothing, so there is nothing to keep.
 
-There is **no background goroutine**. The collector is purely push-driven, so there is no scrape
-loop, no ticker and nothing for goleak to find.
+The gate runs both callbacks **under its own lock**, so they take `c.mu` themselves and must
+never call back into the gate — that would deadlock on `g.mu`. Lock order is `g.mu` then `c.mu`,
+never the reverse; nothing that holds `c.mu` may reach the gate.
 
-`active atomic.Bool` is the only atomic, and it exists for `Connected`, which the pipeline calls
-on every single delivery and which therefore must not take `mu`. It is a **hint, not a
-guarantee**: the last client can leave between the check and the `Record` that follows, so
-`Record` returns silently when `ring == nil`. Do not turn that into an error.
+The gate clears its active flag **after** `stop` returns, which is what makes
+`Connected() == false` imply `ring == nil`. Invert that order and
+`TestCollectorDropsRingAfterIdleTimeout` starts failing intermittently rather than outright.
+
+There is **no background goroutine** of this package's own. The collector is purely push-driven,
+so there is no scrape loop and no ticker; the only goroutine goleak can find is the gate's idle
+timer, and it is gone once the collector deactivates.
+
+`Connected` is `gate.Active`, one atomic load: the pipeline calls it on every single delivery and
+it therefore must not take a lock. It is a **hint, not a guarantee**: the last client can leave
+between the check and the `Record` that follows, so `Record` returns silently when `ring == nil`.
+Do not turn that into an error.
 
 ## One record per delivery, retries inside it
 
@@ -106,7 +115,9 @@ never needs the port widened.
 `operations_collector_test.go` covers the collector through its port; `ring_test.go` covers the
 ring directly, which is where the buffer swap is pinned by **identity** — `samePayload` and
 `sameAttempts` compare backing arrays, so a test fails if the ring starts copying instead of
-swapping. `newTestCollector` bypasses the global shutdown hook with `t.Cleanup(c.close)`;
+swapping. The gate's own mechanics — refcount, idle timer, stale generations — are covered in
+`pkg/idle_gate`, not here; what stays is what the callbacks do to the ring.
+`newTestCollector` bypasses the global shutdown hook with `t.Cleanup(c.close)`;
 `write` records one delivery; `waitFor` polls a condition for a second. Helpers live below the
 last test function — see the `go` skill.
 

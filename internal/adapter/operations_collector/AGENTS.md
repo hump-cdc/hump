@@ -45,6 +45,11 @@ terminal outcome (`success` or `failure`); `Attempt.Status` uses the whole
 `domain.DeliveryStatus` vocabulary, so a delivery that failed twice and then went through is one
 record with `Status: success`, `Retries: 2` and attempts `retry, retry, success`.
 
+`Record.Error` is the terminal error of the retry loop, and it is empty whenever the delivery
+ended in a success — including one that took retries to get there, whose failures stay on the
+attempts. It is not always the last attempt's text: an abort mid-backoff wraps it in
+`ErrRetryAborted`, which is the more useful string of the two.
+
 An attempt's status is only knowable once the retry loop is done — a failed attempt is a `retry`
 unless it turns out to be the last — so `process_operation.operation.end` labels them all at the
 end rather than as they happen. That is also why `pkg/resilience` is untouched: its hooks carry
@@ -95,6 +100,37 @@ behind.
 `Seq`, unlike `Written`, **carries across an idle period**: `stop` saves it on the collector and
 the next `activate` resumes from it. A reader holding a `Seq` as a cursor would otherwise see
 the numbering restart after a reconnect and re-read records it had already seen.
+
+## The filter runs inside the ring
+
+`Search(Query)` is the filtered `Dump`, and `Dump` is now `search` with an empty query. The
+filter has to live here rather than in the web controller, because the alternative is dumping
+`capacity × payloadLimit` — 64 MB by default, every buffer deep-copied — to throw most of it
+away. `search` instead counts every match into `Total` and clones only the ones inside
+`[Start, End)` **of the matches**, so offset 1 is the second match, not the second record.
+
+The order is **strictly newest first**, filter or no filter: `index` walks offsets back from
+`next - 1`, so offset 0 is the most recent delivery and the last record of a page the oldest.
+Nothing downstream re-sorts, and `TestOperationsRouteAnswersNewestFirst` pins it at the HTTP
+edge as well as `TestRingSearchWithoutFiltersReadsEverything` in the ring.
+
+A zero filter matches everything, which is what keeps `page(start, end)` honest as a delegation.
+`Start` and `End` are **indices into the matches**, not times: the API's `from`/`to` map straight
+onto them, so `from: 0, to: 50` is the 50 newest matching records. Both are clamped to `Total`,
+so a window past the end is an empty page rather than an error.
+
+The whole ring is walked even once the window is full, because `Total` has to be honest — it is
+what tells a client how far it can page.
+
+`newMatcher` splits `Query.Table` and lowercases `Query.Text` once, before the scan, so matching
+a record allocates nothing — the `schema + "." + name` a naive comparison would build is exactly
+the allocation this avoids. `containsFold` is generic over `~string | ~[]byte` for the same
+reason: a payload needs no conversion, and `strings.Contains(strings.ToLower(…))` would allocate
+per record. `TestRingSearchDoesNotAllocateWhenNothingMatches` pins that at 0.
+
+The cost is the lock: `Search` holds `mu` for the full walk, and with a `Text` set that is up to
+`capacity × payloadLimit` bytes scanned while `Record` waits. Acceptable for a dashboard query,
+but it is the reason not to expose this to anything that polls hard.
 
 ## Who feeds it
 

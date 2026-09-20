@@ -3,8 +3,8 @@
 import { queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { Config, Metrics, type Options } from '../sdk.gen';
-import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse, PostApiMetricsData, PostApiMetricsError, PostApiMetricsResponse } from '../types.gen';
+import { Config, Metrics, Operations, type Options } from '../sdk.gen';
+import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse, PostApiMetricsData, PostApiMetricsError, PostApiMetricsResponse, PostApiOperationsData, PostApiOperationsError, PostApiOperationsResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -102,6 +102,26 @@ export const postApiMetricsMutation = (options?: Partial<Options<PostApiMetricsD
             return data;
         },
         mutationKey: postApiMetricsMutationKey(options)
+    };
+    return mutationOptions;
+};
+
+export const postApiOperationsMutationKey = (options?: Partial<Options<PostApiOperationsData>>) => createMutationKey('postApiOperations', options);
+
+/**
+ * List sink deliveries matching a filter
+ */
+export const postApiOperationsMutation = (options?: Partial<Options<PostApiOperationsData>>): UseMutationOptions<PostApiOperationsResponse, PostApiOperationsError, Options<PostApiOperationsData>> => {
+    const mutationOptions: UseMutationOptions<PostApiOperationsResponse, PostApiOperationsError, Options<PostApiOperationsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await Operations.list({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        },
+        mutationKey: postApiOperationsMutationKey(options)
     };
     return mutationOptions;
 };

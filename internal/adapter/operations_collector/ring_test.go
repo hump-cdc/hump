@@ -3,6 +3,7 @@ package operationscollector
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"hump/internal/domain"
 	port "hump/internal/port/operations_collector"
@@ -264,6 +265,113 @@ func TestRingPageReturnsCopies(t *testing.T) {
 	}
 }
 
+func TestRingSearchWithoutFiltersReadsEverything(t *testing.T) {
+	r := searchRing()
+
+	page := r.search(port.Query{End: 10})
+
+	if got := targets(page); !equal(got, []string{"delta", "charlie", "bravo", "alpha"}) {
+		t.Fatalf("targets = %v, want [delta charlie bravo alpha]", got)
+	}
+
+	if page.Total != 4 {
+		t.Fatalf("Total = %d, want 4, every record in the ring", page.Total)
+	}
+}
+
+func TestRingSearchFiltersByField(t *testing.T) {
+	r := searchRing()
+
+	cases := map[string]struct {
+		query port.Query
+		want  []string
+	}{
+		"sink type":  {port.Query{SinkType: "http"}, []string{"charlie"}},
+		"table":      {port.Query{Table: "public.orders"}, []string{"delta", "bravo"}},
+		"operations": {port.Query{Operations: []domain.OperationType{domain.OperationTypeUpdate, domain.OperationTypeDelete}}, []string{"charlie", "bravo"}},
+		"status":     {port.Query{Status: domain.DeliveryStatusFailure}, []string{"delta"}},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tc.query.End = 10
+
+			page := r.search(tc.query)
+			if got := targets(page); !equal(got, tc.want) {
+				t.Fatalf("targets = %v, want %v", got, tc.want)
+			}
+
+			if page.Total != len(tc.want) {
+				t.Fatalf("Total = %d, want %d", page.Total, len(tc.want))
+			}
+		})
+	}
+}
+
+func TestRingSearchCombinesFilters(t *testing.T) {
+	r := searchRing()
+
+	page := r.search(port.Query{Table: "public.orders", Status: domain.DeliveryStatusSuccess, End: 10})
+
+	if got := targets(page); !equal(got, []string{"bravo"}) {
+		t.Fatalf("targets = %v, want [bravo]", got)
+	}
+}
+
+func TestRingSearchFindsTextWhereverItSits(t *testing.T) {
+	r := searchRing()
+
+	cases := map[string]struct {
+		text string
+		want []string
+	}{
+		"payload":        {"ORDER-7", []string{"bravo"}},
+		"target":         {"CHARLIE", []string{"charlie"}},
+		"record error":   {"refused", []string{"delta"}},
+		"attempt error":  {"TIMED out", []string{"delta"}},
+		"metadata key":   {"header.x-trace", []string{"alpha"}},
+		"metadata value": {"post", []string{"charlie"}},
+		"nothing":        {"absent", nil},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := targets(r.search(port.Query{Text: tc.text, End: 10})); !equal(got, tc.want) {
+				t.Fatalf("targets = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRingSearchPagesTheMatchesRatherThanTheRing(t *testing.T) {
+	r := searchRing()
+
+	page := r.search(port.Query{Table: "public.orders", Start: 1, End: 2})
+
+	// Offset 1 is the second match, not the second record: bravo rather than charlie.
+	if got := targets(page); !equal(got, []string{"bravo"}) {
+		t.Fatalf("targets = %v, want [bravo]", got)
+	}
+
+	if page.Total != 2 || page.Start != 1 || page.End != 2 {
+		t.Fatalf("Total, Start, End = %d, %d, %d, want 2, 1, 2", page.Total, page.Start, page.End)
+	}
+}
+
+func TestRingSearchClampsOffsetsToTheMatches(t *testing.T) {
+	r := searchRing()
+
+	page := r.search(port.Query{Status: domain.DeliveryStatusFailure, Start: 5, End: 10})
+
+	if len(page.Records) != 0 {
+		t.Fatalf("Records = %v, want none past the last match", targets(page))
+	}
+
+	if page.Total != 1 || page.Start != 1 || page.End != 1 {
+		t.Fatalf("Total, Start, End = %d, %d, %d, want 1, 1, 1", page.Total, page.Start, page.End)
+	}
+}
+
 func TestRingIndexCountsBackFromTheNewest(t *testing.T) {
 	r := newRing(4, 8, 0)
 	r.next = 1
@@ -390,6 +498,71 @@ func TestRingPageDoesNotAllocateForAnEmptyWindow(t *testing.T) {
 	if got != 0 {
 		t.Fatalf("page allocated %v times per call for an empty window, want 0", got)
 	}
+}
+
+func TestRingSearchDoesNotAllocateWhenNothingMatches(t *testing.T) {
+	r := searchRing()
+
+	got := testing.AllocsPerRun(1000, func() { r.search(port.Query{Text: "absent", End: 10}) })
+
+	if got != 0 {
+		t.Fatalf("search allocated %v times per call for an empty result, want 0", got)
+	}
+}
+
+// searchEpoch is the start time of the oldest record searchRing holds; the
+// others follow one minute apart, so a reader can tell them apart by time.
+var searchEpoch = time.Date(2026, time.September, 20, 12, 0, 0, 0, time.UTC)
+
+// searchRing returns a full ring whose four records differ in every field a
+// query can filter on, newest first: delta, charlie, bravo, alpha.
+func searchRing() *ring {
+	r := newRing(4, 64, 0)
+
+	for _, rec := range []port.Record{
+		{
+			StartedAt: searchEpoch,
+			Table:     domain.TableIdentifier{Schema: "public", Name: "users"},
+			Operation: domain.OperationTypeInsert,
+			SinkType:  "kafka",
+			Target:    "alpha",
+			Status:    domain.DeliveryStatusSuccess,
+			Payload:   []byte(`{"id":1}`),
+			Metadata:  map[string]string{"header.x-trace": "1"},
+		},
+		{
+			StartedAt: searchEpoch.Add(time.Minute),
+			Table:     domain.TableIdentifier{Schema: "public", Name: "orders"},
+			Operation: domain.OperationTypeUpdate,
+			SinkType:  "nats",
+			Target:    "bravo",
+			Status:    domain.DeliveryStatusSuccess,
+			Payload:   []byte(`{"ref":"order-7"}`),
+		},
+		{
+			StartedAt: searchEpoch.Add(2 * time.Minute),
+			Table:     domain.TableIdentifier{Schema: "billing", Name: "users"},
+			Operation: domain.OperationTypeDelete,
+			SinkType:  "http",
+			Target:    "charlie",
+			Status:    domain.DeliveryStatusSuccess,
+			Metadata:  map[string]string{"method": "POST"},
+		},
+		{
+			StartedAt: searchEpoch.Add(3 * time.Minute),
+			Table:     domain.TableIdentifier{Schema: "public", Name: "orders"},
+			Operation: domain.OperationTypeInsert,
+			SinkType:  "kafka",
+			Target:    "delta",
+			Status:    domain.DeliveryStatusFailure,
+			Error:     "nats: connection refused",
+			Attempts:  []port.Attempt{{Status: domain.DeliveryStatusRetry, Error: "nats: timed out"}},
+		},
+	} {
+		r.write(&rec)
+	}
+
+	return r
 }
 
 // ringRecord returns a record identified by target, with buffers of payloadCap

@@ -184,6 +184,7 @@ func (o *operation) end(err error) {
 	o.rec.Status = domain.DeliveryStatusSuccess
 	if err != nil {
 		o.rec.Status = domain.DeliveryStatusFailure
+		o.rec.Error = err.Error()
 	}
 
 	last := len(o.rec.Attempts) - 1

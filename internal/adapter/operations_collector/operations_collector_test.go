@@ -177,6 +177,31 @@ func TestDumpClampsOffsets(t *testing.T) {
 	}
 }
 
+func TestSearchFiltersThePage(t *testing.T) {
+	c := newTestCollector(t, WithCapacity(4))
+	c.Connect()
+	write(c, "a")
+	write(c, "b")
+
+	page := c.Search(port.Query{Text: "b", End: 10})
+
+	if got := targets(page); !equal(got, []string{"b"}) {
+		t.Fatalf("targets = %v, want [b]", got)
+	}
+
+	if page.Total != 1 || page.Written != 2 {
+		t.Fatalf("Total, Written = %d, %d, want 1 match out of 2 records written", page.Total, page.Written)
+	}
+}
+
+func TestSearchAnswersAnEmptyPageWhileIdle(t *testing.T) {
+	c := newTestCollector(t, WithCapacity(4))
+
+	if page := c.Search(port.Query{End: 10}); len(page.Records) != 0 || page.Total != 0 {
+		t.Fatalf("Search() = %+v, want an empty page", page)
+	}
+}
+
 func TestRecordSwapsBuffers(t *testing.T) {
 	c := newTestCollector(t, WithCapacity(4))
 	c.Connect()

@@ -1,8 +1,11 @@
 package operationscollector
 
 import (
-	port "hump/internal/port/operations_collector"
 	"maps"
+	"slices"
+	"strings"
+
+	port "hump/internal/port/operations_collector"
 )
 
 // ring is a fixed-capacity buffer of records that overwrites the oldest one.
@@ -66,23 +69,37 @@ func (r *ring) total() int {
 	return len(r.slots)
 }
 
-// page copies the records in [start, end) counted back from the newest. Both
-// offsets are clamped to total, so an out-of-range window is empty rather than
-// an error. Every buffer is copied, since write reuses the slots afterwards.
+// page copies the records in [start, end) counted back from the newest.
 func (r *ring) page(start, end int) port.Page {
+	return r.search(port.Query{Start: start, End: end})
+}
+
+// search copies the records matching q in [q.Start, q.End) counted back from
+// the newest match. Both offsets are clamped to the number of matches, so an
+// out-of-range window is empty rather than an error. Every buffer is copied,
+// since write reuses the slots afterwards.
+func (r *ring) search(q port.Query) port.Page {
 	total := r.total()
-	start = clamp(start, total)
-	end = clamp(end, total)
+	m := newMatcher(q)
 
-	p := port.Page{Start: start, End: end, Total: total, Written: r.written}
-	if start >= end {
-		return p
+	// The whole ring is walked even once the window is filled, because Total
+	// has to count every match.
+	p := port.Page{Written: r.written}
+	for offset := range total {
+		rec := &r.slots[r.index(offset)]
+		if !m.matches(rec) {
+			continue
+		}
+
+		if p.Total >= q.Start && p.Total < q.End {
+			p.Records = append(p.Records, clone(rec))
+		}
+
+		p.Total++
 	}
 
-	p.Records = make([]port.Record, 0, end-start)
-	for offset := start; offset < end; offset++ {
-		p.Records = append(p.Records, clone(&r.slots[r.index(offset)]))
-	}
+	p.Start = clamp(q.Start, p.Total)
+	p.End = clamp(q.End, p.Total)
 
 	return p
 }
@@ -95,6 +112,111 @@ func (r *ring) index(offset int) int {
 	}
 
 	return i
+}
+
+// matcher is a Query prepared for the scan: the parts that would otherwise be
+// split or lowercased once per record are done once here instead, so matching
+// a record allocates nothing.
+type matcher struct {
+	query  port.Query
+	schema string // schema and name are query.Table split on its dot; both empty when no table was asked for.
+	name   string
+	text   string // text is query.Text lowercased, since containsFold expects a lowercased needle.
+}
+
+// newMatcher prepares q for the scan.
+func newMatcher(q port.Query) matcher {
+	m := matcher{query: q, text: strings.ToLower(q.Text)}
+	if q.Table != "" {
+		m.schema, m.name, _ = strings.Cut(q.Table, ".")
+	}
+
+	return m
+}
+
+// matches reports whether rec satisfies every filter of the query.
+func (m *matcher) matches(rec *port.Record) bool {
+	q := &m.query
+
+	if q.SinkType != "" && rec.SinkType != q.SinkType {
+		return false
+	}
+
+	if q.Table != "" && (string(rec.Table.Schema) != m.schema || string(rec.Table.Name) != m.name) {
+		return false
+	}
+
+	if len(q.Operations) > 0 && !slices.Contains(q.Operations, rec.Operation) {
+		return false
+	}
+
+	if q.Status != "" && rec.Status != q.Status {
+		return false
+	}
+
+	return m.text == "" || m.matchesText(rec)
+}
+
+// matchesText reports whether the prepared needle occurs anywhere a reader
+// would look for it: the payload as far as it was kept, the rendered target,
+// the errors, and both halves of every metadata entry.
+func (m *matcher) matchesText(rec *port.Record) bool {
+	if containsFold(rec.Payload, m.text) || containsFold(rec.Target, m.text) || containsFold(rec.Error, m.text) {
+		return true
+	}
+
+	for key, value := range rec.Metadata {
+		if containsFold(key, m.text) || containsFold(value, m.text) {
+			return true
+		}
+	}
+
+	for i := range rec.Attempts {
+		if containsFold(rec.Attempts[i].Error, m.text) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsFold reports whether hay contains needle, comparing ASCII letters
+// case-insensitively. needle must already be lowercased. It is generic over
+// string and []byte so a payload needs no conversion, and it allocates
+// nothing, which strings.Contains(strings.ToLower(...)) would not manage.
+func containsFold[T ~string | ~[]byte](hay T, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+
+	for i := 0; i+len(needle) <= len(hay); i++ {
+		if matchesAt(hay, needle, i) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesAt reports whether needle occurs in hay at i, folding ASCII case.
+func matchesAt[T ~string | ~[]byte](hay T, needle string, i int) bool {
+	for j := range len(needle) {
+		if lowerASCII(hay[i+j]) != needle[j] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// lowerASCII lowercases an ASCII letter and leaves every other byte alone,
+// which keeps a UTF-8 continuation byte from being altered.
+func lowerASCII(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+
+	return b
 }
 
 // clone deep-copies the buffers of rec so a reader keeps nothing the ring owns.

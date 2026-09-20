@@ -121,6 +121,30 @@ func TestCaptureFilledOnFailedDelivery(t *testing.T) {
 	}
 }
 
+func TestRecordCarriesTheTerminalError(t *testing.T) {
+	tests := map[string]struct {
+		errs      []error
+		wantError bool
+	}{
+		"attempts exhausted":         {[]error{errBoom, errBoom}, true},
+		"delivered after one retry":  {[]error{errBoom}, false},
+		"delivered on the first try": {nil, false},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			log := &fakeOperationLog{connected: true}
+			b, _ := newTestBinding(t, log, 2, tt.errs...)
+
+			deliver(t, b)
+
+			if got := log.records[0].Error; (got != "") != tt.wantError {
+				t.Fatalf("Error = %q, want a terminal error: %v", got, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestBindingRebindsCaptureAfterRecord(t *testing.T) {
 	log := &fakeOperationLog{connected: true}
 	b, _ := newTestBinding(t, log, 1)

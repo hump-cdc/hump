@@ -129,6 +129,19 @@ func (c *Collector) Dump(start, end int) port.Page {
 	return c.ring.page(start, end)
 }
 
+// Search returns the window of q cut out of the records matching it. An idle
+// collector answers an empty page.
+func (c *Collector) Search(q port.Query) port.Page {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.ring == nil {
+		return port.Page{}
+	}
+
+	return c.ring.search(q)
+}
+
 // activate allocates the ring and starts recording. The gate calls it while
 // holding its own lock, so it must not call back into the gate.
 func (c *Collector) activate() {

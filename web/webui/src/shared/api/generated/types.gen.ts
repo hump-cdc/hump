@@ -300,6 +300,156 @@ export type MetricsTableOpsModel = {
     u: number;
 };
 
+export type OperationAttemptModel = {
+    /**
+     * Position of the attempt, counted from 1
+     */
+    attempt: number;
+    /**
+     * How long the attempt took in milliseconds, the timeout wait included
+     */
+    duration: number;
+    /**
+     * Error the attempt failed with; absent when it succeeded
+     */
+    error?: string;
+    /**
+     * When the attempt began
+     */
+    startedAt: string;
+    /**
+     * How the attempt ended: success, retry or failure
+     */
+    status: string;
+};
+
+export type OperationItemModel = {
+    /**
+     * Every attempt the delivery took, oldest first
+     */
+    attempts: Array<OperationAttemptModel> | null;
+    /**
+     * Source database
+     */
+    database: string;
+    /**
+     * How long the delivery took in milliseconds, every attempt and backoff pause included
+     */
+    duration: number;
+    /**
+     * Error the delivery ended with; absent when it succeeded
+     */
+    error?: string;
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * What the sink reported about the call: headers under a header. prefix, HTTP method and status, acknowledgements
+     */
+    metadata: {
+        [key: string]: string;
+    };
+    /**
+     * Row operation: insert, update, delete or truncate
+     */
+    operation: string;
+    /**
+     * Body as it went on the wire, truncated to the collector's limit
+     */
+    payload: string;
+    /**
+     * Untruncated body size in bytes
+     */
+    payloadSize: number;
+    /**
+     * Attempts beyond the first
+     */
+    retries: number;
+    /**
+     * Number ordering the record across the whole process
+     */
+    seq: number;
+    /**
+     * Sink type
+     */
+    sink: string;
+    /**
+     * When the first attempt began
+     */
+    startedAt: string;
+    /**
+     * How the delivery ended: success or failure
+     */
+    status: string;
+    /**
+     * Schema-qualified source table
+     */
+    table: string;
+    /**
+     * Target the sink rendered for this row: topic, subject, exchange, stream or URL
+     */
+    target: string;
+    /**
+     * WAL commit time of the row
+     */
+    timestamp: string;
+};
+
+export type OperationsRequestBodyModel = {
+    /**
+     * Index of the first record to return, counted from the newest match, so 0 is the most recent delivery
+     */
+    from: number;
+    /**
+     * Row operations to filter by; an empty list matches all of them
+     */
+    operations?: Array<'insert' | 'update' | 'delete' | 'truncate'> | null;
+    /**
+     * Sink type to filter by
+     */
+    sink?: string;
+    /**
+     * Terminal outcome to filter by; retry is an attempt status and never a record's
+     */
+    status?: 'success' | 'failure';
+    /**
+     * Schema-qualified table to filter by
+     */
+    table?: string;
+    /**
+     * Case-insensitive substring of the payload, target, error or metadata
+     */
+    text?: string;
+    /**
+     * Index one past the last record to return, so from 0 to 50 asks for the 50 newest matches
+     */
+    to: number;
+};
+
+export type OperationsResponseBodyModel = {
+    /**
+     * Index the window starts at, clamped to total
+     */
+    from: number;
+    /**
+     * The window, strictly newest first: index 0 is the most recent delivery and the last item the oldest
+     */
+    items: Array<OperationItemModel> | null;
+    /**
+     * Index the window ends before, clamped to total
+     */
+    to: number;
+    /**
+     * Records matching the filter, of which the window is one page
+     */
+    total: number;
+    /**
+     * Records stored since the log started, so a reader can tell the ring overwrote what it had not read
+     */
+    written: number;
+};
+
 export type PingEventModel = {
     /**
      * Time the ping was sent
@@ -397,3 +547,28 @@ export type PostApiMetricsResponses = {
 };
 
 export type PostApiMetricsResponse = PostApiMetricsResponses[keyof PostApiMetricsResponses];
+
+export type PostApiOperationsData = {
+    body: OperationsRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/operations';
+};
+
+export type PostApiOperationsErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiOperationsError = PostApiOperationsErrors[keyof PostApiOperationsErrors];
+
+export type PostApiOperationsResponses = {
+    /**
+     * OK
+     */
+    200: OperationsResponseBodyModel;
+};
+
+export type PostApiOperationsResponse = PostApiOperationsResponses[keyof PostApiOperationsResponses];

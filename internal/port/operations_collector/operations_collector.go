@@ -33,6 +33,7 @@ type Record struct {
 	Host        string
 	Target      string                // Target is what the sink rendered for this row, which a templated topic or URL makes differ from the configured one.
 	Status      domain.DeliveryStatus // Status is how the delivery ended once the retry loop was done: success or failure. Retry lives on the attempts.
+	Error       string                // Error is the terminal error of the retry loop; it is empty when the delivery succeeded.
 	Retries     int                   // Retries is len(Attempts)-1, so a list can say "failed after 4 retries" without walking them.
 	Payload     []byte                // Payload is the body as it went on the wire, truncated to the collector's limit.
 	PayloadSize int                   // PayloadSize is the untruncated body size in bytes.
@@ -40,12 +41,23 @@ type Record struct {
 	Attempts    []Attempt
 }
 
+// Query selects a window of the log. Every filter is optional: a zero one
+// matches every record, so the zero Query is the first page of the whole ring.
+type Query struct {
+	SinkType   string                 // SinkType must match the record's exactly.
+	Table      string                 // Table is the schema-qualified name, "schema.name".
+	Operations []domain.OperationType // Operations matches a record carrying any one of them.
+	Status     domain.DeliveryStatus
+	Text       string // Text is an ASCII case-insensitive substring of the payload, target, errors or metadata; the payload is only searched as far as the collector kept it.
+	Start, End int    // Start and End are indices into the matching records, counted from the newest, cutting out the half-open window [Start, End).
+}
+
 // Page is one window of the log, newest first.
 type Page struct {
 	Records []Record
 	Start   int // Start and End are the offsets the window was cut at, clamped to Total.
 	End     int
-	Total   int    // Total is how many records the ring holds right now, which is the capacity once it has wrapped.
+	Total   int    // Total is how many records matched the query, which is everything the ring holds when the query has no filter.
 	Written uint64 // Written counts every record stored since the collector last activated, so a reader can tell it fell behind.
 }
 
@@ -69,4 +81,7 @@ type Collector interface {
 	// Total, so an idle collector answers an empty page rather than an error.
 	// Every buffer is copied, since the ring overwrites its slots afterwards.
 	Dump(start, end int) Page
+	// Search is Dump over the records matching q, which are counted into the
+	// page's Total before its window is cut out of them.
+	Search(q Query) Page
 }

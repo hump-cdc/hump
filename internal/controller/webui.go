@@ -7,6 +7,7 @@ import (
 	"fmt"
 	getwebuiconfig "hump/internal/application/webui/get_webui_config"
 	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
+	getwebuioperations "hump/internal/application/webui/get_webui_operations"
 	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/middleware"
@@ -26,20 +27,23 @@ import (
 var webuiFS embed.FS
 
 type WebUIController struct {
-	configController  *getwebuiconfig.Controller
-	metricsController *getwebuimetrics.Controller
-	liveController    *streamwebuiupdates.Controller
+	configController     *getwebuiconfig.Controller
+	metricsController    *getwebuimetrics.Controller
+	operationsController *getwebuioperations.Controller
+	liveController       *streamwebuiupdates.Controller
 }
 
 func NewWebUIController(
 	configController *getwebuiconfig.Controller,
 	metricsController *getwebuimetrics.Controller,
+	operationsController *getwebuioperations.Controller,
 	liveController *streamwebuiupdates.Controller,
 ) *WebUIController {
 	return &WebUIController{
-		configController:  configController,
-		metricsController: metricsController,
-		liveController:    liveController,
+		configController:     configController,
+		metricsController:    metricsController,
+		operationsController: operationsController,
+		liveController:       liveController,
 	}
 }
 
@@ -110,6 +114,14 @@ func (c *WebUIController) routes(api huma.API) {
 		Tags:        []string{"Metrics"},
 	}, c.metricsController.Handler())
 
+	huma.Register(api, huma.Operation{
+		OperationID: "operations.list",
+		Method:      http.MethodPost,
+		Path:        "/api/operations",
+		Summary:     "List sink deliveries matching a filter",
+		Tags:        []string{"Operations"},
+	}, c.operationsController.Handler())
+
 	sse.Register(api, huma.Operation{
 		OperationID: "live.stream",
 		Method:      http.MethodGet,
@@ -117,37 +129,4 @@ func (c *WebUIController) routes(api huma.API) {
 		Summary:     "Stream live updates",
 		Tags:        []string{"Live"},
 	}, c.liveController.Events(), c.liveController.Handler())
-
-	// sse.Register(api, huma.Operation{
-	// 	OperationID: "operations.stream",
-	// 	Method:      http.MethodGet,
-	// 	Path:        "/api/operations",
-	// 	Summary:     "Stream change-data-capture operations",
-	// 	Tags:        []string{"Operations"},
-	// }, map[string]any{
-	// 	"operation": stream.Event{},
-	// 	"retry":     stream.RetryEvent{},
-	// }, func(ctx context.Context, _ *struct{}, send sse.Sender) {
-	// 	// s *streamer.FanOutStreamer[stream.Message]
-	// 	if s == nil {
-	// 		return
-	// 	}
-
-	// 	id, ch := s.Subscribe()
-	// 	defer s.Unsubscribe(id)
-
-	// 	for {
-	// 		select {
-	// 		case <-ctx.Done():
-	// 			return
-	// 		case event, ok := <-ch:
-	// 			if !ok {
-	// 				return
-	// 			}
-	// 			if err := send(sse.Message{Data: event}); err != nil {
-	// 				return
-	// 			}
-	// 		}
-	// 	}
-	// })
 }

@@ -1,24 +1,12 @@
-import type { FC } from 'react'
-import { useEffect, useState } from 'react'
+import { createHighlighter } from '@tanstack/highlight/core'
+import { yaml } from '@tanstack/highlight/languages/yaml'
 
-import yaml from '@shikijs/langs/yaml'
-import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
+import type { FC } from 'react'
+import { useMemo } from 'react'
 
 import { cn } from '@/shared/utils'
 
-import { humpCode } from './code.theme'
-
-let highlighterPromise: Promise<HighlighterCore> | undefined
-
-const getHighlighter = (): Promise<HighlighterCore> => {
-    highlighterPromise ??= createHighlighterCore({
-        themes: [humpCode],
-        langs: [yaml],
-        engine: createJavaScriptRegexEngine(),
-    })
-    return highlighterPromise
-}
+const highlighter = createHighlighter({ languages: [yaml] })
 
 type CodeProps = {
     /** Source text to display (read-only). */
@@ -28,32 +16,13 @@ type CodeProps = {
 }
 
 export const Code: FC<CodeProps> = ({ value, className }) => {
-    const [html, setHtml] = useState<string | null>(null)
-
-    useEffect(() => {
-        let active = true
-        getHighlighter().then((highlighter) => {
-            if (!active) return
-            setHtml(
-                highlighter.codeToHtml(value, {
-                    lang: 'yaml',
-                    theme: 'hump-code',
-                }),
-            )
-        })
-        return () => {
-            active = false
-        }
-    }, [value])
+    const html = useMemo(() => highlighter.highlightToHtml(value, { lang: 'yaml', lineNumbers: true }), [value])
 
     return (
-        <div className={cn('hump-code min-h-0 flex-1 overflow-auto', className)}>
-            {html ? (
-                // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki output is server-grade sanitized HTML built from `value`.
-                <div dangerouslySetInnerHTML={{ __html: html }} />
-            ) : (
-                <pre className="hump-code-fallback">{value}</pre>
-            )}
-        </div>
+        <div
+            className={cn('hump-code min-h-0 flex-1 overflow-auto', className)}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: TanStack Highlight escapes `value` while rendering.
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     )
 }

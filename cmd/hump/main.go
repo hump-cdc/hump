@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	cfg "hump/config"
 	sinkcfg "hump/config/sink"
+	liveStreamerAdapter "hump/internal/adapter/live_streamer"
 	metricsCollectorAdapter "hump/internal/adapter/metrics_collector"
 	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
@@ -16,10 +18,12 @@ import (
 	processOperationFeature "hump/internal/application/processing/process_operation"
 	getWebuiConfigFeature "hump/internal/application/webui/get_webui_config"
 	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
+	getWebUIOperationsFeature "hump/internal/application/webui/get_webui_operations"
 	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
 	"hump/internal/domain"
 	databasePort "hump/internal/port/database"
+	livestreamPort "hump/internal/port/live_stream"
 	metricsCollectorPort "hump/internal/port/metrics_collector"
 	operationsCollectorPort "hump/internal/port/operations_collector"
 	sinkPort "hump/internal/port/sink"
@@ -75,10 +79,18 @@ func main() {
 	}
 
 	// The operations log only serves the web UI, and it stays idle, holding no
-	// buffer at all, until a client connects.
+	// buffer at all, until a client connects. The live streamer wraps it, so the
+	// pipeline keeps writing to one collector while the SSE stream reads the
+	// same deliveries off the wrapper.
 	var operations operationsCollectorPort.Collector
+	var live livestreamPort.Streamer
 	if opts.WebPort != nil {
-		operations = operationsCollectorAdapter.New()
+		streamer := liveStreamerAdapter.New(
+			operationsCollectorAdapter.New(),
+			liveStreamerAdapter.WithInterval(500*time.Millisecond),
+			liveStreamerAdapter.WithScraper(collector),
+		)
+		operations, live = streamer, streamer
 	}
 
 	// Application
@@ -112,7 +124,8 @@ func main() {
 					server := controller.NewWebUIController(
 						getWebuiConfigFeature.NewController(opts, configuration, db),
 						getWebUIMetricsFeature.NewController(collector),
-						streamWebuiUpdatesFeature.NewController(collector),
+						getWebUIOperationsFeature.NewController(operations),
+						streamWebuiUpdatesFeature.NewController(collector, operations, live),
 					)
 					return server.Serve(ctx, *opts.WebPort)
 				})

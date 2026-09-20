@@ -323,6 +323,29 @@ export type OperationAttemptModel = {
     status: string;
 };
 
+export type OperationEventModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Schema of the source table
+     */
+    schema: string;
+    /**
+     * Sink type the row was delivered to
+     */
+    sink: string;
+    /**
+     * Name of the source table
+     */
+    table: string;
+    /**
+     * Target the sink rendered for this row: topic, subject, exchange, stream or HTTP method
+     */
+    target: string;
+};
+
 export type OperationItemModel = {
     /**
      * Every attempt the delivery took, oldest first
@@ -396,6 +419,13 @@ export type OperationItemModel = {
     timestamp: string;
 };
 
+export type OperationsEventModel = {
+    /**
+     * Deliveries made since the previous event, oldest first
+     */
+    operations: Array<OperationEventModel> | null;
+};
+
 export type OperationsRequestBodyModel = {
     /**
      * Index of the first record to return, counted from the newest match, so 0 is the most recent delivery
@@ -450,13 +480,6 @@ export type OperationsResponseBodyModel = {
     written: number;
 };
 
-export type PingEventModel = {
-    /**
-     * Time the ping was sent
-     */
-    timestamp: string;
-};
-
 export type GetApiConfigData = {
     body?: never;
     path?: never;
@@ -505,11 +528,11 @@ export type GetApiLiveResponses = {
      * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
      */
     200: Array<{
-        data: PingEventModel;
+        data: OperationsEventModel;
         /**
          * The event name.
          */
-        event: 'ping';
+        event: 'operations';
         /**
          * The event ID.
          */

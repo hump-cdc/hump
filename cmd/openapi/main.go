@@ -25,7 +25,7 @@ func main() {
 		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
 		getwebuimetrics.NewController(nil),
 		getwebuioperations.NewController(nil),
-		streamwebuiupdates.NewController(nil),
+		streamwebuiupdates.NewController(nil, nil, nil),
 	).Api(chi.NewMux())
 
 	spec, err := api.OpenAPI().MarshalJSON()

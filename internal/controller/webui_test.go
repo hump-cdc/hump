@@ -150,7 +150,7 @@ func newTestRouter(collector operationscollectorport.Collector) chi.Router {
 		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
 		getwebuimetrics.NewController(nil),
 		getwebuioperations.NewController(collector),
-		streamwebuiupdates.NewController(nil),
+		streamwebuiupdates.NewController(nil, nil, nil),
 	).Api(router)
 
 	return router

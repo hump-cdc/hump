@@ -262,6 +262,26 @@ export const OperationAttemptSchema = z.object({
 
 export type OperationAttempt = z.infer<typeof OperationAttemptSchema>;
 
+export const OperationEventSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the source table'
+    }),
+    sink: z.string().register(z.globalRegistry, {
+        description: 'Sink type the row was delivered to'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Name of the source table'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target the sink rendered for this row: topic, subject, exchange, stream or HTTP method'
+    })
+});
+
+export type OperationEvent = z.infer<typeof OperationEventSchema>;
+
 export const OperationItemSchema = z.object({
     attempts: z.array(OperationAttemptSchema).nullable(),
     database: z.string().register(z.globalRegistry, {
@@ -316,6 +336,12 @@ export const OperationItemSchema = z.object({
 
 export type OperationItem = z.infer<typeof OperationItemSchema>;
 
+export const OperationsEventSchema = z.object({
+    operations: z.array(OperationEventSchema).nullable()
+});
+
+export type OperationsEvent = z.infer<typeof OperationsEventSchema>;
+
 export const OperationsRequestBodySchema = z.object({
     from: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
         description: 'Index of the first record to return, counted from the newest match, so 0 is the most recent delivery'
@@ -363,14 +389,6 @@ export const OperationsResponseBodySchema = z.object({
 
 export type OperationsResponseBody = z.infer<typeof OperationsResponseBodySchema>;
 
-export const PingEventSchema = z.object({
-    timestamp: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
-        description: 'Time the ping was sent'
-    })
-});
-
-export type PingEvent = z.infer<typeof PingEventSchema>;
-
 /**
  * OK
  */
@@ -382,8 +400,8 @@ export const zGetApiConfigResponse = ConfigResponseBodySchema;
  * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
  */
 export const zGetApiLiveResponse = z.array(z.object({
-    data: PingEventSchema,
-    event: z.literal('ping').register(z.globalRegistry, {
+    data: OperationsEventSchema,
+    event: z.literal('operations').register(z.globalRegistry, {
         description: 'The event name.'
     }),
     id: z.int().register(z.globalRegistry, {

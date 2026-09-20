@@ -18,7 +18,14 @@ export const ExpandButton: FC<ExpandButtonProps> = ({ isExpanded, onToggle }) =>
             type="button"
             aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
             aria-expanded={isExpanded}
-            onClick={onToggle}
+            // Not a Tab stop and never focused by a click: Space on the table body toggles the row.
+            tabIndex={-1}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+                // Expanding is not selecting: keep the click off the row.
+                event.stopPropagation()
+                onToggle()
+            }}
             className="flex size-full items-center justify-center text-ink-tertiary hover:text-ink-muted"
         >
             <Icon className={cn('size-3.75', isExpanded && 'text-ink-muted')} />

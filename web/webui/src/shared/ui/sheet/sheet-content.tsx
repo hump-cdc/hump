@@ -49,24 +49,34 @@ export const SheetContent: FC<SheetContentProps> = ({
     portal = true,
     ...props
 }) => {
-    const body = (
-        <>
-            {showOverlay && <SheetOverlay />}
-            <SheetContentPrimitive
-                data-slot="sheet-content"
-                className={cn(sheetContentVariants({ side }), className)}
-                {...props}
-            >
-                {children}
-                {showCloseButton && (
-                    <SheetClosePrimitive className="absolute top-4 right-4 rounded-md text-ink-subtle transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                        <X className="size-4" />
-                        <span className="sr-only">Close</span>
-                    </SheetClosePrimitive>
-                )}
-            </SheetContentPrimitive>
-        </>
+    const overlay = showOverlay && <SheetOverlay />
+    const content = (
+        <SheetContentPrimitive
+            data-slot="sheet-content"
+            className={cn(sheetContentVariants({ side }), className)}
+            {...props}
+        >
+            {children}
+            {showCloseButton && (
+                <SheetClosePrimitive className="absolute top-4 right-4 rounded-md text-ink-subtle transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <X className="size-4" />
+                    <span className="sr-only">Close</span>
+                </SheetClosePrimitive>
+            )}
+        </SheetContentPrimitive>
     )
 
-    return portal ? <SheetPortal data-slot="sheet-portal">{body}</SheetPortal> : body
+    // Overlay and content go to the portal as separate children: it wraps each one in its own
+    // `Presence`, which needs a real element (not a fragment) to wait for the exit animation.
+    return portal ? (
+        <SheetPortal data-slot="sheet-portal">
+            {overlay}
+            {content}
+        </SheetPortal>
+    ) : (
+        <>
+            {overlay}
+            {content}
+        </>
+    )
 }

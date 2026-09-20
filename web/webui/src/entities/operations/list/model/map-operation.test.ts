@@ -15,9 +15,13 @@ describe('mapOperation', () => {
             op: 'truncate',
             sink: 'kafka',
             sinkHost: 'localhost:9092',
+            target: 'users',
             status: 'delivered',
             attempts: 1,
             durationMs: 15,
+            payload: '{}',
+            payloadSize: 2,
+            metadata: {},
         })
     })
 

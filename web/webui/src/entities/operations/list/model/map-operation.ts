@@ -13,11 +13,15 @@ export const mapOperation = (item: OperationItemModel): Operation => {
         op: item.operation as Operation['op'],
         sink: item.sink,
         sinkHost: item.host,
+        target: item.target,
         status: item.status === 'success' ? 'delivered' : 'failed',
         attempts: attempts.length || toNumber(item.retries) + 1,
         durationMs: toNumber(item.duration),
         error: item.error,
         retries: attempts.length > 1 ? attempts : undefined,
+        payload: item.payload,
+        payloadSize: toNumber(item.payloadSize),
+        metadata: item.metadata ?? {},
     }
 }
 

@@ -1,32 +1,13 @@
 import type { FC, PropsWithChildren } from 'react'
 
-import { CircleCheck, CircleX } from 'lucide-react'
-
-import { Badge } from '@/shared/ui/badge'
 import type { DataTableColumn } from '@/shared/ui/data-table'
+import { OperationBadge } from '@/shared/ui/operation-badge'
+import { OperationStatusBadge } from '@/shared/ui/operation-status-badge'
 import { Sink } from '@/shared/ui/sink'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { formatLatency, formatTime } from '@/shared/utils'
 
 import type { Operation } from '../model/types'
-
-const opVariant = {
-    insert: 'healthy',
-    update: 'active',
-    delete: 'failed',
-    truncate: 'lag',
-} as const satisfies Record<Operation['op'], string>
-
-const statusIcon: Record<Operation['status'], FC> = {
-    delivered: () => <CircleCheck className="size-3.75 text-success" />,
-    failed: () => <CircleX className="size-3.75 text-danger" />,
-}
-
-/** Custom React component used as a cell renderer. */
-const StatusCell: FC<{ row: Operation }> = ({ row }) => {
-    const Icon = statusIcon[row.status]
-    return <Icon />
-}
 
 const TextFromStatus: FC<
     PropsWithChildren<{
@@ -53,11 +34,7 @@ export const columns: DataTableColumn<Operation>[] = [
     {
         header: 'Operation',
         width: 104,
-        render: (r) => (
-            <Badge className="px-1 uppercase leading-4" variant={opVariant[r.op]}>
-                {r.op}
-            </Badge>
-        ),
+        render: (r) => <OperationBadge op={r.op} />,
     },
     {
         field: 'sink',
@@ -71,7 +48,7 @@ export const columns: DataTableColumn<Operation>[] = [
         width: 116,
         render: (r) => (
             <div className="flex h-full items-center justify-center">
-                <StatusCell row={r} />
+                <OperationStatusBadge variant="compact" status={r.status} attempts={r.attempts} />
             </div>
         ),
     },
@@ -102,7 +79,8 @@ export const columns: DataTableColumn<Operation>[] = [
         render: (r) =>
             r.error ? (
                 <Tooltip>
-                    <TooltipTrigger>
+                    {/* A plain span, not Radix's default button, so the error is no Tab stop. */}
+                    <TooltipTrigger asChild>
                         <span className="text-danger text-sm">{r.error}</span>
                     </TooltipTrigger>
                     <TooltipContent variant="primary">{r.error}</TooltipContent>

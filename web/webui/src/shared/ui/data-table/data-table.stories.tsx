@@ -320,7 +320,7 @@ const operations: Operation[] = [
     },
 ]
 
-const detailHeight = (row: Operation) => 53 + (row.retries?.length ?? 0) * 41
+const detailHeight = (row: Operation) => 62 + (row.retries?.length ?? 0) * 44
 
 type StoryArgs = {
     rowCount: number

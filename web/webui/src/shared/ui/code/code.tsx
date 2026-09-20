@@ -1,4 +1,6 @@
 import { createHighlighter } from '@tanstack/highlight/core'
+import { json } from '@tanstack/highlight/languages/json'
+import { plaintext } from '@tanstack/highlight/languages/plaintext'
 import { yaml } from '@tanstack/highlight/languages/yaml'
 
 import type { FC } from 'react'
@@ -6,17 +8,27 @@ import { useMemo } from 'react'
 
 import { cn } from '@/shared/utils'
 
-const highlighter = createHighlighter({ languages: [yaml] })
+import { detectGrammar, formatCode } from './code.grammar'
+
+const highlighter = createHighlighter({ languages: [yaml, json, plaintext] })
 
 type CodeProps = {
-    /** Source text to display (read-only). */
+    /** Source text to display (read-only); its grammar is detected from the content. */
     value: string
+    /** Show a line-number gutter. Defaults to `true`. */
+    lineNumbers?: boolean
+    /** Pretty-print JSON and YAML before highlighting. Defaults to `false` (shown as written). */
+    format?: boolean
     /** Wrapper class — control sizing from the consumer (the viewer fills it). */
     className?: string
 }
 
-export const Code: FC<CodeProps> = ({ value, className }) => {
-    const html = useMemo(() => highlighter.highlightToHtml(value, { lang: 'yaml', lineNumbers: true }), [value])
+export const Code: FC<CodeProps> = ({ value, lineNumbers = true, format = false, className }) => {
+    const { lang, text } = useMemo(
+        () => (format ? formatCode(value) : { lang: detectGrammar(value), text: value }),
+        [value, format],
+    )
+    const html = useMemo(() => highlighter.highlightToHtml(text, { lang, lineNumbers }), [text, lang, lineNumbers])
 
     return (
         <div

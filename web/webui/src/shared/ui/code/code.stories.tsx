@@ -1,3 +1,5 @@
+import type { ComponentProps } from 'react'
+
 import type { Meta, StoryObj } from '@storybook/react'
 
 import { Card, CardContent } from '../card'
@@ -13,7 +15,7 @@ const SAMPLE_YAML = `sinks:
           url: "nats://localhost:4222"
           subject: "hump.{{.Schema}}.{{.Table}}"`
 
-type StoryArgs = {
+type StoryArgs = Pick<ComponentProps<typeof Code>, 'lineNumbers' | 'format'> & {
     value: string
 }
 
@@ -25,14 +27,18 @@ const meta: Meta<StoryArgs> = {
             control: 'text',
             table: { category: 'Content' },
         },
+        lineNumbers: { name: 'Line numbers', control: 'boolean', table: { category: 'Style' } },
+        format: { name: 'Format', control: 'boolean', table: { category: 'Style' } },
     },
     args: {
         value: SAMPLE_YAML,
+        lineNumbers: true,
+        format: false,
     },
-    render: ({ value }) => (
+    render: ({ value, lineNumbers, format }) => (
         <Card>
             <CardContent>
-                <Code className="h-full w-full" value={value} />
+                <Code className="h-full w-full" value={value} lineNumbers={lineNumbers} format={format} />
             </CardContent>
         </Card>
     ),

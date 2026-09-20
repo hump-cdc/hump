@@ -67,6 +67,12 @@ export type DataTableProps<T> = {
     getDetail?: DetailComponent<T>
     /** Whether a given row can be expanded. Defaults to `() => !!getDetail`. */
     isRowExpandable?: (row: T) => boolean
+    /** Id of the highlighted row, or `null`/`undefined` when none is selected. */
+    selectedRowId?: string | null
+    /** Called with a row's id and the row when the row is clicked. Its presence makes rows selectable. */
+    onRowSelect?: (id: string, row: T) => void
+    /** Called when the body is clicked outside any row, e.g. the empty space below the last one. */
+    onClearSelection?: () => void
     /** Height of the expanded detail panel in pixels (or per-row). Defaults to `200`. */
     detailHeight?: number | ((row: T) => number)
     /** Body row height in pixels. Defaults to `44`. */

@@ -19,6 +19,8 @@ export type Operation = {
     /** Sink type. */
     sink: string
     sinkHost: string
+    /** Target the sink rendered for the row: topic, subject, exchange, stream or URL. */
+    target: string
     status: 'delivered' | 'failed'
     attempts: number
     /** Whole delivery, every attempt and backoff pause included. */
@@ -26,4 +28,10 @@ export type Operation = {
     error?: string
     /** Every attempt, oldest first; present only when there was more than one. */
     retries?: Attempt[]
+    /** Body as it went on the wire, truncated to the collector's limit. */
+    payload: string
+    /** Untruncated body size in bytes. */
+    payloadSize: number
+    /** What the sink reported about the call; headers are keyed under a `header.` prefix. */
+    metadata: Record<string, string>
 }

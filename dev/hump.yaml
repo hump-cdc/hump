@@ -42,6 +42,11 @@ sinks:
           url: "http://localhost:5050/submit1"
           method: "POST"
       failure: skip
+      retry:
+          maxAttempts: 10
+          attemptTimeout: 50ms
+          backoff:
+              max: 50ms
 
 tables:
     - tables:
@@ -62,7 +67,7 @@ tables:
           - schema: public
             table: events
       sinks:
-          # - preset: http1
+          - preset: http1
           # - preset: kafka1
           - preset: nats-core
           # - preset: nats-jetstream

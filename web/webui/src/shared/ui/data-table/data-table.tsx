@@ -6,9 +6,11 @@ import {
     type Table,
     useReactTable,
 } from '@tanstack/react-table'
-import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
+import { useVirtualizer, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual'
 
 import {
+    type KeyboardEvent,
+    type MouseEvent,
     type ReactElement,
     type RefObject,
     type UIEvent,
@@ -55,6 +57,9 @@ export const DataTable = <T,>({
     isLoading = false,
     getDetail,
     isRowExpandable,
+    selectedRowId,
+    onRowSelect,
+    onClearSelection,
     detailHeight = DEFAULT_DETAIL_HEIGHT,
     rowHeight = DEFAULT_ROW_HEIGHT,
     headerHeight = DEFAULT_HEADER_HEIGHT,
@@ -118,6 +123,26 @@ export const DataTable = <T,>({
     const items = virtualizer.getVirtualItems()
     useRangeReport(items, rowCount, onVisibleRangeChange)
 
+    const onKeyDown = useKeyboardNavigation({
+        virtualizer,
+        rowAt,
+        getRowId,
+        canExpand,
+        selectedRowId,
+        onRowSelect,
+        onToggle: toggle,
+    })
+
+    // A row (with its detail panel) handles its own clicks; anywhere else in the body clears.
+    const clearOnEmptyClick = useCallback(
+        (event: MouseEvent<HTMLDivElement>) => {
+            if (onClearSelection && !(event.target as Element).closest('[data-slot="data-table-row"]')) {
+                onClearSelection()
+            }
+        },
+        [onClearSelection],
+    )
+
     const syncHeaderScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
         if (headerRef.current) {
             headerRef.current.scrollLeft = event.currentTarget.scrollLeft
@@ -144,10 +169,15 @@ export const DataTable = <T,>({
             />
             {/* The scroller is taken out of flow so the rows never size the table or its parents. */}
             <div className="relative min-h-0 flex-1">
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: the scroller is the table's single keyboard stop. */}
                 <div
                     ref={bodyRef}
+                    // Focusable as one stop: Tab moves past the table, arrows and Space act on its rows.
+                    tabIndex={onRowSelect ? 0 : undefined}
+                    onKeyDown={onKeyDown}
+                    onClick={clearOnEmptyClick}
                     onScroll={syncHeaderScroll}
-                    className="scrollbar-thin absolute inset-0 overflow-auto [scrollbar-color:var(--hairline-strong)_transparent]"
+                    className="scrollbar-thin absolute inset-0 overflow-auto outline-none [scrollbar-color:var(--hairline-strong)_transparent]"
                 >
                     {count === 0 ? (
                         <div className="flex h-full items-center justify-center">{emptyMessage}</div>
@@ -156,6 +186,7 @@ export const DataTable = <T,>({
                             {items.map((item) => {
                                 const row = rowAt(item.index)
                                 const isExpanded = isRowExpanded(row)
+                                const rowId = row === undefined ? undefined : getRowId(row)
                                 return (
                                     <DataTableRow<T>
                                         key={item.key}
@@ -164,7 +195,7 @@ export const DataTable = <T,>({
                                         totalWidth={totalWidth}
                                         viewportWidth={viewport.width}
                                         row={row}
-                                        rowId={row === undefined ? undefined : getRowId(row)}
+                                        rowId={rowId}
                                         start={item.start}
                                         rowHeight={rowHeight}
                                         isExpandable={isExpandable}
@@ -173,6 +204,8 @@ export const DataTable = <T,>({
                                         detailHeight={isExpanded && row !== undefined ? detailHeightOf(row) : 0}
                                         Detail={getDetail}
                                         onToggle={toggle}
+                                        isSelected={rowId !== undefined && rowId === selectedRowId}
+                                        onSelect={onRowSelect}
                                     />
                                 )
                             })}
@@ -290,6 +323,83 @@ const useExpandedRows = (): [ReadonlySet<string>, (id: string) => void] => {
     )
 
     return [expanded, toggle]
+}
+
+type KeyboardNavigationOptions<T> = {
+    virtualizer: Virtualizer<HTMLDivElement, Element>
+    rowAt: (index: number) => T | undefined
+    getRowId: (row: T) => string
+    canExpand: (row: T) => boolean
+    selectedRowId: string | null | undefined
+    onRowSelect: ((id: string, row: T) => void) | undefined
+    onToggle: (id: string) => void
+}
+
+/**
+ * Keyboard handler of the body: Up/Down select the previous/next row and scroll
+ * it into view, Space expands or collapses the selected row.
+ */
+const useKeyboardNavigation = <T,>({
+    virtualizer,
+    rowAt,
+    getRowId,
+    canExpand,
+    selectedRowId,
+    onRowSelect,
+    onToggle,
+}: KeyboardNavigationOptions<T>): ((event: KeyboardEvent<HTMLDivElement>) => void) => {
+    // Last index the selection was seen at, so it is found again after scrolling far off.
+    const selectedIndex = useRef<number | undefined>(undefined)
+
+    return useCallback(
+        (event: KeyboardEvent<HTMLDivElement>) => {
+            // Keys typed into a detail panel's own controls are theirs.
+            if (!onRowSelect || event.target !== event.currentTarget) {
+                return
+            }
+            const indexOfSelection = (): number | undefined => {
+                if (selectedRowId == null) {
+                    return undefined
+                }
+                const isSelectedAt = (index: number) => {
+                    const row = rowAt(index)
+                    return row !== undefined && getRowId(row) === selectedRowId
+                }
+                if (selectedIndex.current !== undefined && isSelectedAt(selectedIndex.current)) {
+                    return selectedIndex.current
+                }
+                return virtualizer.getVirtualItems().find((item) => isSelectedAt(item.index))?.index
+            }
+
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                const current = indexOfSelection()
+                const step = event.key === 'ArrowDown' ? 1 : -1
+                // Without a selection, start from the first row on screen.
+                const next = current === undefined ? (virtualizer.range?.startIndex ?? 0) : current + step
+                if (next < 0 || next >= virtualizer.options.count) {
+                    return
+                }
+                virtualizer.scrollToIndex(next, { align: 'auto' })
+                const row = rowAt(next)
+                if (row !== undefined) {
+                    selectedIndex.current = next
+                    onRowSelect(getRowId(row), row)
+                }
+                return
+            }
+
+            if (event.key === ' ') {
+                event.preventDefault()
+                const current = indexOfSelection()
+                const row = current === undefined ? undefined : rowAt(current)
+                if (row !== undefined && canExpand(row)) {
+                    onToggle(getRowId(row))
+                }
+            }
+        },
+        [virtualizer, rowAt, getRowId, canExpand, selectedRowId, onRowSelect, onToggle],
+    )
 }
 
 /** Reports the rendered index range whenever it changes; skeleton rows of an unknown count are skipped. */

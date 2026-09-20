@@ -24,6 +24,9 @@ type DataTableRowProps<T> = {
     detailHeight: number
     Detail: DetailComponent<T> | undefined
     onToggle: (id: string) => void
+    isSelected: boolean
+    /** Called with the row's id and the row when it is clicked; rows are not selectable without it. */
+    onSelect: ((id: string, row: T) => void) | undefined
 }
 
 /**
@@ -46,10 +49,23 @@ export const DataTableRow = memo(
         detailHeight,
         Detail,
         onToggle,
+        isSelected,
+        onSelect,
     }: DataTableRowProps<T>): ReactNode => (
-        <div className="absolute top-0 left-0" style={{ transform: `translateY(${start}px)`, width: totalWidth }}>
+        <div
+            data-slot="data-table-row"
+            className="absolute top-0 left-0"
+            style={{ transform: `translateY(${start}px)`, width: totalWidth }}
+        >
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: rows are keyboard-driven from the table body (arrows, Space), not one by one. */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: same as above. */}
             <div
-                className="flex border-hairline border-b bg-surface-1 hover:bg-surface-2"
+                onClick={onSelect && row !== undefined && rowId !== undefined ? () => onSelect(rowId, row) : undefined}
+                className={cn(
+                    'flex border-hairline border-b bg-surface-1 hover:bg-surface-2',
+                    onSelect && rowId !== undefined && 'cursor-pointer',
+                    isSelected && 'bg-primary-soft/40 hover:bg-primary-soft/40',
+                )}
                 style={{ height: rowHeight }}
             >
                 {isExpandable && (
@@ -75,7 +91,7 @@ export const DataTableRow = memo(
                     className="sticky left-0 border-hairline border-b bg-surface-1"
                     style={{ width: viewportWidth, height: detailHeight }}
                 >
-                    <div className="h-full overflow-hidden bg-surface-2 pt-0.5 pr-4 pb-4 pl-11">
+                    <div className="h-full overflow-hidden bg-surface-2 pt-3 pr-4 pb-4 pl-11">
                         <div className="overflow-hidden rounded-[10px] border border-hairline bg-canvas">
                             <Detail row={row} />
                         </div>

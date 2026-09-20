@@ -4,9 +4,14 @@ import { cn } from '@/shared/utils'
 
 type TabsListIndicatorProps = {
     listRef: RefObject<HTMLDivElement | null>
+    /** `pill` covers the active trigger; `underline` draws a bar along its bottom edge. */
+    variant: 'pill' | 'underline'
 }
 
-export const TabsListIndicator: FC<TabsListIndicatorProps> = ({ listRef }) => {
+/** Thickness (px) of the `underline` indicator. */
+const UNDERLINE_HEIGHT = 2
+
+export const TabsListIndicator: FC<TabsListIndicatorProps> = ({ listRef, variant }) => {
     const indicatorRef = useRef<HTMLDivElement>(null)
     const [ready, setReady] = useState(false)
 
@@ -23,12 +28,17 @@ export const TabsListIndicator: FC<TabsListIndicatorProps> = ({ listRef }) => {
 
         indicator.style.opacity = '1'
         indicator.style.left = `${activeTrigger.offsetLeft}px`
-        indicator.style.top = `${activeTrigger.offsetTop}px`
         indicator.style.width = `${activeTrigger.offsetWidth}px`
-        indicator.style.height = `${activeTrigger.offsetHeight}px`
+        if (variant === 'underline') {
+            indicator.style.top = `${activeTrigger.offsetTop + activeTrigger.offsetHeight - UNDERLINE_HEIGHT}px`
+            indicator.style.height = `${UNDERLINE_HEIGHT}px`
+        } else {
+            indicator.style.top = `${activeTrigger.offsetTop}px`
+            indicator.style.height = `${activeTrigger.offsetHeight}px`
+        }
 
         if (!ready) setReady(true)
-    }, [listRef, ready])
+    }, [listRef, ready, variant])
 
     useEffect(() => {
         const list = listRef.current
@@ -46,7 +56,10 @@ export const TabsListIndicator: FC<TabsListIndicatorProps> = ({ listRef }) => {
         <div
             ref={indicatorRef}
             className={cn(
-                'pointer-events-none absolute select-none rounded-md border border-hairline-strong bg-canvas shadow-sm dark:bg-surface-3',
+                'pointer-events-none absolute select-none',
+                variant === 'underline'
+                    ? 'bg-primary'
+                    : 'rounded-md border border-hairline-strong bg-canvas shadow-sm dark:bg-surface-3',
                 ready && 'transition-all duration-300 ease-out',
             )}
         />

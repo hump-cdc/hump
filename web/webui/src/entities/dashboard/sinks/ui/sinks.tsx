@@ -48,7 +48,7 @@ export const Sinks: FC = () => {
                     {sinks.length === 0 ? (
                         <span className="px-4 py-3 text-ink-tertiary text-xs">No sinks configured</span>
                     ) : (
-                        sinks.map(({ key, type, host, ok }, index) => (
+                        sinks.map(({ key, type, host }, index) => (
                             <div
                                 key={key}
                                 className={cn(
@@ -57,7 +57,7 @@ export const Sinks: FC = () => {
                                 )}
                             >
                                 <div className="flex items-center gap-2.5">
-                                    <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-danger')} />
+                                    <span className="size-1.5 rounded-full bg-ink-subtle" />
                                     <Sink type={type} host={host} />
                                 </div>
                             </div>

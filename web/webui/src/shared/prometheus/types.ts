@@ -19,7 +19,6 @@ export type LabelMatch = (labels: Record<string, string>) => boolean
 
 /**
  * One bucket of a histogram: its upper bound and the count of observations at or below it.
- * Named for the histogram to keep it apart from `shared/storage`'s time-window `Bucket`.
  */
 export type HistogramBucket = { le: number; count: number }
 

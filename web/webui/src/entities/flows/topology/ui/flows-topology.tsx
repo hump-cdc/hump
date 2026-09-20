@@ -1,6 +1,7 @@
 import { type FC, type ReactNode, useMemo } from 'react'
 
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/topology'
+import { useLiveOperations } from '@/shared/live'
 import { Flow, SinkNode, TableNode } from '@/shared/ui/flow'
 
 import { edges, sinks, tables } from '../model/mock'
@@ -25,6 +26,9 @@ export const FlowsTopology: FC<FlowsTopologyProps> = ({ overlay }) => {
     const clear = useFlowInspectorStore((state) => state.clear)
 
     const labelById = useMemo(() => new Map([...tables, ...sinks].map((node) => [node.id, node.name])), [])
+
+    // Placeholder consumer: this is where the live feed will animate the matching edges.
+    useLiveOperations((batch) => console.log('live batch', batch))
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">

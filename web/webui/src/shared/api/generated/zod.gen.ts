@@ -395,24 +395,9 @@ export type OperationsResponseBody = z.infer<typeof OperationsResponseBodySchema
 export const zGetApiConfigResponse = ConfigResponseBodySchema;
 
 /**
- * Server Sent Events
- *
- * Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
+ * OK
  */
-export const zGetApiLiveResponse = z.array(z.object({
-    data: OperationsEventSchema,
-    event: z.literal('operations').register(z.globalRegistry, {
-        description: 'The event name.'
-    }),
-    id: z.int().register(z.globalRegistry, {
-        description: 'The event ID.'
-    }).optional(),
-    retry: z.int().register(z.globalRegistry, {
-        description: 'The retry time in milliseconds.'
-    }).optional()
-})).register(z.globalRegistry, {
-    description: 'Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.'
-});
+export const zGetApiLiveResponse = OperationsEventSchema;
 
 export const zPostApiMetricsBody = MetricsRequestBodySchema;
 

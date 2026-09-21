@@ -181,7 +181,7 @@ export const MetricsSinkTargetSchema = z.object({
         description: 'Share of deliveries that succeeded, 0 to 1; absent without an operation'
     }).optional(),
     target: z.string().register(z.globalRegistry, {
-        description: 'Rendered target: topic, subject, exchange, stream or HTTP method'
+        description: 'Rendered target: topic, subject, exchange, stream or URL'
     })
 });
 
@@ -276,7 +276,7 @@ export const OperationEventSchema = z.object({
         description: 'Name of the source table'
     }),
     target: z.string().register(z.globalRegistry, {
-        description: 'Target the sink rendered for this row: topic, subject, exchange, stream or HTTP method'
+        description: 'Target the sink rendered for this row: topic, subject, exchange, stream or URL'
     })
 });
 

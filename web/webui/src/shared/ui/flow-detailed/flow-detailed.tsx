@@ -1,12 +1,10 @@
 import { type ComponentProps, type FC, type Ref, useMemo } from 'react'
 
-import { Background, BackgroundVariant, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react'
+import { Flow, useFlowSelection, useSelectionHandlers } from '@/shared/ui/flow'
 
-import { cn } from '@/shared/utils'
-
-import { nodeTypes } from './flow-detailed.consts'
+import { EDGE_Z_INDEX, nodeTypes } from './flow-detailed.consts'
 import { TargetSelectionContext } from './flow-detailed.context'
-import { partitionChildren, useEdgeAnimation, useFlowSelection, useSelectionHandlers } from './flow-detailed.helpers'
+import { partitionChildren, useDetailedEdgeAnimation, useTargetClickHandler } from './flow-detailed.helpers'
 import type {
     ClearSelectionHandler,
     EdgeSelectHandler,
@@ -15,6 +13,9 @@ import type {
     SinkTargetSelectHandler,
     TableNodeSelectHandler,
 } from './flow-detailed.types'
+import type { SinkNodeData } from './node.sink'
+
+export { TableNode as FlowDetailedTable, type TableNodeData } from '@/shared/ui/flow'
 
 export { sinkTargetKey } from './flow-detailed.context'
 export type {
@@ -27,12 +28,8 @@ export type {
 } from './flow-detailed.types'
 export { GhostNode as FlowDetailedGhost, type GhostNodeData } from './node.ghost'
 export { SinkNode as FlowDetailedSink, type SinkNodeData, type SinkTarget } from './node.sink'
-export { TableNode as FlowDetailedTable, type TableNodeData } from './node.table'
 
-import '@xyflow/react/dist/style.css'
-import './flow-detailed.css'
-
-type FlowDetailedProps = Omit<ComponentProps<typeof ReactFlow>, 'nodes' | 'selected' | 'ref'> & {
+type FlowDetailedProps = Omit<ComponentProps<typeof Flow>, 'nodes' | 'selected' | 'ref'> & {
     /** Id of the currently selected node, edge or target (`sinkTargetKey(sinkId, targetId)`). */
     selected?: string
     onTableNodeSelect?: TableNodeSelectHandler
@@ -52,7 +49,6 @@ type FlowDetailedProps = Omit<ComponentProps<typeof ReactFlow>, 'nodes' | 'selec
  * `ref.animate` flashes a route.
  */
 export const FlowDetailed: FC<FlowDetailedProps> = ({
-    className,
     children,
     selected,
     edges,
@@ -66,18 +62,19 @@ export const FlowDetailed: FC<FlowDetailedProps> = ({
 }) => {
     const { nodes, rest } = useMemo(() => partitionChildren(children), [children])
 
-    const animatedIds = useEdgeAnimation(edges, ref)
+    const animatedEdges = useDetailedEdgeAnimation(edges, ref)
 
-    const { selectedNodes, selectedEdges } = useFlowSelection(nodes, edges, selected, animatedIds)
+    const { selectedNodes, selectedEdges } = useFlowSelection(nodes, edges, selected, animatedEdges, EDGE_Z_INDEX)
 
-    const { handleNodeClick, handleTargetClick, handleEdgeClick, handlePaneClick } = useSelectionHandlers({
+    const { handleNodeClick, handleEdgeClick, handlePaneClick } = useSelectionHandlers<SinkNodeData>({
         selected,
         onTableNodeSelect,
         onSinkNodeSelect,
-        onSinkTargetSelect,
         onEdgeSelect,
         onClearSelection,
     })
+
+    const handleTargetClick = useTargetClickHandler(selected, onSinkTargetSelect, onClearSelection)
 
     const targetSelection = useMemo(
         () => ({ selected, onTargetClick: handleTargetClick }),
@@ -85,32 +82,18 @@ export const FlowDetailed: FC<FlowDetailedProps> = ({
     )
 
     return (
-        <ReactFlowProvider>
-            <TargetSelectionContext value={targetSelection}>
-                <div className={cn('h-full w-full', className)}>
-                    <ReactFlow
-                        nodes={selectedNodes}
-                        edges={selectedEdges}
-                        nodeTypes={nodeTypes}
-                        nodesDraggable={false}
-                        nodesConnectable={false}
-                        nodesFocusable={true}
-                        edgesFocusable={true}
-                        fitView
-                        fitViewOptions={{ maxZoom: 1 }}
-                        proOptions={{ hideAttribution: true }}
-                        onNodeClick={handleNodeClick}
-                        onEdgeClick={handleEdgeClick}
-                        onPaneClick={handlePaneClick}
-                        {...props}
-                        colorMode="light"
-                    >
-                        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-                        <Controls showInteractive={false} />
-                        {rest}
-                    </ReactFlow>
-                </div>
-            </TargetSelectionContext>
-        </ReactFlowProvider>
+        <TargetSelectionContext value={targetSelection}>
+            <Flow
+                nodes={selectedNodes}
+                edges={selectedEdges}
+                nodeTypes={nodeTypes}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={handleEdgeClick}
+                onPaneClick={handlePaneClick}
+                {...props}
+            >
+                {rest}
+            </Flow>
+        </TargetSelectionContext>
     )
 }

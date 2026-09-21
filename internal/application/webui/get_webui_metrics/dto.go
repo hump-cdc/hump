@@ -29,7 +29,7 @@ type MetricsTableOps struct {
 }
 
 type MetricsSinkTarget struct {
-	Target     string   `json:"target"            doc:"Rendered target: topic, subject, exchange, stream or HTTP method"`
+	Target     string   `json:"target"            doc:"Rendered target: topic, subject, exchange, stream or URL"`
 	Operations int64    `json:"operations"        doc:"Deliveries finished since start, retries excluded"`
 	Success    *float64 `json:"success,omitempty" doc:"Share of deliveries that succeeded, 0 to 1; absent without an operation"`
 	P95        *float64 `json:"p95,omitempty"     doc:"P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate"`

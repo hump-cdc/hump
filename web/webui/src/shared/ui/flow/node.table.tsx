@@ -4,14 +4,15 @@ import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { cva } from 'class-variance-authority'
 import { Table2 } from 'lucide-react'
 
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
 
 import type { FlowNodeBase, FlowNodeConfig } from './node'
 
-/** A single operation-kind cell: pre-formatted count plus optional p95 latency. */
+/** A single operation-kind cell: count plus optional p95 latency in milliseconds. */
 type TableOpStat = {
-    count: string
-    p95?: string
+    count: number
+    p95?: number
 }
 
 export type TableNodeData = {
@@ -58,10 +59,12 @@ export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected })
                 <div key={key} className="flex flex-col gap-0.5">
                     <span className="font-medium text-2xs text-ink-tertiary leading-none tracking-caps">{label}</span>
                     <span className={cn('font-mono font-semibold text-base leading-tight', tone)}>
-                        {data.ops[key].count}
+                        <NumberFlow value={data.ops[key].count} kind="compact" />
                     </span>
-                    {data.ops[key].p95 ? (
-                        <span className="font-mono text-2xs text-ink-subtle leading-none">{data.ops[key].p95}</span>
+                    {data.ops[key].p95 !== undefined ? (
+                        <span className="font-mono text-2xs text-ink-subtle leading-none">
+                            <NumberFlow value={data.ops[key].p95} kind="latency" />
+                        </span>
                     ) : null}
                 </div>
             ))}
@@ -71,7 +74,7 @@ export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected })
     </div>
 )
 
-/** Declarative config element: `<FlowDetailedTable id name ops />`. */
+/** Declarative config element: `<TableNode id name ops />`. */
 export const TableNode: FlowNodeConfig<'table', TableNodeData> = Object.assign(
     (_props: FlowNodeBase & TableNodeData) => null,
     { flowNodeType: 'table' as const },

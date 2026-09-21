@@ -1,9 +1,26 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { Metrics as MetricsApi, type MetricsPointModel, type MetricsResponseBodyModel } from '@/shared/api'
+import {
+    Metrics as MetricsApi,
+    type MetricsConnectionModel,
+    type MetricsPointModel,
+    type MetricsResponseBodyModel,
+    type MetricsSinkModel,
+    type MetricsSinkTargetModel,
+    type MetricsTableOpsModel,
+} from '@/shared/api'
 import { keys } from '@/shared/state'
 
-import type { Metrics, MetricsDuration, MetricsPoint } from './types'
+import type {
+    Metrics,
+    MetricsConnection,
+    MetricsDuration,
+    MetricsPoint,
+    MetricsSink,
+    MetricsSinkTarget,
+    MetricsTable,
+    MetricsTopology,
+} from './types'
 
 /** Metrics refresh every minute, this far past the minute boundary. */
 const REFRESH_OFFSET_MS = 1_000
@@ -58,8 +75,24 @@ export const normalizeMetrics = (response: MetricsResponseBodyModel, now: number
             return byTimestamp.get(timestamp) ?? emptyPoint(timestamp)
         }),
         sinks: [...sinks].sort(),
+        topology: toTopology(response),
     }
 }
+
+/**
+ * Converts the configured tables, sinks and connections, sorted so the layout stays put across
+ * refetches (tables arrive as a map, whose key order is random).
+ */
+const toTopology = (response: MetricsResponseBodyModel): MetricsTopology => ({
+    tables: Object.entries(response.tables ?? {})
+        .map(([name, ops]) => toTable(name, ops))
+        .sort((a, b) => compare(a.name, b.name)),
+    sinks: (response.sinks ?? []).map(toSink).sort((a, b) => compare(a.type, b.type) || compare(a.host, b.host)),
+    connections: (response.connections ?? []).map(toConnection),
+})
+
+/** Locale-independent string order. */
+const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /** Counters arrive as `bigint` once the response transformer ran, while the generated types say `number`. */
 const toNumber = (value: number | bigint): number => Number(value)
@@ -78,6 +111,42 @@ const toPoint = (point: MetricsPointModel): MetricsPoint => ({
     memoryAllocBytes: point.memoryAllocBytes,
     sinkDelivery: toNumbers(point.sinkDelivery),
     sinkLatencyP95: toNumbers(point.sinkLatencyP95),
+})
+
+/** Converts one table's abbreviated operation counters. */
+const toTable = (name: string, ops: MetricsTableOpsModel): MetricsTable => ({
+    name,
+    insert: toNumber(ops.i),
+    update: toNumber(ops.u),
+    delete: toNumber(ops.d),
+    truncate: toNumber(ops.t),
+})
+
+/** Converts one sink target. */
+const toSinkTarget = (target: MetricsSinkTargetModel): MetricsSinkTarget => ({
+    target: target.target,
+    operations: toNumber(target.operations),
+    success: target.success,
+    p95: target.p95,
+})
+
+/** Converts one sink, its targets sorted by name. */
+const toSink = (sink: MetricsSinkModel): MetricsSink => ({
+    type: sink.type,
+    host: sink.host,
+    operations: toNumber(sink.operations),
+    success: sink.success,
+    p95: sink.p95,
+    targets: (sink.targets ?? []).map(toSinkTarget).sort((a, b) => compare(a.target, b.target)),
+})
+
+/** Converts one table-to-target connection. */
+const toConnection = (connection: MetricsConnectionModel): MetricsConnection => ({
+    table: connection.table,
+    sink: connection.sink,
+    host: connection.host,
+    target: connection.target,
+    operations: toNumber(connection.operations),
 })
 
 /** All-zero point standing in for a bucket the response has no data for. */

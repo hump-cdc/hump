@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { formatNumber } from '@/shared/utils'
 
 import { useFailed } from '../model/use-failed'
@@ -14,7 +15,7 @@ export const Failed: FC = () => {
         <MetricCard
             title="Failed"
             hint="Delivery attempts that failed during the time range."
-            value={value}
+            value={value === undefined ? undefined : <NumberFlow value={value} kind="integer" />}
             values={values}
             tooltipValueFormatter={formatFailed}
             variant="danger"

@@ -1,25 +1,34 @@
-import { type FC, useMemo } from 'react'
+import { type FC, useMemo, useRef } from 'react'
 
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/flows'
-import { FlowSummary, FlowSummarySink, FlowSummaryTable } from '@/shared/ui/flow-summary'
+import { useLiveOperations } from '@/shared/live'
+import { FlowSummary, type FlowSummaryRef, FlowSummarySink, FlowSummaryTable } from '@/shared/ui/flow-summary'
 
-import { edges, sinks, tables } from '../model/mock'
+import { type FlowsTopology, sinkId, tableId } from '../model/topology'
 
 /**
  * Summary topology: one card per sink. Clicking a node or edge stores the selection in the
- * shared inspector store, which highlights it.
+ * shared inspector store, which highlights it. Every live delivery flashes its table → sink edge.
  */
-export const FlowsSummary: FC = () => {
+export const FlowsSummary: FC<{ topology: FlowsTopology }> = ({ topology: { tables, sinks, edges } }) => {
     const selected = useFlowInspectorStore((state) => state.selected)
     const selectTable = useFlowInspectorStore((state) => state.selectTable)
     const selectSink = useFlowInspectorStore((state) => state.selectSink)
     const selectEdge = useFlowInspectorStore((state) => state.selectEdge)
     const clear = useFlowInspectorStore((state) => state.clear)
 
-    const labelById = useMemo(() => new Map([...tables, ...sinks].map((node) => [node.id, node.name])), [])
+    const flowRef = useRef<FlowSummaryRef>(null)
+    useLiveOperations((batch) => {
+        for (const operation of batch) {
+            flowRef.current?.animate(tableId(operation.schema, operation.table), sinkId(operation.sink, operation.host))
+        }
+    })
+
+    const labelById = useMemo(() => new Map([...tables, ...sinks].map((node) => [node.id, node.name])), [tables, sinks])
 
     return (
         <FlowSummary
+            ref={flowRef}
             edges={edges}
             selected={selected?.id}
             onTableNodeSelect={selectTable}

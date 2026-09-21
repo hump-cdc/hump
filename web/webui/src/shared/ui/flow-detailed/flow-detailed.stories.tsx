@@ -122,30 +122,30 @@ const meta: Meta<StoryArgs> = {
                         id="t-users"
                         name="public.users"
                         ops={{
-                            insert: { count: '842', p95: '11ms' },
-                            update: { count: '311', p95: '8ms' },
-                            delete: { count: '47', p95: '19ms' },
-                            truncate: { count: '0', p95: '4ms' },
+                            insert: { count: 842, p95: 11 },
+                            update: { count: 311, p95: 8 },
+                            delete: { count: 47, p95: 19 },
+                            truncate: { count: 0, p95: 4 },
                         }}
                     />
                     <FlowDetailedTable
                         id="t-orders"
                         name="public.orders"
                         ops={{
-                            insert: { count: '210', p95: '14ms' },
-                            update: { count: '540', p95: '9ms' },
-                            delete: { count: '88', p95: '22ms' },
-                            truncate: { count: '1', p95: '5ms' },
+                            insert: { count: 210, p95: 14 },
+                            update: { count: 540, p95: 9 },
+                            delete: { count: 88, p95: 22 },
+                            truncate: { count: 1, p95: 5 },
                         }}
                     />
                     <FlowDetailedTable
                         id="t-events"
                         name="public.events"
                         ops={{
-                            insert: { count: '37', p95: '6ms' },
-                            update: { count: '12', p95: '7ms' },
-                            delete: { count: '4', p95: '15ms' },
-                            truncate: { count: '0', p95: '3ms' },
+                            insert: { count: 37, p95: 6 },
+                            update: { count: 12, p95: 7 },
+                            delete: { count: 4, p95: 15 },
+                            truncate: { count: 0, p95: 3 },
                         }}
                     />
 
@@ -154,14 +154,14 @@ const meta: Meta<StoryArgs> = {
                         name="Kafka"
                         type="kafka"
                         host="localhost:9092"
-                        count="1284"
+                        count={1284}
                         targets={[
                             {
                                 id: 'orders',
                                 name: 'orders',
                                 kind: 'topic',
-                                count: '842',
-                                p95: '6ms',
+                                count: 842,
+                                p95: 6,
                                 successRate: 99.9,
                                 health: 'ok',
                             },
@@ -169,8 +169,8 @@ const meta: Meta<StoryArgs> = {
                                 id: 'events',
                                 name: 'events',
                                 kind: 'topic',
-                                count: '442',
-                                p95: '9ms',
+                                count: 442,
+                                p95: 9,
                                 successRate: 99.7,
                                 health: 'ok',
                             },
@@ -181,14 +181,14 @@ const meta: Meta<StoryArgs> = {
                         name="RabbitMQ"
                         type="rabbitmq"
                         host="localhost:5672"
-                        count="970"
+                        count={970}
                         targets={[
                             {
                                 id: 'users',
                                 name: 'users',
                                 kind: 'queue',
-                                count: '612',
-                                p95: '14ms',
+                                count: 612,
+                                p95: 14,
                                 successRate: 99.8,
                                 health: 'ok',
                             },
@@ -196,8 +196,8 @@ const meta: Meta<StoryArgs> = {
                                 id: 'events',
                                 name: 'events',
                                 kind: 'queue',
-                                count: '358',
-                                p95: '41ms',
+                                count: 358,
+                                p95: 41,
                                 successRate: 97.2,
                                 health: 'error',
                             },

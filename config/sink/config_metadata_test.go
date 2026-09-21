@@ -41,7 +41,7 @@ func TestSinkMetadata(t *testing.T) {
 				Method: mustTemplate(t, "POST"),
 			},
 			wantHost:   "webhooks.host",
-			wantTarget: "POST",
+			wantTarget: "https://webhooks.host/url1",
 		},
 		{
 			name: "nats core",

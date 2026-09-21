@@ -88,4 +88,55 @@ describe('normalizeMetrics', () => {
         expect(latest?.sinkDelivery).toEqual({ webhook: 2 })
         expect(metrics.sinks).toEqual(['kafka', 'webhook'])
     })
+
+    test('converts the topology and sorts it for a stable layout', () => {
+        const big = (value: number) => BigInt(value) as unknown as number
+        const { topology } = normalizeMetrics(
+            response({
+                tables: {
+                    'public.users': { i: big(3), u: big(2), d: big(1), t: big(0) },
+                    'public.events': { i: big(9), u: big(0), d: big(0), t: big(1) },
+                },
+                sinks: [
+                    { type: 'nats-core', host: 'b:4222', operations: big(1), targets: null },
+                    {
+                        type: 'kafka',
+                        host: 'a:9092',
+                        operations: big(5),
+                        success: 0.8,
+                        p95: 12.5,
+                        targets: [
+                            { target: 'users', operations: big(3), success: 1 },
+                            { target: 'events', operations: big(2) },
+                        ],
+                    },
+                ],
+                connections: [
+                    { table: 'public.users', sink: 'kafka', host: 'a:9092', target: 'users', operations: big(3) },
+                ],
+            }),
+            NOW,
+        )
+
+        expect(topology.tables).toEqual([
+            { name: 'public.events', insert: 9, update: 0, delete: 0, truncate: 1 },
+            { name: 'public.users', insert: 3, update: 2, delete: 1, truncate: 0 },
+        ])
+        expect(topology.sinks.map(({ type }) => type)).toEqual(['kafka', 'nats-core'])
+        expect(topology.sinks[0]).toEqual({
+            type: 'kafka',
+            host: 'a:9092',
+            operations: 5,
+            success: 0.8,
+            p95: 12.5,
+            targets: [
+                { target: 'events', operations: 2, success: undefined, p95: undefined },
+                { target: 'users', operations: 3, success: 1, p95: undefined },
+            ],
+        })
+        expect(topology.sinks[1].targets).toEqual([])
+        expect(topology.connections).toEqual([
+            { table: 'public.users', sink: 'kafka', host: 'a:9092', target: 'users', operations: 3 },
+        ])
+    })
 })

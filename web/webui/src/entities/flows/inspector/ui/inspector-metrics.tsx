@@ -5,11 +5,12 @@ import { InspectorStat } from './inspector-stat'
 /** Headline figures grid plus the success-rate bar; values are supplied per selection kind. */
 export const InspectorMetrics: FC<{
     throughput: string
-    successRate: number
+    /** Success rate (0–100); absent without an operation. */
+    successRate?: number
     totalEvents: string
     failures: string
 }> = ({ throughput, successRate, totalEvents, failures }) => {
-    const successLabel = `${successRate}%`
+    const successLabel = successRate === undefined ? '—' : `${successRate}%`
 
     return (
         <>
@@ -30,11 +31,15 @@ export const InspectorMetrics: FC<{
                     <span className="font-medium font-mono text-success text-xs">{successLabel}</span>
                 </div>
                 <div className="flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-surface-3">
-                    <div
-                        className="h-full bg-success"
-                        style={{ width: `${Math.max(0, Math.min(100, successRate))}%` }}
-                    />
-                    <div className="h-full flex-1 bg-danger" />
+                    {successRate === undefined ? null : (
+                        <>
+                            <div
+                                className="h-full bg-success"
+                                style={{ width: `${Math.max(0, Math.min(100, successRate))}%` }}
+                            />
+                            <div className="h-full flex-1 bg-danger" />
+                        </>
+                    )}
                 </div>
             </div>
         </>

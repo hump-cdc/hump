@@ -276,7 +276,7 @@ export type MetricsSinkTargetModel = {
      */
     success?: number;
     /**
-     * Rendered target: topic, subject, exchange, stream or HTTP method
+     * Rendered target: topic, subject, exchange, stream or URL
      */
     target: string;
 };
@@ -341,7 +341,7 @@ export type OperationEventModel = {
      */
     table: string;
     /**
-     * Target the sink rendered for this row: topic, subject, exchange, stream or HTTP method
+     * Target the sink rendered for this row: topic, subject, exchange, stream or URL
      */
     target: string;
 };

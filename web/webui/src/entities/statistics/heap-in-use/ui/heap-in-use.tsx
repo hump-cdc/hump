@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 
 import { AreaChartCard } from '@/shared/ui/card'
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { formatNumber2 } from '@/shared/utils'
 
 import { useHeapInUse } from '../model/use-heap-in-use'
@@ -17,7 +18,8 @@ export const HeapInUse: FC = () => {
             value={
                 value === undefined ? undefined : (
                     <div className="flex flex-nowrap items-end gap-1">
-                        {value} <span className="pb-1 font-medium font-sans text-base text-ink-subtle">MB</span>
+                        <NumberFlow value={value} kind="decimal" />{' '}
+                        <span className="pb-1 font-medium font-sans text-base text-ink-subtle">MB</span>
                     </div>
                 )
             }

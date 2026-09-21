@@ -1,6 +1,6 @@
 import { type FC, useState } from 'react'
 
-import { sinks, tables } from '@/entities/flows/flows/@x/toolbar'
+import { useFlowsTopology } from '@/entities/flows/flows/@x/toolbar'
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/toolbar'
 import { MultiComboBox } from '@/shared/ui/multi-combo-box'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
@@ -8,21 +8,38 @@ import { Toolbar } from '@/shared/ui/toolbar'
 
 import { TOPOLOGY_MODES, type TopologyMode, useTopologyModeStore } from '../model/store'
 
-const tableOptions = tables.map((table) => ({
-    value: table.id,
-    label: table.name,
-}))
-const sinkOptions = sinks.map((sink) => ({ value: sink.id, label: sink.name }))
-
 /** Display labels of the topology modes. */
 const MODE_LABELS: Record<TopologyMode, string> = {
     summary: 'Summary',
     detailed: 'Detailed',
 }
 
+/** A filter option; its `value` is the node id. */
+type Option = { value: string; label: string }
+
+/**
+ * Selection kept as the options switched off, so every table or sink starts selected, including
+ * those arriving after mount with the first metrics response or appearing later.
+ */
+const useExclusion = (options: Option[]) => {
+    const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set())
+
+    return {
+        value: options.filter((option) => !excluded.has(option.value)).map((option) => option.value),
+        onValueChange: (value: string[]) => {
+            const selected = new Set(value)
+            setExcluded(new Set(options.filter((option) => !selected.has(option.value)).map((option) => option.value)))
+        },
+    }
+}
+
 export const FlowsToolbar: FC = () => {
-    const [selectedTables, setSelectedTables] = useState(tableOptions.map((option) => option.value))
-    const [selectedSinks, setSelectedSinks] = useState(sinkOptions.map((option) => option.value))
+    const { tables, detailedSinks } = useFlowsTopology()
+    const tableOptions = tables.map((table) => ({ value: table.id, label: table.name }))
+    // Sinks of one type differ by host only, so the label carries both.
+    const sinkOptions = detailedSinks.map((sink) => ({ value: sink.id, label: `${sink.name} · ${sink.host}` }))
+    const tableFilter = useExclusion(tableOptions)
+    const sinkFilter = useExclusion(sinkOptions)
     const mode = useTopologyModeStore((state) => state.mode)
     const setMode = useTopologyModeStore((state) => state.setMode)
     const clearSelection = useFlowInspectorStore((state) => state.clear)
@@ -49,22 +66,8 @@ export const FlowsToolbar: FC = () => {
 
     return (
         <Toolbar actions={modeTabs}>
-            <MultiComboBox
-                items={tableOptions}
-                value={selectedTables}
-                onValueChange={setSelectedTables}
-                placeholder="Tables"
-                icon="Tables"
-                className="w-72"
-            />
-            <MultiComboBox
-                items={sinkOptions}
-                value={selectedSinks}
-                onValueChange={setSelectedSinks}
-                placeholder="Sinks"
-                icon="Sinks"
-                className="w-72"
-            />
+            <MultiComboBox items={tableOptions} {...tableFilter} placeholder="Tables" icon="Tables" className="w-72" />
+            <MultiComboBox items={sinkOptions} {...sinkFilter} placeholder="Sinks" icon="Sinks" className="w-72" />
         </Toolbar>
     )
 }

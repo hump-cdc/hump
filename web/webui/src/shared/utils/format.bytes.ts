@@ -24,3 +24,19 @@ export const formatBytes = <T extends number | undefined>(value: T): Formatted<T
 
     return `${sign}${number} ${UNITS[unit]}` as Formatted<T>
 }
+
+/** Byte size scaled to its 1024-based unit, e.g. 1536 → { value: 1.5, suffix: ' KB', fractionDigits: 2 }. */
+export const scaleBytes = (value: number): { value: number; suffix: string; fractionDigits: number } => {
+    let size = Math.abs(value)
+    let unit = 0
+    while (size >= 1024 && unit < UNITS.length - 1) {
+        size /= 1024
+        unit++
+    }
+
+    return {
+        value: Math.sign(value) * (unit === 0 ? Math.round(size) : size),
+        suffix: ` ${UNITS[unit]}`,
+        fractionDigits: unit === 0 ? 0 : 2,
+    }
+}

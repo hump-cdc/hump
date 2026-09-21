@@ -49,12 +49,12 @@ func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.
 	// Metrics
 	sinkMessagesCounter := metricsFactory.NewCounterVec(prometheus.CounterOpts{
 		Name: "sink_messages_total",
-		Help: "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/HTTP method).",
+		Help: "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/URL).",
 	}, []string{"status", "type", "host", "target"})
 
 	sinkDurationHistogram := metricsFactory.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "sink_duration_seconds",
-		Help: "Time spent dispatching a single message to a sink, in seconds, labeled by sink type, connection host, and rendered target (topic/subject/exchange/stream/HTTP method). Measures end-to-end write latency including any retries within a single attempt.",
+		Help: "Time spent dispatching a single message to a sink, in seconds, labeled by sink type, connection host, and rendered target (topic/subject/exchange/stream/URL). Measures end-to-end write latency including any retries within a single attempt.",
 	}, []string{"type", "host", "target"})
 
 	// Build binding mappings per (schema, table) pair

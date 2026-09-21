@@ -2,8 +2,7 @@ import type { FC } from 'react'
 
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 
-import type { FlowNodeBase, FlowNodeConfig } from './node'
-import { SinkIcon } from './sink-icon'
+import { type FlowNodeBase, type FlowNodeConfig, SinkIcon } from '@/shared/ui/flow'
 
 export type GhostNodeData = {
     /** Sink type shown as a placeholder (e.g. `clickhouse`, `s3`). */

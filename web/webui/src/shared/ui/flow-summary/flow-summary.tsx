@@ -1,11 +1,9 @@
 import { type ComponentProps, type FC, type Ref, useMemo } from 'react'
 
-import { Background, BackgroundVariant, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react'
-
-import { cn } from '@/shared/utils'
+import { Flow, useFlowSelection, useSelectionHandlers } from '@/shared/ui/flow'
 
 import { nodeTypes } from './flow-summary.consts'
-import { partitionChildren, useEdgeAnimation, useFlowSelection, useSelectionHandlers } from './flow-summary.helpers'
+import { partitionChildren, useSummaryEdgeAnimation } from './flow-summary.helpers'
 import type {
     ClearSelectionHandler,
     EdgeSelectHandler,
@@ -13,6 +11,9 @@ import type {
     SinkNodeSelectHandler,
     TableNodeSelectHandler,
 } from './flow-summary.types'
+import type { SinkNodeData } from './node.sink'
+
+export { TableNode as FlowSummaryTable, type TableNodeData } from '@/shared/ui/flow'
 
 export type {
     ClearSelectionHandler,
@@ -22,12 +23,8 @@ export type {
     TableNodeSelectHandler,
 } from './flow-summary.types'
 export { SinkNode as FlowSummarySink, type SinkNodeData } from './node.sink'
-export { TableNode as FlowSummaryTable, type TableNodeData } from './node.table'
 
-import '@xyflow/react/dist/style.css'
-import './flow-summary.css'
-
-type FlowSummaryProps = Omit<ComponentProps<typeof ReactFlow>, 'nodes' | 'selected' | 'ref'> & {
+type FlowSummaryProps = Omit<ComponentProps<typeof Flow>, 'nodes' | 'selected' | 'ref'> & {
     /** Id of the currently selected node or edge. */
     selected?: string
     onTableNodeSelect?: TableNodeSelectHandler
@@ -43,7 +40,6 @@ type FlowSummaryProps = Omit<ComponentProps<typeof ReactFlow>, 'nodes' | 'select
  * `style` (`opacity`/`strokeWidth`); `ref.animate` flashes a route.
  */
 export const FlowSummary: FC<FlowSummaryProps> = ({
-    className,
     children,
     selected,
     edges,
@@ -56,11 +52,11 @@ export const FlowSummary: FC<FlowSummaryProps> = ({
 }) => {
     const { nodes, rest } = useMemo(() => partitionChildren(children), [children])
 
-    const animatedIds = useEdgeAnimation(edges, ref)
+    const animatedEdges = useSummaryEdgeAnimation(edges, ref)
 
-    const { selectedNodes, selectedEdges } = useFlowSelection(nodes, edges, selected, animatedIds)
+    const { selectedNodes, selectedEdges } = useFlowSelection(nodes, edges, selected, animatedEdges)
 
-    const { handleNodeClick, handleEdgeClick, handlePaneClick } = useSelectionHandlers({
+    const { handleNodeClick, handleEdgeClick, handlePaneClick } = useSelectionHandlers<SinkNodeData>({
         selected,
         onTableNodeSelect,
         onSinkNodeSelect,
@@ -69,30 +65,16 @@ export const FlowSummary: FC<FlowSummaryProps> = ({
     })
 
     return (
-        <ReactFlowProvider>
-            <div className={cn('h-full w-full', className)}>
-                <ReactFlow
-                    nodes={selectedNodes}
-                    edges={selectedEdges}
-                    nodeTypes={nodeTypes}
-                    nodesDraggable={false}
-                    nodesConnectable={false}
-                    nodesFocusable={true}
-                    edgesFocusable={true}
-                    fitView
-                    fitViewOptions={{ maxZoom: 1 }}
-                    proOptions={{ hideAttribution: true }}
-                    onNodeClick={handleNodeClick}
-                    onEdgeClick={handleEdgeClick}
-                    onPaneClick={handlePaneClick}
-                    {...props}
-                    colorMode="light"
-                >
-                    <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-                    <Controls showInteractive={false} />
-                    {rest}
-                </ReactFlow>
-            </div>
-        </ReactFlowProvider>
+        <Flow
+            nodes={selectedNodes}
+            edges={selectedEdges}
+            nodeTypes={nodeTypes}
+            onNodeClick={handleNodeClick}
+            onEdgeClick={handleEdgeClick}
+            onPaneClick={handlePaneClick}
+            {...props}
+        >
+            {rest}
+        </Flow>
     )
 }

@@ -1,5 +1,7 @@
 import type { FC } from 'react'
 
+import { formatNumberCompact } from '@/shared/utils'
+
 import type { SelectedItem } from '../model/types'
 import { IdentityCard } from './identity-card'
 import { InspectorMetrics } from './inspector-metrics'
@@ -16,7 +18,7 @@ export const SinkDetails: FC<{ selected: Extract<SelectedItem, { kind: 'sink' }>
         <InspectorMetrics
             throughput="842/s"
             successRate={selected.data.successRate}
-            totalEvents={selected.data.operations}
+            totalEvents={formatNumberCompact(selected.data.operations)}
             failures={selected.data.health === 'error' ? '37' : '2'}
         />
     </>

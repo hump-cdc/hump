@@ -3,11 +3,11 @@ import type { FC } from 'react'
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { cva } from 'class-variance-authority'
 
+import { type FlowNodeBase, type FlowNodeConfig, SinkIconTile } from '@/shared/ui/flow'
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
 
 import { sinkTargetKey, useTargetSelection } from './flow-detailed.context'
-import type { FlowNodeBase, FlowNodeConfig } from './node'
-import { SinkIconTile } from './sink-icon'
 
 /** A delivery target inside a sink (topic, queue, subject, …); edges attach to it via `targetHandle`. */
 export type SinkTarget = {
@@ -16,12 +16,12 @@ export type SinkTarget = {
     name: string
     /** Target kind label (e.g. `topic`, `queue`). */
     kind: string
-    /** Pre-formatted operations delivered to this target. */
-    count: string
-    /** Pre-formatted p95 delivery latency (e.g. `6ms`). */
-    p95: string
-    /** Success rate (0–100). */
-    successRate: number
+    /** Operations delivered to this target. */
+    count: number
+    /** p95 delivery latency in milliseconds; absent without an estimate. */
+    p95?: number
+    /** Success rate (0–100); absent without an operation. */
+    successRate?: number
     health: 'ok' | 'error'
 }
 
@@ -30,8 +30,8 @@ export type SinkNodeData = {
     /** Sink type (`kafka`, `rabbitmq`, …); picks the header logo. */
     type: string
     host?: string
-    /** Pre-formatted total operations across all targets. */
-    count: string
+    /** Total operations across all targets. */
+    count: number
     targets: SinkTarget[]
 }
 
@@ -59,11 +59,13 @@ const sinkNodeVariants = cva('flex w-95 flex-col gap-2.5 rounded-xl border bg-su
     },
 })
 
-const rateVariants = cva('rounded px-1.5 py-0.5 font-medium font-mono text-2xs', {
+const rateVariants = cva('shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 font-medium font-mono text-2xs', {
     variants: {
         health: {
             ok: 'bg-success-soft text-success',
             error: 'bg-danger-soft text-danger',
+            /** No operation yet, so no rate to judge. */
+            none: 'bg-surface-2 text-ink-subtle',
         },
     },
 })
@@ -102,14 +104,16 @@ const TargetRow: FC<{ sinkId: string; target: SinkTarget }> = ({ sinkId, target 
                     onTargetClick(sinkId, target)
                 }}
             >
-                <span className="font-medium font-mono text-ink text-sm">{target.name}</span>
-                <span className="text-2xs text-ink-subtle">{target.kind}</span>
-                <span className="flex-1" />
-                <span className="font-mono text-ink-subtle text-xs">{target.count}</span>
-                <span className="rounded border border-hairline-strong bg-surface-2 px-1.5 font-mono text-ink-subtle text-xs">
-                    {target.p95}
+                <span className="min-w-0 flex-1 truncate font-medium font-mono text-ink text-sm">{target.name}</span>
+                <span className="shrink-0 whitespace-nowrap font-mono text-ink-subtle text-xs">
+                    <NumberFlow value={target.count} kind="compact" />
                 </span>
-                <span className={rateVariants({ health: target.health })}>{target.successRate}%</span>
+                <span className="shrink-0 whitespace-nowrap rounded border border-hairline-strong bg-surface-2 px-1.5 font-mono text-ink-subtle text-xs">
+                    <NumberFlow value={target.p95} kind="latency" />
+                </span>
+                <span className={rateVariants({ health: target.successRate === undefined ? 'none' : target.health })}>
+                    <NumberFlow value={target.successRate} kind="percent" />
+                </span>
             </button>
 
             <Handle
@@ -137,7 +141,9 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ id, data, selected 
                     ) : null}
                 </div>
                 <div className="flex-1" />
-                <span className="font-mono font-semibold text-base text-ink">{data.count}</span>
+                <span className="font-mono font-semibold text-base text-ink">
+                    <NumberFlow value={data.count} kind="compact" />
+                </span>
             </div>
 
             <div className="h-px bg-hairline-strong" />

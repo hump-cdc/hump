@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { formatNumber } from '@/shared/utils'
 
 import { useDelivered } from '../model/use-delivered'
@@ -14,7 +15,7 @@ export const Delivered: FC = () => {
         <MetricCard
             title="Delivered"
             hint="Change events successfully written to their destinations during the time range."
-            value={value}
+            value={value === undefined ? undefined : <NumberFlow value={value} kind="integer" />}
             values={values}
             tooltipValueFormatter={formatDelivered}
             variant="success"

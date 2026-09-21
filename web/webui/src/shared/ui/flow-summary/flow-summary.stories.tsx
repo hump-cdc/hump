@@ -102,30 +102,30 @@ const meta: Meta<StoryArgs> = {
                         id="t-users"
                         name="public.users"
                         ops={{
-                            insert: { count: '842', p95: '11ms' },
-                            update: { count: '311', p95: '8ms' },
-                            delete: { count: '47', p95: '19ms' },
-                            truncate: { count: '0', p95: '4ms' },
+                            insert: { count: 842, p95: 11 },
+                            update: { count: 311, p95: 8 },
+                            delete: { count: 47, p95: 19 },
+                            truncate: { count: 0, p95: 4 },
                         }}
                     />
                     <FlowSummaryTable
                         id="t-orders"
                         name="public.orders"
                         ops={{
-                            insert: { count: '210', p95: '14ms' },
-                            update: { count: '540', p95: '9ms' },
-                            delete: { count: '88', p95: '22ms' },
-                            truncate: { count: '1', p95: '5ms' },
+                            insert: { count: 210, p95: 14 },
+                            update: { count: 540, p95: 9 },
+                            delete: { count: 88, p95: 22 },
+                            truncate: { count: 1, p95: 5 },
                         }}
                     />
                     <FlowSummaryTable
                         id="t-events"
                         name="public.events"
                         ops={{
-                            insert: { count: '37', p95: '6ms' },
-                            update: { count: '12', p95: '7ms' },
-                            delete: { count: '4', p95: '15ms' },
-                            truncate: { count: '0', p95: '3ms' },
+                            insert: { count: 37, p95: 6 },
+                            update: { count: 12, p95: 7 },
+                            delete: { count: 4, p95: 15 },
+                            truncate: { count: 0, p95: 3 },
                         }}
                     />
 
@@ -133,8 +133,8 @@ const meta: Meta<StoryArgs> = {
                         id="s-kafka"
                         name="kafka"
                         type="kafka"
-                        operations="1.24M"
-                        p95="18ms"
+                        operations={1240000}
+                        p95={18}
                         successRate={99.98}
                         health="ok"
                     />
@@ -142,8 +142,8 @@ const meta: Meta<StoryArgs> = {
                         id="s-rabbitmq"
                         name="rabbitmq"
                         type="rabbitmq"
-                        operations="486K"
-                        p95="31ms"
+                        operations={486000}
+                        p95={31}
                         successRate={99.7}
                         health="ok"
                     />

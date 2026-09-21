@@ -1,23 +1,22 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { cva } from 'class-variance-authority'
 
+import { type FlowNodeBase, type FlowNodeConfig, SinkIconTile } from '@/shared/ui/flow'
+import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
-
-import type { FlowNodeBase, FlowNodeConfig } from './node'
-import { SinkIconTile } from './sink-icon'
 
 export type SinkNodeData = {
     name: string
     /** Sink type (`kafka`, `rabbitmq`, …); picks the header logo. */
     type: string
-    /** Pre-formatted total operations delivered (e.g. `1.24M`). */
-    operations: string
-    /** Pre-formatted p95 delivery latency (e.g. `18ms`). */
-    p95: string
-    /** Success rate (0–100). */
-    successRate: number
+    /** Total operations delivered. */
+    operations: number
+    /** p95 delivery latency in milliseconds; absent without an estimate. */
+    p95?: number
+    /** Success rate (0–100); absent without an operation. */
+    successRate?: number
     health: 'ok' | 'error'
 }
 
@@ -38,7 +37,7 @@ const sinkNodeVariants = cva(
     },
 )
 
-const MetricCell: FC<{ label: string; value: string; className?: string }> = ({ label, value, className }) => (
+const MetricCell: FC<{ label: string; value: ReactNode; className?: string }> = ({ label, value, className }) => (
     <div className="flex flex-col gap-0.5">
         <span className="font-medium text-2xs text-ink-tertiary tracking-caps">{label}</span>
         <span className={cn('font-mono font-semibold text-base text-ink', className)}>{value}</span>
@@ -55,12 +54,18 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ data, selected }) =
         <div className="h-px bg-hairline-strong" />
 
         <div className="grid grid-cols-3 gap-2">
-            <MetricCell label="OPERATIONS" value={data.operations} />
-            <MetricCell label="P95" value={data.p95} />
+            <MetricCell label="OPERATIONS" value={<NumberFlow value={data.operations} kind="compact" />} />
+            <MetricCell label="P95" value={<NumberFlow value={data.p95} kind="latency" />} />
             <MetricCell
                 label="SUCCESS"
-                value={`${data.successRate}%`}
-                className={data.health === 'error' ? 'text-danger' : 'text-success'}
+                value={<NumberFlow value={data.successRate} kind="percent" />}
+                className={
+                    data.successRate === undefined
+                        ? 'text-ink-subtle'
+                        : data.health === 'error'
+                          ? 'text-danger'
+                          : 'text-success'
+                }
             />
         </div>
 

@@ -2,6 +2,7 @@ import { type FC, useMemo, useRef } from 'react'
 
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/flows'
 import { useLiveOperations } from '@/shared/live'
+import type { ViewportInsets } from '@/shared/ui/flow'
 import { FlowDetailed, type FlowDetailedRef, FlowDetailedSink, FlowDetailedTable } from '@/shared/ui/flow-detailed'
 
 import { type FlowsTopology, sinkId, tableId } from '../model/topology'
@@ -12,8 +13,9 @@ import type { DetailedSinkSpec } from '../model/types'
  * stores the selection in the shared inspector store, which highlights it. Every live delivery
  * flashes its table → sink target edge.
  */
-export const FlowsDetailed: FC<{ topology: FlowsTopology }> = ({
+export const FlowsDetailed: FC<{ topology: FlowsTopology; viewportInsets?: ViewportInsets }> = ({
     topology: { tables, detailedSinks, detailedEdges },
+    viewportInsets,
 }) => {
     const selected = useFlowInspectorStore((state) => state.selected)
     const selectTable = useFlowInspectorStore((state) => state.selectTable)
@@ -41,6 +43,7 @@ export const FlowsDetailed: FC<{ topology: FlowsTopology }> = ({
     return (
         <FlowDetailed
             ref={flowRef}
+            viewportInsets={viewportInsets}
             edges={detailedEdges}
             selected={selected?.id}
             onTableNodeSelect={selectTable}

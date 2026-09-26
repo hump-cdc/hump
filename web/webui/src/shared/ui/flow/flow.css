@@ -50,3 +50,8 @@
 .react-flow__handle.selected-target {
     border-color: var(--primary);
 }
+
+/* Lucide control icons are stroked; xyflow fills control svgs with currentColor. */
+.react-flow__controls-button svg {
+    fill: none;
+}

@@ -2,6 +2,7 @@ import { type FC, useMemo, useRef } from 'react'
 
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/flows'
 import { useLiveOperations } from '@/shared/live'
+import type { ViewportInsets } from '@/shared/ui/flow'
 import { FlowSummary, type FlowSummaryRef, FlowSummarySink, FlowSummaryTable } from '@/shared/ui/flow-summary'
 
 import { type FlowsTopology, sinkId, tableId } from '../model/topology'
@@ -10,7 +11,10 @@ import { type FlowsTopology, sinkId, tableId } from '../model/topology'
  * Summary topology: one card per sink. Clicking a node or edge stores the selection in the
  * shared inspector store, which highlights it. Every live delivery flashes its table → sink edge.
  */
-export const FlowsSummary: FC<{ topology: FlowsTopology }> = ({ topology: { tables, sinks, edges } }) => {
+export const FlowsSummary: FC<{ topology: FlowsTopology; viewportInsets?: ViewportInsets }> = ({
+    topology: { tables, sinks, edges },
+    viewportInsets,
+}) => {
     const selected = useFlowInspectorStore((state) => state.selected)
     const selectTable = useFlowInspectorStore((state) => state.selectTable)
     const selectSink = useFlowInspectorStore((state) => state.selectSink)
@@ -29,6 +33,7 @@ export const FlowsSummary: FC<{ topology: FlowsTopology }> = ({ topology: { tabl
     return (
         <FlowSummary
             ref={flowRef}
+            viewportInsets={viewportInsets}
             edges={edges}
             selected={selected?.id}
             onTableNodeSelect={selectTable}

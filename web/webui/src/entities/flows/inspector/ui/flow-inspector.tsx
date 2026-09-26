@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 
-import { type FC, useEffect, useState } from 'react'
+import { type FC, type Ref, useEffect, useState } from 'react'
 
 import { ArrowUpRight } from 'lucide-react'
 
@@ -17,9 +17,10 @@ import { RecentOperations } from './recent-operations'
  * Non-blocking inspector for the flows topology, built on the shared `Sheet`. Docks to the
  * right edge of the canvas region at full canvas height and renders the selected node/edge
  * details (mirrors the `Inspector` design frame). Driven by the shared store: opens while a
- * selection exists and stays modal-less so the canvas beneath remains interactive.
+ * selection exists and stays modal-less so the canvas beneath remains interactive. `ref` points at
+ * the sheet panel, e.g. to measure the canvas area it covers.
  */
-export const FlowInspector: FC = () => {
+export const FlowInspector: FC<{ ref?: Ref<HTMLDivElement> }> = ({ ref }) => {
     const selected = useFlowInspectorStore((state) => state.selected)
     const clear = useFlowInspectorStore((state) => state.clear)
     const isMobile = useIsMobile()
@@ -44,6 +45,7 @@ export const FlowInspector: FC = () => {
             }}
         >
             <SheetContent
+                ref={ref}
                 side={isMobile ? 'bottom' : 'right'}
                 portal={false}
                 showOverlay={false}

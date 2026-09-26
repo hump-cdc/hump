@@ -4,7 +4,12 @@ import { Flow, useFlowSelection, useSelectionHandlers } from '@/shared/ui/flow'
 
 import { EDGE_Z_INDEX, nodeTypes } from './flow-detailed.consts'
 import { TargetSelectionContext } from './flow-detailed.context'
-import { partitionChildren, useDetailedEdgeAnimation, useTargetClickHandler } from './flow-detailed.helpers'
+import {
+    getRevealId,
+    partitionChildren,
+    useDetailedEdgeAnimation,
+    useTargetClickHandler,
+} from './flow-detailed.helpers'
 import type {
     ClearSelectionHandler,
     EdgeSelectHandler,
@@ -76,6 +81,8 @@ export const FlowDetailed: FC<FlowDetailedProps> = ({
 
     const handleTargetClick = useTargetClickHandler(selected, onSinkTargetSelect, onClearSelection)
 
+    const revealId = useMemo(() => getRevealId(nodes, selected), [nodes, selected])
+
     const targetSelection = useMemo(
         () => ({ selected, onTargetClick: handleTargetClick }),
         [selected, handleTargetClick],
@@ -90,6 +97,8 @@ export const FlowDetailed: FC<FlowDetailedProps> = ({
                 onNodeClick={handleNodeClick}
                 onEdgeClick={handleEdgeClick}
                 onPaneClick={handlePaneClick}
+                revealId={revealId}
+                revealKey={selected}
                 {...props}
             >
                 {rest}

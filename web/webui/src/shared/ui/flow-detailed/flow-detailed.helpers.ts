@@ -147,3 +147,14 @@ export const useTargetClickHandler = (
         },
         [selected, onSinkTargetSelect, onClearSelection],
     )
+
+/**
+ * Id of the canvas element to reveal for `selected`: a selected target row resolves to its sink
+ * node (the whole card is revealed); a node or edge id passes through.
+ */
+export const getRevealId = (nodes: Node[], selected: string | undefined): string | undefined =>
+    nodes.find(
+        (node) =>
+            node.type === 'sink' &&
+            (node.data as SinkNodeData).targets.some((target) => sinkTargetKey(node.id, target.id) === selected),
+    )?.id ?? selected

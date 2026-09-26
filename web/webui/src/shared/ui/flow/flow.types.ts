@@ -12,3 +12,6 @@ export type EdgeSelectHandler = (
 ) => void
 /** Fired when the current selection is cleared (re-click selected item or click empty pane). */
 export type ClearSelectionHandler = () => void
+
+/** Canvas margins (px) covered by floating overlays (toolbar, inspector), excluded when revealing a selection. */
+export type ViewportInsets = { top: number; right: number; bottom: number; left: number }

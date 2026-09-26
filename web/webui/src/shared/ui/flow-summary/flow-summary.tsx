@@ -72,6 +72,7 @@ export const FlowSummary: FC<FlowSummaryProps> = ({
             onNodeClick={handleNodeClick}
             onEdgeClick={handleEdgeClick}
             onPaneClick={handlePaneClick}
+            revealId={selected}
             {...props}
         >
             {rest}

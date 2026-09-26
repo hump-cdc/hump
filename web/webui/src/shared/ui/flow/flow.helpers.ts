@@ -3,7 +3,13 @@ import { Children, isValidElement, type ReactNode, useCallback, useEffect, useMe
 import type { Dimensions, Edge, EdgeMouseHandler, Node, NodeMouseHandler, OnNodesChange } from '@xyflow/react'
 
 import { DEFAULT_ANIMATE_DURATION, EDGE_DASH_PERIOD, LABEL_OFFSET_Y } from './flow.consts'
-import type { ClearSelectionHandler, EdgeSelectHandler, FlowNodeSpec, TableNodeSelectHandler } from './flow.types'
+import type {
+    ClearSelectionHandler,
+    EdgeSelectHandler,
+    FlowNodeSpec,
+    TableNodeSelectHandler,
+    ViewportInsets,
+} from './flow.types'
 import type { FlowNodeBase } from './node'
 import type { TableNodeData } from './node.table'
 
@@ -227,4 +233,42 @@ export const useMeasuredNodes = (
     )
 
     return { measuredNodes, handleNodesChange }
+}
+
+/** Axis-aligned rectangle in flow coordinates. */
+export type FlowRect = { x: number; y: number; width: number; height: number }
+
+/**
+ * Viewport translation that brings `rect` fully into the unobstructed canvas area (the canvas
+ * `size` minus `insets`, shrunk by `margin`) at the current zoom, moving the least on each axis.
+ * A rect larger than the area is aligned to its left/top edge. Returns `null` when no move is needed.
+ */
+export const getRevealViewport = (
+    rect: FlowRect,
+    viewport: { x: number; y: number; zoom: number },
+    size: { width: number; height: number },
+    insets: ViewportInsets,
+    margin: number,
+): { x: number; y: number } | null => {
+    const shift = (start: number, length: number, min: number, max: number): number => {
+        if (start < min || length > max - min) {
+            return min - start
+        }
+        return start + length > max ? max - (start + length) : 0
+    }
+
+    const dx = shift(
+        rect.x * viewport.zoom + viewport.x,
+        rect.width * viewport.zoom,
+        insets.left + margin,
+        size.width - insets.right - margin,
+    )
+    const dy = shift(
+        rect.y * viewport.zoom + viewport.y,
+        rect.height * viewport.zoom,
+        insets.top + margin,
+        size.height - insets.bottom - margin,
+    )
+
+    return dx === 0 && dy === 0 ? null : { x: viewport.x + dx, y: viewport.y + dy }
 }

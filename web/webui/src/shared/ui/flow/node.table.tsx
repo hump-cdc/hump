@@ -23,7 +23,7 @@ export type TableNodeData = {
 type TableNodeModel = Node<TableNodeData, 'table'>
 
 const tableNodeVariants = cva(
-    'flex w-61 flex-col gap-2.5 rounded-xl border bg-surface-2 px-4 py-2.5 shadow-lg transition',
+    'flex w-70 flex-col gap-2.5 rounded-xl border bg-surface-2 px-4 py-2.5 shadow-lg transition',
     {
         variants: {
             selected: {
@@ -54,18 +54,16 @@ export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected })
 
         <div className="h-px bg-hairline-strong" />
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-x-4 gap-y-2">
             {OP_CELLS.map(({ key, label, tone }) => (
                 <div key={key} className="flex flex-col gap-0.5">
                     <span className="font-medium text-2xs text-ink-tertiary leading-none tracking-caps">{label}</span>
                     <span className={cn('font-mono font-semibold text-base leading-tight', tone)}>
                         <NumberFlow value={data.ops[key].count} kind="compact" />
                     </span>
-                    {data.ops[key].p95 !== undefined ? (
-                        <span className="font-mono text-2xs text-ink-subtle leading-none">
-                            <NumberFlow value={data.ops[key].p95} kind="latency" />
-                        </span>
-                    ) : null}
+                    <span className="font-mono text-2xs text-ink-subtle leading-none">
+                        <NumberFlow value={data.ops[key].p95} kind="latency" />
+                    </span>
                 </div>
             ))}
         </div>

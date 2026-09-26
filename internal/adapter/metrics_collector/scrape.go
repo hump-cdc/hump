@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"hump/internal/domain"
-	port "hump/internal/port/metrics_collector"
 
 	dto "github.com/prometheus/client_model/go"
 )
@@ -36,14 +35,14 @@ type sinkKey struct {
 // latest holds the absolute counter readings of the most recent scrape, which is
 // what the flat views of a snapshot report.
 type latest struct {
-	tables map[domain.TableIdentifier]port.TableOps
+	tables map[tableOpKey]float64
 	sinks  map[sinkKey]map[domain.DeliveryStatus]float64
 }
 
 // newLatest returns an empty latest with its maps allocated.
 func newLatest() latest {
 	return latest{
-		tables: make(map[domain.TableIdentifier]port.TableOps),
+		tables: make(map[tableOpKey]float64),
 		sinks:  make(map[sinkKey]map[domain.DeliveryStatus]float64),
 	}
 }
@@ -111,19 +110,27 @@ func (s *scraper) scrape(families []*dto.MetricFamily) aggregate {
 			for _, m := range family.GetMetric() {
 				delta, ok := s.histogramDelta(seriesKey(name, m), histogramOf(m.GetHistogram()))
 				if ok {
-					observed.addLatency(sinkKeyOf(m), delta)
+					addDistribution(observed.sinkLatency, sinkKeyOf(m), delta)
 				}
 			}
 
 		case familyProcessedRows:
 			for _, m := range family.GetMetric() {
-				key := domain.TableIdentifier{
-					Schema: domain.TableSchema(labelValue(m, labelSchema)),
-					Name:   domain.TableName(labelValue(m, labelTable)),
+				key := tableOpKey{
+					table: domain.TableIdentifier{
+						Schema: domain.TableSchema(labelValue(m, labelSchema)),
+						Name:   domain.TableName(labelValue(m, labelTable)),
+					},
+					operation: labelValue(m, labelOperation),
 				}
-				ops := current.tables[key]
-				addOperation(&ops, labelValue(m, labelOperation), float64(m.GetHistogram().GetSampleCount()))
-				current.tables[key] = ops
+				value := histogramOf(m.GetHistogram())
+
+				current.tables[key] += value.count
+
+				delta, ok := s.histogramDelta(seriesKey(name, m), value)
+				if ok {
+					addDistribution(observed.rowLatency, key, delta)
+				}
 			}
 
 		case familyReplicationLag:
@@ -160,21 +167,6 @@ func (s *scraper) histogramDelta(key string, value histogram) (histogram, bool) 
 	s.histograms[key] = value
 
 	return value.sub(baseline), ok
-}
-
-// addOperation adds count to the field of ops that operation names, ignoring an
-// operation the domain does not define.
-func addOperation(ops *port.TableOps, operation string, count float64) {
-	switch domain.OperationType(operation) {
-	case domain.OperationTypeInsert:
-		ops.Insert += count
-	case domain.OperationTypeUpdate:
-		ops.Update += count
-	case domain.OperationTypeDelete:
-		ops.Delete += count
-	case domain.OperationTypeTruncate:
-		ops.Truncate += count
-	}
 }
 
 // histogramOf converts a gathered histogram into its cumulative distribution.

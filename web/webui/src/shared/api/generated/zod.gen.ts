@@ -208,19 +208,22 @@ export const MetricsSinkSchema = z.object({
 
 export type MetricsSink = z.infer<typeof MetricsSinkSchema>;
 
+export const MetricsTableOpSchema = z.object({
+    n: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Operations replicated since start'
+    }),
+    p95: z.number().register(z.globalRegistry, {
+        description: 'P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate'
+    }).optional()
+});
+
+export type MetricsTableOp = z.infer<typeof MetricsTableOpSchema>;
+
 export const MetricsTableOpsSchema = z.object({
-    d: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Rows deleted since start'
-    }),
-    i: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Rows inserted since start'
-    }),
-    t: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Tables truncated since start'
-    }),
-    u: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Rows updated since start'
-    })
+    d: MetricsTableOpSchema,
+    i: MetricsTableOpSchema,
+    t: MetricsTableOpSchema,
+    u: MetricsTableOpSchema
 });
 
 export type MetricsTableOps = z.infer<typeof MetricsTableOpsSchema>;

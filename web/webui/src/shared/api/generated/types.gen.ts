@@ -281,23 +281,34 @@ export type MetricsSinkTargetModel = {
     target: string;
 };
 
+export type MetricsTableOpModel = {
+    /**
+     * Operations replicated since start
+     */
+    n: number;
+    /**
+     * P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+};
+
 export type MetricsTableOpsModel = {
     /**
-     * Rows deleted since start
+     * Deleted rows
      */
-    d: number;
+    d: MetricsTableOpModel;
     /**
-     * Rows inserted since start
+     * Inserted rows
      */
-    i: number;
+    i: MetricsTableOpModel;
     /**
-     * Tables truncated since start
+     * Table truncations
      */
-    t: number;
+    t: MetricsTableOpModel;
     /**
-     * Rows updated since start
+     * Updated rows
      */
-    u: number;
+    u: MetricsTableOpModel;
 };
 
 export type OperationAttemptModel = {

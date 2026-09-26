@@ -64,13 +64,22 @@ type Connection struct {
 	Target   string
 }
 
-// TableOps counts the row operations replicated from one table since the
-// process started.
+// TableOps reports the row operations replicated from one table, by operation.
 type TableOps struct {
-	Insert   float64
-	Update   float64
-	Delete   float64
-	Truncate float64
+	Insert   TableOp
+	Update   TableOp
+	Delete   TableOp
+	Truncate TableOp
+}
+
+// TableOp is what one operation kind of one table replicated.
+type TableOp struct {
+	// Count is the number of rows replicated since the process started.
+	Count float64
+	// P95 is the p95 latency of processing a row through every sink, in
+	// milliseconds, over the requested window; it is nil when the window
+	// observed nothing.
+	P95 *float64
 }
 
 // Delivery is what one sink, or one of its targets, delivered since the process

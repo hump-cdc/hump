@@ -22,10 +22,15 @@ type MetricsPoint struct {
 // MetricsTableOps abbreviates its keys because the map that carries it repeats
 // them for every configured table.
 type MetricsTableOps struct {
-	Insert   int64 `json:"i" doc:"Rows inserted since start"`
-	Update   int64 `json:"u" doc:"Rows updated since start"`
-	Delete   int64 `json:"d" doc:"Rows deleted since start"`
-	Truncate int64 `json:"t" doc:"Tables truncated since start"`
+	Insert   MetricsTableOp `json:"i" doc:"Inserted rows"`
+	Update   MetricsTableOp `json:"u" doc:"Updated rows"`
+	Delete   MetricsTableOp `json:"d" doc:"Deleted rows"`
+	Truncate MetricsTableOp `json:"t" doc:"Table truncations"`
+}
+
+type MetricsTableOp struct {
+	Count int64    `json:"n"             doc:"Operations replicated since start"`
+	P95   *float64 `json:"p95,omitempty" doc:"P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate"`
 }
 
 type MetricsSinkTarget struct {

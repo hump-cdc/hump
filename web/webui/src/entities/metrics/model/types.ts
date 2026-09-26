@@ -15,14 +15,22 @@ export type MetricsPoint = {
     sinkLatencyP95: Record<string, number>
 }
 
-/** Row operations replicated from one table since start. */
+/** Row operations replicated from one table, by operation. */
 export type MetricsTable = {
     /** Schema-qualified table name. */
     name: string
-    insert: number
-    update: number
-    delete: number
-    truncate: number
+    insert: MetricsTableOp
+    update: MetricsTableOp
+    delete: MetricsTableOp
+    truncate: MetricsTableOp
+}
+
+/** One operation kind of a table. */
+export type MetricsTableOp = {
+    /** Operations replicated since start. */
+    count: number
+    /** P95 row processing latency in milliseconds over the requested window; absent without an estimate. */
+    p95?: number
 }
 
 /** What a sink, or one of its targets, delivered since start. */

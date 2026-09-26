@@ -5,7 +5,15 @@ import type { MetricsTopology } from '@/entities/metrics/@x/flows'
 import { sinkId, tableId, toFlowsTopology } from './topology'
 
 const topology: MetricsTopology = {
-    tables: [{ name: 'public.events', insert: 1_240_000, update: 0, delete: 3, truncate: 0 }],
+    tables: [
+        {
+            name: 'public.events',
+            insert: { count: 1_240_000, p95: 9 },
+            update: { count: 0 },
+            delete: { count: 3 },
+            truncate: { count: 0 },
+        },
+    ],
     sinks: [
         {
             type: 'http',
@@ -63,7 +71,8 @@ describe('toFlowsTopology', () => {
     })
 
     test('passes sink and target figures through, leaving what is missing undefined', () => {
-        expect(flows.tables[0].ops.insert.count).toBe(1240000)
+        expect(flows.tables[0].ops.insert).toEqual({ count: 1240000, p95: 9 })
+        expect(flows.tables[0].ops.update.p95).toBeUndefined()
         expect(flows.sinks[0]).toMatchObject({ name: 'http', p95: undefined, successRate: 40, health: 'error' })
         expect(flows.detailedSinks[0].targets).toEqual([
             expect.objectContaining({ kind: 'url', p95: 12, successRate: 100, health: 'ok' }),

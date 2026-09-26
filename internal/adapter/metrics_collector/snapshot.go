@@ -25,27 +25,43 @@ func (c *Collector) snapshot(d port.Duration) port.Snapshot {
 	}
 
 	points := []port.Point{}
-	var windowed map[sinkKey]*histogram
+	windowed := newAggregate()
 
 	if s, ok := c.series[d]; ok {
 		points = s.dump()
-		windowed = s.total().sinkLatency
+		windowed = s.total()
 	}
 
 	return port.Snapshot{
 		Points:      points,
-		Tables:      c.tables(readings),
-		Sinks:       c.sinks(readings, windowed),
+		Tables:      c.tables(readings, windowed.rowLatency),
+		Sinks:       c.sinks(readings, windowed.sinkLatency),
 		Connections: c.edges(),
 	}
 }
 
-// tables counts the row operations of every configured table, keyed by
-// "schema.table".
-func (c *Collector) tables(readings latest) map[string]port.TableOps {
+// tables counts the row operations of every configured table and estimates their
+// p95 latency over the scraped window, keyed by "schema.table".
+func (c *Collector) tables(readings latest, windowed map[tableOpKey]*histogram) map[string]port.TableOps {
+	op := func(table domain.TableIdentifier, operation domain.OperationType) port.TableOp {
+		key := tableOpKey{table: table, operation: string(operation)}
+		result := port.TableOp{Count: readings.tables[key]}
+
+		if h, ok := windowed[key]; ok {
+			result.P95 = p95(*h)
+		}
+
+		return result
+	}
+
 	tables := make(map[string]port.TableOps, len(c.topology))
 	for _, conn := range c.topology {
-		tables[qualify(conn.Table)] = readings.tables[conn.Table]
+		tables[qualify(conn.Table)] = port.TableOps{
+			Insert:   op(conn.Table, domain.OperationTypeInsert),
+			Update:   op(conn.Table, domain.OperationTypeUpdate),
+			Delete:   op(conn.Table, domain.OperationTypeDelete),
+			Truncate: op(conn.Table, domain.OperationTypeTruncate),
+		}
 	}
 
 	return tables
@@ -153,12 +169,21 @@ func delivery(readings latest, windowed map[sinkKey]*histogram, keys []sinkKey) 
 		result.Success = &rate
 	}
 
-	if value, ok := merged.quantile(latencyQuantile); ok {
-		milliseconds := value * millisecondsPerSecond
-		result.P95 = &milliseconds
-	}
+	result.P95 = p95(merged)
 
 	return result
+}
+
+// p95 estimates the p95 latency of h in milliseconds, or nil when h has no estimate.
+func p95(h histogram) *float64 {
+	value, ok := h.quantile(latencyQuantile)
+	if !ok {
+		return nil
+	}
+
+	milliseconds := value * millisecondsPerSecond
+
+	return &milliseconds
 }
 
 // qualify renders a table identifier as the schema-qualified name a snapshot

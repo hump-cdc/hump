@@ -30,7 +30,10 @@ const resolve = (value: number, kind: Kind): Resolved => {
         case 'compact':
             return {
                 value,
-                format: { notation: 'compact', maximumFractionDigits: 2 },
+                format:
+                    Math.abs(value) >= 999.995
+                        ? { notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                        : { notation: 'compact', maximumFractionDigits: 2 },
                 locales: DEFAULT_LOCALE,
             }
         case 'percent':
@@ -68,7 +71,7 @@ type NumberFlowProps = {
 /** Animated number that inherits the surrounding typography; only the digit transitions are added. */
 export const NumberFlow: FC<NumberFlowProps> = ({ value, kind = 'integer', suffix, className }) => {
     if (value === undefined) {
-        return <span className={cn('font-mono', className)}>—</span>
+        return <span className={cn('inline-block py-0.5 font-mono leading-none', className)}>—</span>
     }
 
     const resolved = resolve(value, kind)

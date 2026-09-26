@@ -19,7 +19,7 @@ func TestSnapshotReportsTopologyWhileIdle(t *testing.T) {
 		t.Fatalf("got %d points while idle", len(snapshot.Points))
 	}
 
-	if ops, ok := snapshot.Tables["public.users"]; !ok || ops != (port.TableOps{}) {
+	if ops, ok := snapshot.Tables["public.users"]; !ok || counts(ops) != [4]float64{} {
 		t.Fatalf("got tables %+v, want public.users with zero counts", snapshot.Tables)
 	}
 
@@ -42,17 +42,41 @@ func TestSnapshotCountsTableOperationsAbsolutely(t *testing.T) {
 	m.rows.WithLabelValues("delete", "public", "users").Observe(0.001)
 	m.rows.WithLabelValues("truncate", "public", "users").Observe(0.001)
 
-	want := port.TableOps{Insert: 2, Update: 1, Delete: 1, Truncate: 1}
-	waitFor(t, func() bool { return mustSnapshot(t, c, port.Duration1m).Tables["public.users"] == want })
+	want := [4]float64{2, 1, 1, 1}
+	waitFor(t, func() bool { return counts(mustSnapshot(t, c, port.Duration1m).Tables["public.users"]) == want })
 
 	// The readings are absolute, so a further scrape must not double them.
 	time.Sleep(30 * time.Millisecond)
-	if got := mustSnapshot(t, c, port.Duration1m).Tables["public.users"]; got != want {
-		t.Fatalf("got %+v, want %+v", got, want)
+	if got := counts(mustSnapshot(t, c, port.Duration1m).Tables["public.users"]); got != want {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 
-	if got := mustSnapshot(t, c, port.Duration1m).Tables["public.posts"]; got != (port.TableOps{}) {
-		t.Fatalf("got %+v for an untouched table, want zero counts", got)
+	if got := counts(mustSnapshot(t, c, port.Duration1m).Tables["public.posts"]); got != [4]float64{} {
+		t.Fatalf("got %v for an untouched table, want zero counts", got)
+	}
+}
+
+func TestSnapshotReportsTableLatencyInMilliseconds(t *testing.T) {
+	m := newTestMetrics()
+	// The series has to exist before the first scrape, which is the baseline the
+	// later observations are measured against.
+	m.rows.WithLabelValues("insert", "public", "users").Observe(0.009)
+	c := newActiveCollector(t, m, testTopology())
+	waitFor(t, func() bool { return len(mustDump(t, c, port.Duration1m)) > 0 })
+
+	for range 20 {
+		m.rows.WithLabelValues("insert", "public", "users").Observe(0.009)
+	}
+
+	waitFor(t, func() bool { return mustSnapshot(t, c, port.Duration1m).Tables["public.users"].Insert.P95 != nil })
+
+	users := mustSnapshot(t, c, port.Duration1m).Tables["public.users"]
+	if got := *users.Insert.P95; got != 9.75 {
+		t.Fatalf("got insert p95 %v ms, want 9.75", got)
+	}
+
+	if users.Update.P95 != nil {
+		t.Fatalf("got update p95 %v for an untouched operation, want none", *users.Update.P95)
 	}
 }
 
@@ -261,4 +285,9 @@ func newActiveCollector(t *testing.T, m *testMetrics, topology []port.Connection
 	c.Connect()
 
 	return c
+}
+
+// counts returns the operation counts of ops in insert, update, delete, truncate order.
+func counts(ops port.TableOps) [4]float64 {
+	return [4]float64{ops.Insert.Count, ops.Update.Count, ops.Delete.Count, ops.Truncate.Count}
 }

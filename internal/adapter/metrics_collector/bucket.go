@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"hump/internal/domain"
 	port "hump/internal/port/metrics_collector"
 )
 
@@ -28,6 +29,15 @@ type aggregate struct {
 	// sinkLatency is the latency distribution by sink destination; it is keyed by
 	// the full label set so a snapshot can report per-target latency too.
 	sinkLatency map[sinkKey]*histogram
+	// rowLatency is the row processing latency distribution by table and operation.
+	rowLatency map[tableOpKey]*histogram
+}
+
+// tableOpKey identifies one operation kind of one table, matching the label set
+// the pipeline writes its row metrics with.
+type tableOpKey struct {
+	table     domain.TableIdentifier
+	operation string
 }
 
 // newAggregate returns an empty aggregate with its maps allocated.
@@ -35,6 +45,7 @@ func newAggregate() aggregate {
 	return aggregate{
 		sinkDelivery: make(map[string]float64),
 		sinkLatency:  make(map[sinkKey]*histogram),
+		rowLatency:   make(map[tableOpKey]*histogram),
 	}
 }
 
@@ -50,16 +61,20 @@ func (a *aggregate) merge(other aggregate) {
 	}
 
 	for key, h := range other.sinkLatency {
-		a.addLatency(key, *h)
+		addDistribution(a.sinkLatency, key, *h)
+	}
+
+	for key, h := range other.rowLatency {
+		addDistribution(a.rowLatency, key, *h)
 	}
 }
 
-// addLatency adds h to the distribution of key.
-func (a *aggregate) addLatency(key sinkKey, h histogram) {
-	existing, ok := a.sinkLatency[key]
+// addDistribution adds h to the distribution of key in distributions.
+func addDistribution[K comparable](distributions map[K]*histogram, key K, h histogram) {
+	existing, ok := distributions[key]
 	if !ok {
 		existing = &histogram{buckets: make(map[float64]float64)}
-		a.sinkLatency[key] = existing
+		distributions[key] = existing
 	}
 
 	existing.add(h)

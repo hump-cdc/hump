@@ -94,8 +94,8 @@ describe('normalizeMetrics', () => {
         const { topology } = normalizeMetrics(
             response({
                 tables: {
-                    'public.users': { i: big(3), u: big(2), d: big(1), t: big(0) },
-                    'public.events': { i: big(9), u: big(0), d: big(0), t: big(1) },
+                    'public.users': { i: { n: big(3), p95: 9 }, u: { n: big(2) }, d: { n: big(1) }, t: { n: big(0) } },
+                    'public.events': { i: { n: big(9) }, u: { n: big(0) }, d: { n: big(0) }, t: { n: big(1) } },
                 },
                 sinks: [
                     { type: 'nats-core', host: 'b:4222', operations: big(1), targets: null },
@@ -119,8 +119,20 @@ describe('normalizeMetrics', () => {
         )
 
         expect(topology.tables).toEqual([
-            { name: 'public.events', insert: 9, update: 0, delete: 0, truncate: 1 },
-            { name: 'public.users', insert: 3, update: 2, delete: 1, truncate: 0 },
+            {
+                name: 'public.events',
+                insert: { count: 9, p95: undefined },
+                update: { count: 0, p95: undefined },
+                delete: { count: 0, p95: undefined },
+                truncate: { count: 1, p95: undefined },
+            },
+            {
+                name: 'public.users',
+                insert: { count: 3, p95: 9 },
+                update: { count: 2, p95: undefined },
+                delete: { count: 1, p95: undefined },
+                truncate: { count: 0, p95: undefined },
+            },
         ])
         expect(topology.sinks.map(({ type }) => type)).toEqual(['kafka', 'nats-core'])
         expect(topology.sinks[0]).toEqual({

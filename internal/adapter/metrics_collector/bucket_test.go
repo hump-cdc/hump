@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"hump/internal/domain"
 )
 
 func TestSeriesAlignsScrapesToBucketStart(t *testing.T) {
@@ -106,13 +108,28 @@ func TestPointOmitsLatencyWithoutEstimate(t *testing.T) {
 	s := &series{duration: time.Minute}
 
 	observed := newAggregate()
-	observed.addLatency(sinkKey{sinkType: "kafka"}, histogram{buckets: map[float64]float64{0.1: 10}, count: 10})
-	observed.addLatency(sinkKey{sinkType: "http"}, histogram{buckets: map[float64]float64{0.1: 0}})
+	addDistribution(observed.sinkLatency, sinkKey{sinkType: "kafka"}, histogram{buckets: map[float64]float64{0.1: 10}, count: 10})
+	addDistribution(observed.sinkLatency, sinkKey{sinkType: "http"}, histogram{buckets: map[float64]float64{0.1: 0}})
 	s.add(bucketBase, time.Second, observed)
 
 	latency := s.dump()[0].SinkLatencyP95
 	if _, ok := latency["http"]; ok || len(latency) != 1 {
 		t.Fatalf("got latency %v, want kafka only", latency)
+	}
+}
+
+func TestSeriesMergesRowLatency(t *testing.T) {
+	s := &series{duration: time.Minute}
+	key := tableOpKey{table: domain.TableIdentifier{Schema: "public", Name: "users"}, operation: "insert"}
+
+	for range 2 {
+		observed := newAggregate()
+		addDistribution(observed.rowLatency, key, histogram{buckets: map[float64]float64{0.01: 5}, count: 5})
+		s.add(bucketBase, time.Second, observed)
+	}
+
+	if got := s.total().rowLatency[key]; got == nil || got.count != 10 || got.buckets[0.01] != 10 {
+		t.Fatalf("got %+v, want 10 observations at or below 10ms", got)
 	}
 }
 

@@ -75,20 +75,25 @@ func (c *Controller) points(source []metricscollector.Point) []MetricsPoint {
 	return result
 }
 
-// tables renders the row operation counts by schema-qualified table name.
+// tables renders the row operations by schema-qualified table name.
 func (c *Controller) tables(source map[string]metricscollector.TableOps) map[string]MetricsTableOps {
 	result := make(map[string]MetricsTableOps, len(source))
 
 	for name, ops := range source {
 		result[name] = MetricsTableOps{
-			Insert:   toCount(ops.Insert),
-			Update:   toCount(ops.Update),
-			Delete:   toCount(ops.Delete),
-			Truncate: toCount(ops.Truncate),
+			Insert:   tableOp(ops.Insert),
+			Update:   tableOp(ops.Update),
+			Delete:   tableOp(ops.Delete),
+			Truncate: tableOp(ops.Truncate),
 		}
 	}
 
 	return result
+}
+
+// tableOp renders the count and latency of one operation kind of a table.
+func tableOp(op metricscollector.TableOp) MetricsTableOp {
+	return MetricsTableOp{Count: toCount(op.Count), P95: op.P95}
 }
 
 // sinks renders the sink endpoints along with their targets.

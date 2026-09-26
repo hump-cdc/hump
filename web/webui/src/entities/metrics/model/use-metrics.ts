@@ -7,6 +7,7 @@ import {
     type MetricsResponseBodyModel,
     type MetricsSinkModel,
     type MetricsSinkTargetModel,
+    type MetricsTableOpModel,
     type MetricsTableOpsModel,
 } from '@/shared/api'
 import { keys } from '@/shared/state'
@@ -19,6 +20,7 @@ import type {
     MetricsSink,
     MetricsSinkTarget,
     MetricsTable,
+    MetricsTableOp,
     MetricsTopology,
 } from './types'
 
@@ -113,14 +115,17 @@ const toPoint = (point: MetricsPointModel): MetricsPoint => ({
     sinkLatencyP95: toNumbers(point.sinkLatencyP95),
 })
 
-/** Converts one table's abbreviated operation counters. */
+/** Converts one table's abbreviated operations. */
 const toTable = (name: string, ops: MetricsTableOpsModel): MetricsTable => ({
     name,
-    insert: toNumber(ops.i),
-    update: toNumber(ops.u),
-    delete: toNumber(ops.d),
-    truncate: toNumber(ops.t),
+    insert: toTableOp(ops.i),
+    update: toTableOp(ops.u),
+    delete: toTableOp(ops.d),
+    truncate: toTableOp(ops.t),
 })
+
+/** Converts one operation kind of a table. */
+const toTableOp = (op: MetricsTableOpModel): MetricsTableOp => ({ count: toNumber(op.n), p95: op.p95 })
 
 /** Converts one sink target. */
 const toSinkTarget = (target: MetricsSinkTargetModel): MetricsSinkTarget => ({

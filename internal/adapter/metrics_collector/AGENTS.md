@@ -58,8 +58,8 @@ Four families, named in `scrape.go`:
 | Family | Used for |
 |---|---|
 | `hump_sink_messages_total{status,type,host,target}` | `Points.Delivered`/`Failed`, `Sinks`, `Targets` |
-| `hump_sink_duration_seconds{type,host,target}` | every `p95` |
-| `hump_processed_rows_duration_seconds{db,operation,schema,table}` | `Tables`, via `SampleCount` |
+| `hump_sink_duration_seconds{type,host,target}` | the `p95` of points, `Sinks` and `Targets` |
+| `hump_processed_rows_duration_seconds{db,operation,schema,table}` | `Tables`: counts via `SampleCount`, `p95` via the buckets |
 | `hump_replication_lag_bytes`, `go_memstats_alloc_bytes` | the gauge readings on a point |
 
 `status` has three values, not two: `success`, `retry` and `failure` — the vocabulary is
@@ -67,12 +67,14 @@ Four families, named in `scrape.go`:
 retry is an attempt rather than an outcome, so it is left out of every operation count and
 every success rate.
 
-Three caveats that are properties of the source metrics, not of this package:
+Four caveats that are properties of the source metrics, not of this package:
 
 - **Row counts miss failed rows.** `postgres.observeRow` only fires when the handler returned
   `nil`, so a row whose delivery ultimately failed never reaches `Tables`. Partitions also roll
   up into the configured parent, so `Tables` keys are configured tables, not relations.
-- **`p95` is per attempt.** `OnDuration` is called inside the retry loop
+- **Table `p95` is end to end.** `observeRow` times decoding plus `UseCase.Process`, which waits
+  for every sink of the row, retries included — not a single sink write.
+- **Sink `p95` is per attempt.** `OnDuration` is called inside the retry loop
   (`pkg/resilience/retry.go`), once per attempt including the ones that failed — the metric's
   own help text claims otherwise.
 - **The sink metrics carry no table.** Two tables routed to the same `(type, host, target)`

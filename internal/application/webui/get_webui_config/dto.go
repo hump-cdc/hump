@@ -7,11 +7,19 @@ type ConfigSink struct {
 	Host string `json:"host" doc:"Connection host the sink URL renders to"`
 }
 
+type ConfigTarget struct {
+	Type       string                 `json:"type"       doc:"Sink type"`
+	Host       string                 `json:"host"       doc:"Connection host the sink URL renders to"`
+	Target     string                 `json:"target"     doc:"Target rendered for the table, as the metrics topology reports it"`
+	Operations []domain.OperationType `json:"operations" doc:"Row operations delivered to the target" enum:"insert,update,delete,truncate"`
+}
+
 type ConfigTable struct {
 	Schema  domain.TableSchema `json:"schema"  doc:"Table schema"`
 	Name    domain.TableName   `json:"name"    doc:"Table name"`
 	Replica string             `json:"replica" doc:"Replica identity managed by hump"`
 	Sinks   []ConfigSink       `json:"sinks"   doc:"Sinks connected to the table"`
+	Targets []ConfigTarget     `json:"targets" doc:"Table-to-target edges, with the operations each receives"`
 }
 
 type ConfigResponse struct {

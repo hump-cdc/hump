@@ -61,6 +61,28 @@ tables:
 
 Under any replica identity other than FULL, Postgres omits data hump cannot reconstruct: an unchanged TOAST value on `UPDATE`, and every non-key column of the old row when the update changes a key column or the row is deleted. Those columns reach templates as **unavailable** — they render as an empty string, and only `{{ unavailable . }}` tells them apart from a genuine `''`. See [Templating](#templating).
 
+**`operations`** — optional list of row operations delivered to the table's sinks: any of `insert`, `update`, `delete`, `truncate`. Defaults to all four. Operations not in the list are skipped for that sink: they are not delivered, counted or logged.
+
+```yaml
+tables:
+  - schema: public
+    table: events
+    operations: [insert, delete]
+    sinks:
+      - preset: nats2-jetstream
+
+  - tables:
+      - schema: public
+        table: posts
+      - schema: public
+        table: comments
+    operations: [insert, update]
+    sinks:
+      - preset: slow-http
+```
+
+`operations` may also be set on a single sink or in a sink preset. A table-level list takes precedence and replaces the sink's own. Without one, the sink's list applies, and with neither, all four operations are delivered. Because the list belongs to each sink, a table listed in several entries keeps a separate filter per entry's sinks.
+
 ### Sinks (table level)
 
 Each item in a table's `sinks` sequence is a mapping that contains:
@@ -68,7 +90,7 @@ Each item in a table's `sinks` sequence is a mapping that contains:
 - exactly one sink-type discriminator key — `kafka:`, `http:`, `nats-core:`, `nats-jetstream:`, `rabbitmq:`, or `rabbitmq-stream:` (a sink with zero or more than one is rejected); **or**
 - a `preset: <name>` reference to a top-level preset, optionally accompanied by a discriminator block that is deep-merged onto the preset.
 
-Plus, at the same level, any of the optional policy keys: `failure`, `retry`.
+Plus, at the same level, any of the optional keys: `failure`, `retry`, `operations` (see [`operations`](#tables)).
 
 ```yaml
 sinks:

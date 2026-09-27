@@ -59,3 +59,21 @@ func (o *fakeObserver) Record(conn metricscollector.Connection, status domain.De
 
 	o.calls[conn][status] += n
 }
+
+func TestBindingAcceptsConfiguredOperations(t *testing.T) {
+	b := &binding{operations: map[domain.OperationType]struct{}{
+		domain.OperationTypeInsert: {},
+		domain.OperationTypeDelete: {},
+	}}
+
+	for op, want := range map[domain.OperationType]bool{
+		domain.OperationTypeInsert:   true,
+		domain.OperationTypeUpdate:   false,
+		domain.OperationTypeDelete:   true,
+		domain.OperationTypeTruncate: false,
+	} {
+		if got := b.accepts(op); got != want {
+			t.Fatalf("accepts(%q) = %v, want %v", op, got, want)
+		}
+	}
+}

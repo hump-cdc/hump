@@ -3,10 +3,12 @@ package getwebuiconfig
 import (
 	"context"
 	"hump/config"
+	"hump/internal/domain"
 	"hump/internal/port/database"
 	"hump/internal/port/sink"
 	"hump/pkg/app/options"
 	"hump/pkg/version"
+	"slices"
 )
 
 type Controller struct {
@@ -73,9 +75,51 @@ func (c *Controller) Handler() func(ctx context.Context, _ *struct{}) (*ConfigRe
 				Name:    table.Name,
 				Replica: string(table.Replica),
 				Sinks:   sinks,
+				Targets: targets(table),
 			})
 		}
 
 		return &resp, nil
 	}
+}
+
+// targets renders the table's edges the way the metrics topology does, so the
+// dashboard can match them by type, host and target. Sinks rendering to the same
+// edge collapse into one, receiving the union of their operations.
+func targets(table config.Table) []ConfigTarget {
+	type key struct{ typ, host, target string }
+
+	result := make([]ConfigTarget, 0, len(table.Sinks))
+	idx := map[key]int{}
+	for _, sc := range table.Sinks {
+		if sc.Sink == nil {
+			continue
+		}
+
+		host, target := sc.Sink.Metadata(sink.SinkContext{Schema: table.Schema, Table: table.Name})
+		k := key{string(sc.Sink.Type()), host, target}
+
+		i, ok := idx[k]
+		if !ok {
+			i = len(result)
+			idx[k] = i
+			result = append(result, ConfigTarget{Type: k.typ, Host: host, Target: target})
+		}
+
+		result[i].Operations = union(result[i].Operations, sc.Operations)
+	}
+
+	return result
+}
+
+// union merges b into a, keeping the canonical operation order.
+func union(a, b []domain.OperationType) []domain.OperationType {
+	out := make([]domain.OperationType, 0, len(domain.OperationTypes))
+	for _, op := range domain.OperationTypes {
+		if slices.Contains(a, op) || slices.Contains(b, op) {
+			out = append(out, op)
+		}
+	}
+
+	return out
 }

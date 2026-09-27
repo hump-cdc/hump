@@ -1,4 +1,5 @@
 import type { MetricsDelivery, MetricsTable, MetricsTopology } from '@/entities/metrics/@x/inspector'
+import type { ConfigTableModel, ConfigTargetModel } from '@/shared/api'
 
 import type { SelectedItem, SinkKey } from './types'
 
@@ -36,6 +37,35 @@ export const resolveDelivery = (
         case 'edge':
             return resolveEdge(topology, selected)
     }
+}
+
+/** A row operation a sink can be configured to receive. */
+export type EdgeOperation = NonNullable<ConfigTargetModel['operations']>[number]
+
+/** Every row operation, in the order the inspector lists them. */
+const ALL_OPERATIONS: EdgeOperation[] = ['insert', 'update', 'delete', 'truncate']
+
+/**
+ * Row operations delivered along the selected edge: the union over its targets, one for a detailed
+ * edge and every target of the table → sink route for a summary edge. `undefined` when the edge
+ * receives every operation, or the configuration does not describe it.
+ */
+export const resolveEdgeOperations = (
+    tables: ConfigTableModel[],
+    edge: Extract<SelectedItem, { kind: 'edge' }>,
+): EdgeOperation[] | undefined => {
+    const targets = (tables.find((table) => `${table.schema}.${table.name}` === edge.table)?.targets ?? []).filter(
+        (target) =>
+            target.type === edge.type &&
+            target.host === edge.host &&
+            (edge.target === undefined || target.target === edge.target),
+    )
+    if (targets.length === 0) return undefined
+
+    const received = new Set(targets.flatMap((target) => target.operations ?? []))
+    if (received.size === ALL_OPERATIONS.length) return undefined
+
+    return ALL_OPERATIONS.filter((op) => received.has(op))
 }
 
 /** Total row operations of a table across every operation kind. */

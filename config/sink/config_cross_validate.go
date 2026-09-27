@@ -7,7 +7,7 @@ import (
 // CrossValidator is implemented by sink types that participate in cross-sink
 // validation. Implementations inspect every sink across all tables — passed as
 // one []SinkConfig group per table — and return an error wrapping
-// [errs.ErrCrossValidate] when divergences are detected, or nil when the
+// [hump/config/errors.ErrCrossValidate] when divergences are detected, or nil when the
 // configuration is internally consistent.
 type CrossValidator interface {
 	CrossValidate(groups [][]sinkport.Definition) error

@@ -22,8 +22,9 @@ type handler = resilience.Handler[*sink.SinkContext]
 type binding struct {
 	sinkName              string
 	table                 string
-	observer              Observer     // observer is nil when telemetry is disabled.
-	log                   OperationLog // log is nil when the operations log is disabled.
+	operations            map[domain.OperationType]struct{} // operations are the row operations the sink receives.
+	observer              Observer                          // observer is nil when telemetry is disabled.
+	log                   OperationLog                      // log is nil when the operations log is disabled.
 	conn                  metricscollector.Connection
 	op                    operation
 	fn                    handler
@@ -58,11 +59,17 @@ func newBinding(
 		Schema: schema,
 		Table:  tableName,
 	})
+	operations := make(map[domain.OperationType]struct{}, len(cfg.Operations))
+	for _, op := range cfg.Operations {
+		operations[op] = struct{}{}
+	}
+
 	b := &binding{
-		sinkName: string(cfg.Sink.Type()),
-		table:    fmt.Sprintf("%s.%s", schema, tableName),
-		observer: observer,
-		log:      opLog,
+		sinkName:   string(cfg.Sink.Type()),
+		table:      fmt.Sprintf("%s.%s", schema, tableName),
+		operations: operations,
+		observer:   observer,
+		log:        opLog,
 		conn: metricscollector.Connection{
 			Table:    domain.TableIdentifier{Schema: schema, Name: tableName},
 			SinkType: string(cfg.Sink.Type()),
@@ -97,6 +104,12 @@ func newBinding(
 	b.fn = fn
 
 	return b
+}
+
+// accepts reports whether the sink is configured to receive op.
+func (b *binding) accepts(op domain.OperationType) bool {
+	_, ok := b.operations[op]
+	return ok
 }
 
 func (b *binding) Process(ctx context.Context, operationContext *sink.SinkContext) error {

@@ -145,6 +145,10 @@ func (uc *UseCase) Process(
 
 	uc.wp.BeginBatch()
 	for _, binding := range bindings {
+		if !binding.accepts(operation) {
+			continue
+		}
+
 		if err := uc.wp.Submit(ctx, binding.fn, operationContext); err != nil {
 			logger.Error("Failed to submit task to worker pool",
 				"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next, "errror", err,

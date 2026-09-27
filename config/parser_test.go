@@ -1,12 +1,12 @@
 package config
 
 import (
-	"errors"
+	errs "errors"
 	"strings"
 	"testing"
 	"time"
 
-	"hump/config/errs"
+	"hump/config/errors"
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
 	"hump/internal/port/sink"
@@ -480,7 +480,7 @@ func TestParse_CrossValidationFails(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected cross-validation error")
 	}
-	if !errors.Is(err, errs.ErrCrossValidate) {
+	if !errs.Is(err, errors.ErrCrossValidate) {
 		t.Fatalf("want ErrCrossValidate, got %v", err)
 	}
 }
@@ -893,5 +893,14 @@ func TestParse_NATSJetStream_StorageEnumInvalid(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "storage") {
 		t.Fatalf("expected error to mention storage, got %q", err)
+	}
+}
+
+func TestConfiguration_ResolveAll(t *testing.T) {
+	cfg := Configuration{Tables: []Table{{Name: "users"}, {Name: "orders"}}}
+
+	got := cfg.ResolveAll()
+	if len(got) != 2 || got[0].Name != "users" || got[1].Name != "orders" {
+		t.Fatalf("ResolveAll = %+v, want the configured tables in order", got)
 	}
 }

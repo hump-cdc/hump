@@ -70,6 +70,29 @@ export type ConfigTableModel = {
      * Sinks connected to the table
      */
     sinks: Array<ConfigSinkModel> | null;
+    /**
+     * Table-to-target edges, with the operations each receives
+     */
+    targets: Array<ConfigTargetModel> | null;
+};
+
+export type ConfigTargetModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Row operations delivered to the target
+     */
+    operations: Array<'insert' | 'update' | 'delete' | 'truncate'> | null;
+    /**
+     * Target rendered for the table, as the metrics topology reports it
+     */
+    target: string;
+    /**
+     * Sink type
+     */
+    type: string;
 };
 
 export type DatabaseStructModel = {

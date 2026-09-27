@@ -2,9 +2,11 @@ package sink
 
 import (
 	"fmt"
+	"slices"
 
 	"hump/config/decoder"
 	"hump/config/resilience"
+	"hump/internal/domain"
 	sinkport "hump/internal/port/sink"
 
 	"github.com/goccy/go-yaml/ast"
@@ -31,6 +33,8 @@ type Config struct {
 
 	Failure *resilience.Failure `yaml:"failure,omitempty"`
 	Retry   *resilience.Retry   `yaml:"retry,omitempty"`
+
+	Operations []domain.OperationType `yaml:"operations,omitempty" validate:"omitempty,min=1,unique,dive,oneof=insert update delete truncate"`
 }
 
 func (sc Config) MarshalYAML() (any, error) {
@@ -46,6 +50,10 @@ func (sc Config) MarshalYAML() (any, error) {
 
 	if sc.Retry != nil {
 		out["retry"] = sc.Retry
+	}
+
+	if len(sc.Operations) > 0 {
+		out["operations"] = sc.Operations
 	}
 
 	return out, nil
@@ -85,4 +93,8 @@ func (sc *Config) setDefaults() {
 		sc.Retry = &resilience.Retry{}
 	}
 	sc.Retry.SetDefaults()
+
+	if len(sc.Operations) == 0 {
+		sc.Operations = slices.Clone(domain.OperationTypes)
+	}
 }

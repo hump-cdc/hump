@@ -24,6 +24,26 @@ export const ConfigSinkSchema = z.object({
 
 export type ConfigSink = z.infer<typeof ConfigSinkSchema>;
 
+export const ConfigTargetSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    operations: z.array(z.enum([
+        'insert',
+        'update',
+        'delete',
+        'truncate'
+    ])).nullable(),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target rendered for the table, as the metrics topology reports it'
+    }),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Sink type'
+    })
+});
+
+export type ConfigTarget = z.infer<typeof ConfigTargetSchema>;
+
 export const ConfigTableSchema = z.object({
     name: z.string().register(z.globalRegistry, {
         description: 'Table name'
@@ -34,7 +54,8 @@ export const ConfigTableSchema = z.object({
     schema: z.string().register(z.globalRegistry, {
         description: 'Table schema'
     }),
-    sinks: z.array(ConfigSinkSchema).nullable()
+    sinks: z.array(ConfigSinkSchema).nullable(),
+    targets: z.array(ConfigTargetSchema).nullable()
 });
 
 export type ConfigTable = z.infer<typeof ConfigTableSchema>;

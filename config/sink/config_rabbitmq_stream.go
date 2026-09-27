@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"hump/config/decoder"
-	"hump/config/errs"
+	"hump/config/errors"
 	sinkport "hump/internal/port/sink"
 	"hump/pkg/metadata"
 	"hump/pkg/template"
@@ -132,7 +132,7 @@ func (*RabbitMQStreamSink) CrossValidate(groups [][]sinkport.Definition) error {
 			}
 
 			if prev != e {
-				return fmt.Errorf("%w: stream %q: divergent maxAge/maxLengthBytes/maxSegmentSizeBytes", errs.ErrCrossValidate, streamName)
+				return fmt.Errorf("%w: stream %q: divergent maxAge/maxLengthBytes/maxSegmentSizeBytes", errors.ErrCrossValidate, streamName)
 			}
 		}
 	}

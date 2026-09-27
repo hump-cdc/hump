@@ -90,6 +90,7 @@ tables:
     - tables:
           - schema: public
             table: users
+      operations: [insert]
       sinks:
           # - preset: http1
           - preset: kafka1
@@ -104,6 +105,7 @@ tables:
             table: comments
           - schema: public
             table: events
+      operations: [insert, update, delete]
       sinks:
           # - preset: slow-http
           # - preset: http1

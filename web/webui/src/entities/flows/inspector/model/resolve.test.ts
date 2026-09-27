@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { MetricsTopology } from '@/entities/metrics/@x/inspector'
+import type { ConfigTableModel } from '@/shared/api'
 
-import { resolveDelivery, resolveTable, sumTableOps } from './resolve'
+import { resolveDelivery, resolveEdgeOperations, resolveTable, sumTableOps } from './resolve'
 
 const topology: MetricsTopology = {
     tables: [
@@ -123,5 +124,54 @@ describe('resolveDelivery', () => {
             ...sink,
         })
         expect(stats).toBeUndefined()
+    })
+})
+
+describe('resolveEdgeOperations', () => {
+    const tables: ConfigTableModel[] = [
+        {
+            schema: 'public',
+            name: 'users',
+            replica: 'full',
+            sinks: [],
+            targets: [
+                { type: 'kafka', host: 'a:9092', target: 'users', operations: ['insert'] },
+                { type: 'kafka', host: 'a:9092', target: 'orders', operations: ['update', 'insert'] },
+                {
+                    type: 'kafka',
+                    host: 'b:9092',
+                    target: 'users',
+                    operations: ['insert', 'update', 'delete', 'truncate'],
+                },
+            ],
+        },
+    ]
+
+    const edge = (host: string, target?: string) =>
+        ({
+            kind: 'edge',
+            id: 'e',
+            sourceLabel: 'public.users',
+            targetLabel: 'kafka',
+            table: 'public.users',
+            type: 'kafka',
+            host,
+            target,
+        }) as const
+
+    test('lists the operations of a detailed edge', () => {
+        expect(resolveEdgeOperations(tables, edge('a:9092', 'users'))).toEqual(['insert'])
+    })
+
+    test('unions the targets of a summary edge in canonical order', () => {
+        expect(resolveEdgeOperations(tables, edge('a:9092'))).toEqual(['insert', 'update'])
+    })
+
+    test('is undefined for an edge receiving every operation', () => {
+        expect(resolveEdgeOperations(tables, edge('b:9092', 'users'))).toBeUndefined()
+    })
+
+    test('is undefined for an edge the configuration does not describe', () => {
+        expect(resolveEdgeOperations(tables, edge('c:9092'))).toBeUndefined()
     })
 })

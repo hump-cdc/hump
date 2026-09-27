@@ -120,7 +120,11 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                     {(item: MultiComboBoxItem) => <MultiComboBoxOption key={item.value} item={item} />}
                 </ComboboxList>
                 <ComboboxEmpty>{emptyText}</ComboboxEmpty>
-                <MultiComboBoxFooter selectedCount={selectedItems.length} />
+                <MultiComboBoxFooter
+                    selectedCount={selectedItems.length}
+                    totalCount={items.length}
+                    onSelectAll={() => commit(items)}
+                />
             </ComboboxContent>
         </Combobox>
     )

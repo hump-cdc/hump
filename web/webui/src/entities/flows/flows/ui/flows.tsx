@@ -1,11 +1,13 @@
-import type { AnimationEvent, FC, ReactNode } from 'react'
+import { type AnimationEvent, type FC, type ReactNode, useMemo } from 'react'
 
-import { useTopologyModeStore } from '@/entities/flows/toolbar/@x/flows'
 import type { ViewportInsets } from '@/shared/ui/flow'
 import { cn, useSwitchAnimation } from '@/shared/utils'
 
+import { filterFlowsTopology, useFlowsFilterStore } from '../model/filter'
+import { useTopologyModeStore } from '../model/mode'
 import { useFlowsTopology } from '../model/use-flows-topology'
 import { FlowsDetailed } from './flows.detailed'
+import { FlowsModeSwitch } from './flows.mode'
 import { FlowsSummary } from './flows.summary'
 
 type FlowsProps = {
@@ -17,13 +19,16 @@ type FlowsProps = {
 
 /**
  * Flows page topology: a full-bleed diagram wiring source tables (left) to sinks (right),
- * rendered from the metrics endpoint as the summary or detailed view per the mode switched
- * from the toolbar; switching modes cross-fades the views. The page supplies the `overlay` (the inspector drawer) so it docks to the
+ * rendered from the metrics endpoint (narrowed to the tables and sinks picked in the toolbar) as the summary or detailed view per the mode switched
+ * from the canvas zoom controls; switching modes cross-fades the views. The page supplies the `overlay` (the inspector drawer) so it docks to the
  * corner of the canvas while staying interactive.
  */
 export const Flows: FC<FlowsProps> = ({ overlay, viewportInsets }) => {
     const mode = useTopologyModeStore((state) => state.mode)
-    const topology = useFlowsTopology()
+    const fullTopology = useFlowsTopology()
+    const tables = useFlowsFilterStore((state) => state.tables)
+    const sinks = useFlowsFilterStore((state) => state.sinks)
+    const topology = useMemo(() => filterFlowsTopology(fullTopology, tables, sinks), [fullTopology, tables, sinks])
 
     // The view being switched away from stays mounted until its fade-out ends.
     const { current, leaving, views, onLeaveEnd } = useSwitchAnimation(mode)
@@ -51,9 +56,17 @@ export const Flows: FC<FlowsProps> = ({ overlay, viewportInsets }) => {
                         }}
                     >
                         {view === 'detailed' ? (
-                            <FlowsDetailed topology={topology} viewportInsets={viewportInsets} />
+                            <FlowsDetailed
+                                topology={topology}
+                                viewportInsets={viewportInsets}
+                                controls={<FlowsModeSwitch />}
+                            />
                         ) : (
-                            <FlowsSummary topology={topology} viewportInsets={viewportInsets} />
+                            <FlowsSummary
+                                topology={topology}
+                                viewportInsets={viewportInsets}
+                                controls={<FlowsModeSwitch />}
+                            />
                         )}
                     </div>
                 )

@@ -26,7 +26,7 @@ const ComboboxContent: FC<ComboboxContentProps> = ({
             align={align}
             alignOffset={alignOffset}
             anchor={anchor}
-            className="isolate z-50"
+            className="pointer-events-auto isolate z-50"
         >
             <ComboboxPrimitive.Popup
                 data-slot="combobox-content"

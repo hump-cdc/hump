@@ -12,17 +12,17 @@ type TopologyModeState = {
 }
 
 /**
- * Flows topology view mode, switched from the toolbar. Persisted to localStorage so the
+ * Flows topology view mode, switched from the canvas controls. Persisted to localStorage so the
  * chosen mode survives page reloads.
  */
 export const useTopologyModeStore = create<TopologyModeState>()(
     persist(
         (set) => ({
-            mode: 'summary',
+            mode: 'detailed',
             setMode: (value) => set({ mode: value }),
         }),
         {
-            name: 'hump.flows-topology',
+            name: 'hump.flows-mode',
             partialize: (state) => ({ mode: state.mode }),
         },
     ),

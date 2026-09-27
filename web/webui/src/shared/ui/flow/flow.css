@@ -37,6 +37,16 @@
     border-bottom: none;
 }
 
+/* Toggle-style control buttons (e.g. a view switch): the active one is highlighted. */
+.react-flow__controls-button[aria-pressed="true"] {
+    color: var(--primary);
+}
+
+/* Buttons of one group (e.g. a view switch) sit flush, without a divider below. */
+.react-flow__controls-button.flow-controls-joined {
+    border-bottom: none;
+}
+
 /* Connection handles: small filled circles; primary border on a selected node. */
 .react-flow__handle {
     width: 12px;

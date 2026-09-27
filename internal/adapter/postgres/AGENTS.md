@@ -13,6 +13,7 @@ application layer keyed by the *configured* table.
 | `introspector.go` | catalog reads; resolves an incoming relation to the configured table that owns it |
 | `introspector_registry.go` | in-memory config: configured tables plus the partition→parent index |
 | `wal.go` | pgoutput stream: relation cache, row decoding, standby keepalive |
+| `replication_lag.go` | polls `pg_replication_slots` on its own session for the `replication_lag_bytes` gauge |
 | `connection.go` | self-healing `pgconn` session with retry/backoff |
 | `sql/` | every statement, one file each, pulled in with `//go:embed` |
 

@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/goleak"
 
 	"hump/config"
@@ -316,30 +315,7 @@ func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
 	}
 }
 
-func TestStartUpdatesReplicationLagOnKeepalive(t *testing.T) {
-	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errs := runStart(ctx, w, failingHandler(t))
-
-	relation := relationMessage(1, "public", "users", idColumn())
-	server.stream(xLogData(0x10, 0x1000, relation))
-	server.stream(keepalive(0x2000, true))
-	server.waitForStandbyUpdates(t, 1)
-
-	cancel()
-	awaitStart(t, errs)
-
-	want := float64(0x2000 - (0x10 + len(relation)))
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != want {
-		t.Errorf("replicationLag = %v, want %v: a keepalive is the only lag update an idle stream gets", got, want)
-	}
-}
-
-func TestStartLeavesReplicationLagUnsetBeforeFirstRecord(t *testing.T) {
+func TestStartRepliesToKeepaliveBeforeFirstRecord(t *testing.T) {
 	server := usersServer(t)
 	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
 
@@ -355,38 +331,9 @@ func TestStartLeavesReplicationLagUnsetBeforeFirstRecord(t *testing.T) {
 	awaitStart(t, errs)
 
 	// The reply is what wal_sender_timeout waits for, so it goes out even with
-	// nothing to confirm; only the lag it cannot compute yet is withheld.
+	// nothing to confirm.
 	if updates[0].WALFlushPosition != 0 {
 		t.Errorf("standby update flush = %s, want 0/0 until the first record is decoded", updates[0].WALFlushPosition)
-	}
-
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != 0 {
-		t.Errorf("replicationLag = %v, want 0: the server LSN alone is not a lag", got)
-	}
-}
-
-func TestStartKeepsReplicationLagOnStreamFailure(t *testing.T) {
-	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errs := runStart(ctx, w, failingHandler(t))
-
-	relation := relationMessage(1, "public", "users", idColumn())
-	server.stream(xLogData(0x10, 0x1000, relation))
-	server.stream(keepalive(0x2000, true))
-	server.waitForStandbyUpdates(t, 1)
-
-	server.stream(copyFrame(pglogrepl.PrimaryKeepaliveMessageByteID, 0, 0))
-	if err := awaitStart(t, errs); err == nil {
-		t.Fatal("Start() error = nil, want the malformed keepalive to stop the stream")
-	}
-
-	want := float64(0x2000 - (0x10 + len(relation)))
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != want {
-		t.Errorf("replicationLag = %v, want %v: an unparseable message carries no WAL position to report", got, want)
 	}
 }
 

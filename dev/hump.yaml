@@ -112,12 +112,12 @@ tables:
       sinks:
           - preset: nats-jetstream
           - preset: rabbitmq1
-          - preset: http2
+          # - preset: http2
     - table: comments
       schema: public
       sinks:
           - preset: nats2-core
-          - preset: http1
+          # - preset: http1
     # - table: posts
     #   schema: public
     #   sinks:

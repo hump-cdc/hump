@@ -180,13 +180,6 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			// Keepalives carry the only fresh ServerWALEnd an idle stream gets, but
-			// until the first record is decoded there is no processed position to
-			// measure against and the raw server LSN would be reported as the lag.
-			if walPosition != 0 {
-				w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
-			}
-
 			if pkm.ReplyRequested {
 				if err := w.flush(ctx, walPosition); err != nil {
 					return err
@@ -208,8 +201,6 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				if recordEnd > walPosition {
 					walPosition = recordEnd
 				}
-
-				w.metrics.updateReplicationLag(walPosition, xld.ServerWALEnd)
 			} else {
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, database.ErrWal))
 				return w.fail(ctx, walPosition, err)

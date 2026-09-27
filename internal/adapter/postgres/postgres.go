@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -112,6 +113,20 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	}
 
 	p.healthPostgres.MarkHealthy()
+
+	// The poller gets its own session: conn serves the introspector from the WAL
+	// loop, and a pgconn session cannot run two statements at once.
+	lagConnection, err := newConnection(p.databaseUrl)
+	if err != nil {
+		return fmt.Errorf("unable to connect to database: %w", err)
+	}
+	defer closeDetached(lagConnection.Close)
+
+	lagCtx, stopLag := context.WithCancel(ctx)
+	var lagDone sync.WaitGroup
+	lagDone.Go(func() { newReplicationLagPoller(lagConnection, p.slotName, p.metrics).run(lagCtx) })
+	defer lagDone.Wait()
+	defer stopLag()
 
 	replicationConnection, err := newConnection(p.databaseUrl, withReplication(true))
 	if err != nil {

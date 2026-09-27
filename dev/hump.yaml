@@ -25,6 +25,24 @@ sinks:
                   - "hump.js.>"
           retention: limits
           storage: file
+    - name: nats2-core
+      nats-core:
+          url: '{{ env "NATS2_URL" }}'
+          username: "hump"
+          password: "hump"
+          subject: "hump.{{.Schema}}.{{.Table}}"
+    - name: nats2-jetstream
+      nats-jetstream:
+          url: '{{ env "NATS2_URL" }}'
+          username: "hump"
+          password: "hump"
+          subject: "hump.js.{{.Schema}}.{{.Table}}"
+          stream:
+              name: HUMP
+              subjects:
+                  - "hump.js.>"
+          retention: limits
+          storage: file
     - name: rabbitmq1
       rabbitmq:
           url: '{{ env "RABBITMQ_URL" }}'
@@ -73,10 +91,21 @@ tables:
           # - preset: nats-jetstream
           # - preset: rabbitmq1
           # - preset: rabbitmq-stream
-    # - table: events
-    #   schema: public
-    #   sinks:
-    #       - preset: kafka1
+    - table: events
+      schema: public
+      sinks:
+          - preset: nats2-jetstream
+          - preset: rabbitmq1
+          - preset: rabbitmq-stream
+    - table: posts
+      schema: public
+      sinks:
+          - preset: nats-jetstream
+          - preset: rabbitmq1
+    - table: comments
+      schema: public
+      sinks:
+          - preset: nats2-core
     # - table: posts
     #   schema: public
     #   sinks:

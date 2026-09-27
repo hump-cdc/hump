@@ -117,6 +117,17 @@ services:
         volumes:
             - nats-data:/data
 
+    nats2:
+        image: nats:2.14.0
+        restart: unless-stopped
+        ports:
+            - "4223:4222"
+            - "8223:8222"
+            - "6223:6222"
+        command: "-js -sd /data --user hump --pass hump"
+        volumes:
+            - nats2-data:/data
+
     # RabbitMQ (classic AMQP + Streams)
     rabbitmq:
         image: rabbitmq:4-management
@@ -161,4 +172,5 @@ volumes:
     pg18-data:
     kafka-data:
     nats-data:
+    nats2-data:
     rabbitmq-data:

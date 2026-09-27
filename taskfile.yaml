@@ -64,6 +64,7 @@ tasks:
             CORS: http://localhost:3000
             KAFKA_HOST: localhost:9092
             NATS_URL: nats://localhost:4222
+            NATS2_URL: nats://localhost:4223
             RABBITMQ_URL: amqp://hump:hump@localhost:5672/
             RABBITMQ_STREAM_URL: rabbitmq-stream://hump:hump@localhost:5552/%2F
         cmds:

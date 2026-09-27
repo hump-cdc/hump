@@ -3,7 +3,7 @@ import type { FC, ReactNode } from 'react'
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { cva } from 'class-variance-authority'
 
-import { type FlowNodeBase, type FlowNodeConfig, SinkIconTile } from '@/shared/ui/flow'
+import { type FlowNodeBase, type FlowNodeConfig, MetricHint, SinkIconTile } from '@/shared/ui/flow'
 import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
 
@@ -37,10 +37,17 @@ const sinkNodeVariants = cva(
     },
 )
 
-const MetricCell: FC<{ label: string; value: ReactNode; className?: string }> = ({ label, value, className }) => (
-    <div className="flex flex-col gap-0.5">
+const MetricCell: FC<{ label: string; hint: string; value: ReactNode; className?: string }> = ({
+    label,
+    hint,
+    value,
+    className,
+}) => (
+    <div className="flex flex-col items-start gap-0.5">
         <span className="font-medium text-2xs text-ink-tertiary tracking-caps">{label}</span>
-        <span className={cn('font-mono font-semibold text-base text-ink', className)}>{value}</span>
+        <MetricHint hint={hint}>
+            <span className={cn('font-mono font-semibold text-base text-ink', className)}>{value}</span>
+        </MetricHint>
     </div>
 )
 
@@ -54,10 +61,19 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ data, selected }) =
         <div className="h-px bg-hairline-strong" />
 
         <div className="grid grid-cols-3 gap-2">
-            <MetricCell label="OPERATIONS" value={<NumberFlow value={data.operations} kind="compact" />} />
-            <MetricCell label="P95" value={<NumberFlow value={data.p95} kind="latency" />} />
+            <MetricCell
+                label="OPERATIONS"
+                hint="Messages dispatched to this sink, successful and failed"
+                value={<NumberFlow value={data.operations} kind="compact" />}
+            />
+            <MetricCell
+                label="P95"
+                hint="p95 time to write one message to this sink, retries included"
+                value={<NumberFlow value={data.p95} kind="latency" />}
+            />
             <MetricCell
                 label="SUCCESS"
+                hint="Delivery success rate"
                 value={<NumberFlow value={data.successRate} kind="percent" />}
                 className={
                     data.successRate === undefined

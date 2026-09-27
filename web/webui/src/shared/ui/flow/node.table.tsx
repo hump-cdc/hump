@@ -7,6 +7,7 @@ import { Table2 } from 'lucide-react'
 import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
 
+import { MetricHint } from './metric-hint'
 import type { FlowNodeBase, FlowNodeConfig } from './node'
 
 /** A single operation-kind cell: count plus optional p95 latency in milliseconds. */
@@ -37,12 +38,36 @@ const tableNodeVariants = cva(
     },
 )
 
-/** Operation cells in display order, each with its label and value tone. */
+/** Operation cells in display order, each with its label, value tone and hover hints. */
 const OP_CELLS = [
-    { key: 'insert', label: 'INS', tone: 'text-success' },
-    { key: 'update', label: 'UPD', tone: 'text-ink' },
-    { key: 'delete', label: 'DEL', tone: 'text-danger' },
-    { key: 'truncate', label: 'TRN', tone: 'text-ink-muted' },
+    {
+        key: 'insert',
+        label: 'INS',
+        tone: 'text-success',
+        countHint: 'Inserted rows processed',
+        p95Hint: 'p95 time to process one insert through the pipeline',
+    },
+    {
+        key: 'update',
+        label: 'UPD',
+        tone: 'text-ink',
+        countHint: 'Updated rows processed',
+        p95Hint: 'p95 time to process one update through the pipeline',
+    },
+    {
+        key: 'delete',
+        label: 'DEL',
+        tone: 'text-danger',
+        countHint: 'Deleted rows processed',
+        p95Hint: 'p95 time to process one delete through the pipeline',
+    },
+    {
+        key: 'truncate',
+        label: 'TRN',
+        tone: 'text-ink-muted',
+        countHint: 'Truncate events processed',
+        p95Hint: 'p95 time to process one truncate through the pipeline',
+    },
 ] as const
 
 export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected }) => (
@@ -55,15 +80,19 @@ export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected })
         <div className="h-px bg-hairline-strong" />
 
         <div className="grid grid-cols-4 gap-x-4 gap-y-2">
-            {OP_CELLS.map(({ key, label, tone }) => (
-                <div key={key} className="flex flex-col gap-0.5">
+            {OP_CELLS.map(({ key, label, tone, countHint, p95Hint }) => (
+                <div key={key} className="flex flex-col items-start gap-0.5">
                     <span className="font-medium text-2xs text-ink-tertiary leading-none tracking-caps">{label}</span>
-                    <span className={cn('font-mono font-semibold text-base leading-tight', tone)}>
-                        <NumberFlow value={data.ops[key].count} kind="compact" />
-                    </span>
-                    <span className="font-mono text-2xs text-ink-subtle leading-none">
-                        <NumberFlow value={data.ops[key].p95} kind="latency" />
-                    </span>
+                    <MetricHint hint={countHint}>
+                        <span className={cn('font-mono font-semibold text-base leading-tight', tone)}>
+                            <NumberFlow value={data.ops[key].count} kind="compact" />
+                        </span>
+                    </MetricHint>
+                    <MetricHint hint={p95Hint}>
+                        <span className="font-mono text-2xs text-ink-subtle leading-none">
+                            <NumberFlow value={data.ops[key].p95} kind="latency" />
+                        </span>
+                    </MetricHint>
                 </div>
             ))}
         </div>

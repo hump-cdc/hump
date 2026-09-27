@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { cva } from 'class-variance-authority'
 
-import { type FlowNodeBase, type FlowNodeConfig, SinkIconTile } from '@/shared/ui/flow'
+import { type FlowNodeBase, type FlowNodeConfig, MetricHint, SinkIconTile } from '@/shared/ui/flow'
 import { NumberFlow } from '@/shared/ui/number-flow'
 import { cn } from '@/shared/utils'
 
@@ -105,15 +105,23 @@ const TargetRow: FC<{ sinkId: string; target: SinkTarget }> = ({ sinkId, target 
                 }}
             >
                 <span className="min-w-0 flex-1 truncate font-medium font-mono text-ink text-sm">{target.name}</span>
-                <span className="shrink-0 whitespace-nowrap font-mono text-ink-subtle text-xs">
-                    <NumberFlow value={target.count} kind="compact" />
-                </span>
-                <span className="shrink-0 whitespace-nowrap rounded border border-hairline-strong bg-surface-2 px-1.5 font-mono text-ink-subtle text-xs">
-                    <NumberFlow value={target.p95} kind="latency" />
-                </span>
-                <span className={rateVariants({ health: target.successRate === undefined ? 'none' : target.health })}>
-                    <NumberFlow value={target.successRate} kind="percent" />
-                </span>
+                <MetricHint hint="Messages dispatched to this target, successful and failed">
+                    <span className="shrink-0 whitespace-nowrap font-mono text-ink-subtle text-xs">
+                        <NumberFlow value={target.count} kind="compact" />
+                    </span>
+                </MetricHint>
+                <MetricHint hint="p95 time to write one message to this target, retries included">
+                    <span className="shrink-0 whitespace-nowrap rounded border border-hairline-strong bg-surface-2 px-1.5 font-mono text-ink-subtle text-xs">
+                        <NumberFlow value={target.p95} kind="latency" />
+                    </span>
+                </MetricHint>
+                <MetricHint hint="Delivery success rate">
+                    <span
+                        className={rateVariants({ health: target.successRate === undefined ? 'none' : target.health })}
+                    >
+                        <NumberFlow value={target.successRate} kind="percent" />
+                    </span>
+                </MetricHint>
             </button>
 
             <Handle
@@ -141,9 +149,11 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ id, data, selected 
                     ) : null}
                 </div>
                 <div className="flex-1" />
-                <span className="font-mono font-semibold text-base text-ink">
-                    <NumberFlow value={data.count} kind="compact" />
-                </span>
+                <MetricHint hint="Messages dispatched to this sink across all targets">
+                    <span className="font-mono font-semibold text-base text-ink">
+                        <NumberFlow value={data.count} kind="compact" />
+                    </span>
+                </MetricHint>
             </div>
 
             <div className="h-px bg-hairline-strong" />

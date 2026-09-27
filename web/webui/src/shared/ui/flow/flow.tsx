@@ -28,6 +28,7 @@ export type {
     TableNodeSelectHandler,
     ViewportInsets,
 } from './flow.types'
+export { MetricHint } from './metric-hint'
 export type { FlowNodeBase, FlowNodeConfig } from './node'
 export { LabelNodeView } from './node.label'
 export { TableNode, type TableNodeData, TableNodeView } from './node.table'

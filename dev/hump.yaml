@@ -101,12 +101,12 @@ tables:
           # - preset: nats-jetstream
           # - preset: rabbitmq1
           # - preset: rabbitmq-stream
-    - table: events
-      schema: public
-      sinks:
-          - preset: nats2-jetstream
-          - preset: rabbitmq1
-          - preset: rabbitmq-stream
+    # - table: events
+    #   schema: public
+    #   sinks:
+    #       - preset: nats2-jetstream
+    #       - preset: rabbitmq1
+    #       - preset: rabbitmq-stream
     - table: posts
       schema: public
       sinks:

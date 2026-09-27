@@ -27,7 +27,12 @@ export const ProgressChart: FC<ProgressChartProps> = ({ title, value, showError 
             <div className="flex h-4 items-center justify-between">
                 <span className="font-medium text-ink-subtle text-xs">{title}</span>
                 {hasValue && (
-                    <aside className="font-medium text-success text-xs">
+                    <aside
+                        className={cn(
+                            'font-medium text-xs',
+                            value < 50 ? 'text-danger' : value < 95 ? 'text-amber' : 'text-success',
+                        )}
+                    >
                         <NumberFlow value={value} kind="percent" />
                     </aside>
                 )}

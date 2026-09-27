@@ -1,11 +1,8 @@
 import type { FC } from 'react'
 
 import { BarChartCard } from '@/shared/ui/card'
-import { formatNumber2 } from '@/shared/utils'
 
 import { useSinkLatency } from '../model/use-sink-latency'
-
-const formatMs = (value: number): string => formatNumber2(value, 'ms')
 
 export const SinkLatency: FC = () => {
     const { series, values } = useSinkLatency()
@@ -19,7 +16,7 @@ export const SinkLatency: FC = () => {
             series={series}
             xAxisKey="time"
             stacked={true}
-            tooltipValueFormatter={formatMs}
+            tooltipValue={{ kind: 'decimal', suffix: 'ms' }}
         />
     )
 }

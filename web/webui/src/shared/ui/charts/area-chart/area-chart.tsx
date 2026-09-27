@@ -10,7 +10,7 @@ import {
     type ChartDataRow,
     type ChartSeries,
     ChartTooltipContent,
-    type ChartValueFormatter,
+    type ChartTooltipValue,
     chartCursorSpring,
     chartTooltipOptions,
     createChartConfig,
@@ -29,8 +29,8 @@ type AreaChartProps = HTMLAttributes<HTMLDivElement> & {
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
-    /** Formats each value shown in the tooltip, e.g. `(value) => `${value}s``. */
-    tooltipValueFormatter?: ChartValueFormatter
+    /** How each tooltip value is rendered; the kind defaults to integer or decimal by value. */
+    tooltipValue?: ChartTooltipValue
     legend?: boolean
     ref?: Ref<HTMLDivElement>
 }
@@ -42,7 +42,7 @@ export const AreaChart: FC<AreaChartProps> = ({
     xAxisKey,
     stacked = true,
     tooltip = false,
-    tooltipValueFormatter,
+    tooltipValue,
     legend = false,
     ...props
 }) => {
@@ -65,11 +65,7 @@ export const AreaChart: FC<AreaChartProps> = ({
                     ariaLabel={seriesOrder.map((key) => config[key]?.label ?? key).join(', ')}
                     style={{ height: '100%' }}
                     renderTooltipBody={({ points }) => (
-                        <ChartTooltipContent
-                            points={points}
-                            seriesOrder={seriesOrder}
-                            valueFormatter={tooltipValueFormatter}
-                        />
+                        <ChartTooltipContent points={points} seriesOrder={seriesOrder} valueProps={tooltipValue} />
                     )}
                 />
             )}

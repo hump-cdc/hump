@@ -1,11 +1,8 @@
 import type { FC } from 'react'
 
 import { AreaChartCard } from '@/shared/ui/card'
-import { formatNumberCompact } from '@/shared/utils'
 
 import { useThroughput } from '../model/use-throughput'
-
-const formatRate = (value: number): string => formatNumberCompact(value)
 
 export const Throughput: FC = () => {
     const { values } = useThroughput()
@@ -18,7 +15,7 @@ export const Throughput: FC = () => {
             data={values}
             series={[{ dataKey: 'rowsPerSec', label: 'rows/sec', variant: 'primary' }]}
             xAxisKey="time"
-            tooltipValueFormatter={formatRate}
+            tooltipValue={{ kind: 'compact' }}
         />
     )
 }

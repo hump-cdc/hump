@@ -13,4 +13,4 @@ export {
     toChartRows,
 } from './chart-series'
 export { ChartStyle } from './chart-style'
-export { ChartTooltipContent, type ChartValueFormatter, chartTooltipOptions } from './chart-tooltip'
+export { ChartTooltipContent, type ChartTooltipValue, chartTooltipOptions } from './chart-tooltip'

@@ -252,6 +252,11 @@ body {
   margin: 0;
 }
 
+/* The stable gutter already reserves the scrollbar space, so drop the Radix scroll lock's extra compensation. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+}
+
 html,
 body {
   overscroll-behavior: none;

@@ -42,6 +42,10 @@ type wal struct {
 
 	messageContext *postgresMessageContext
 
+	// inTransaction is set between Begin and Commit, where a keepalive's
+	// ServerWALEnd may already lie past rows not yet processed.
+	inTransaction bool
+
 	introspector *introspector
 
 	// standbyInterval is the wait between standby status updates. It is
@@ -127,6 +131,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
+	w.inTransaction = false
 
 	for {
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
@@ -180,6 +185,13 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
+			// Between transactions everything committed before ServerWALEnd has
+			// already been processed, so confirming it releases the WAL pgoutput
+			// skipped. Inside one the sender may have read past this commit.
+			if !w.inTransaction && pkm.ServerWALEnd > walPosition {
+				walPosition = pkm.ServerWALEnd
+			}
+
 			if pkm.ReplyRequested {
 				if err := w.flush(ctx, walPosition); err != nil {
 					return err
@@ -195,11 +207,10 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			err = w.processMessage(workCtx, xld.WALData, xld.ServerTime, walPosition, handler)
+			commitEnd, err := w.processMessage(workCtx, xld.WALData, xld.ServerTime, walPosition, handler)
 			if err == nil {
-				recordEnd := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
-				if recordEnd > walPosition {
-					walPosition = recordEnd
+				if commitEnd > walPosition {
+					walPosition = commitEnd
 				}
 			} else {
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, database.ErrWal))
@@ -321,34 +332,40 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 
 // processMessage parses a single pgoutput v2 message and dispatches it: a
 // relation updates the cache, a transactional logical message is buffered as
-// context, a commit drops that buffer, and a row change is decoded and forwarded
-// to handler.
-func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+// context, a row change is decoded and forwarded to handler, and a commit drops
+// the buffer and returns the transaction's end LSN; any other message returns 0.
+func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
 	if len(walData) == 0 {
-		return errEmptyWalRecord
+		return 0, errEmptyWalRecord
 	}
 
 	message, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
-		return fmt.Errorf("Parse logical replication message: %w", err)
+		return 0, fmt.Errorf("Parse logical replication message: %w", err)
 	}
 
 	switch message := message.(type) {
 	case *pglogrepl.RelationMessageV2:
 		w.relations[message.RelationID] = message
 
+	case *pglogrepl.BeginMessage:
+		w.inTransaction = true
+
 	case *pglogrepl.CommitMessage:
 		w.messageContext.reset()
+		w.inTransaction = false
+
+		return message.TransactionEndLSN, nil
 
 	case *pglogrepl.LogicalDecodingMessageV2:
 		if !message.Transactional || len(message.Prefix) == 0 || len(message.Content) == 0 {
-			return nil
+			return 0, nil
 		}
 
 		w.messageContext.append(message.Prefix, string(message.Content))
 
 	case *pglogrepl.InsertMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeInsert,
 			relationID:    message.RelationID,
 			prevTupleType: pglogrepl.UpdateMessageTupleTypeNone,
@@ -356,7 +373,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}, timestamp, position, handler)
 
 	case *pglogrepl.UpdateMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeUpdate,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
@@ -365,7 +382,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}, timestamp, position, handler)
 
 	case *pglogrepl.DeleteMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeDelete,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
@@ -379,7 +396,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			start := time.Now()
 			relation, ok := w.relations[relationId]
 			if !ok {
-				return fmt.Errorf("unknown relation ID: %d: %w", relationId, database.ErrWal)
+				return 0, fmt.Errorf("unknown relation ID: %d: %w", relationId, database.ErrWal)
 			}
 
 			table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
@@ -388,7 +405,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
+				return 0, fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 			}
 
 			e := handler(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, ref.Schema, ref.Name, headers, nil, nil)
@@ -401,11 +418,11 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		if len(resultErrs) > 0 {
-			return errors.Join(resultErrs...)
+			return 0, errors.Join(resultErrs...)
 		}
 	}
 
-	return nil
+	return 0, nil
 }
 
 // rowChange is the per-operation part of a decoded row change: the tuples that

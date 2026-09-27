@@ -96,6 +96,13 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
 - pgoutput runs with `proto_version '2'`, streaming **off**, so only committed transactions
   arrive, in commit order. A chunk's catalog rows are therefore visible by the time the INSERT
   that created it is decoded — which is what makes the parent lookup safe.
+- **The confirmed position moves on two events only**: a Commit sets it to the transaction's
+  `TransactionEndLSN`, and a keepalive *outside* a transaction sets it to `ServerWALEnd`, which
+  releases the WAL pgoutput skipped (unpublished tables, internal records). Row messages never
+  move it, so a restart re-sends an unfinished transaction whole. A keepalive between Begin and
+  Commit is ignored: the sender reads a transaction's commit record before replaying it, so its
+  `ServerWALEnd` can already lie past rows not yet processed, and confirming it would make the
+  server skip that transaction on restart.
 - A registry miss can block on the database for a long time (catalog round trips, reconnects,
   an `ALTER` waiting on a lock), so `wal.resolveTable` starts a standby-keepalive goroutine for
   the duration; otherwise the upstream walsender times the session out.

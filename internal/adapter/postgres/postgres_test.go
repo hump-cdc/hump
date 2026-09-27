@@ -1585,11 +1585,12 @@ func beginMessage() []byte {
 	return binary.BigEndian.AppendUint32(data, 1)
 }
 
-// commitMessage encodes the pgoutput message closing a transaction.
-func commitMessage() []byte {
+// commitMessage encodes the pgoutput message closing a transaction whose WAL
+// ends at end.
+func commitMessage(end uint64) []byte {
 	data := []byte{'C', 0}
 	data = binary.BigEndian.AppendUint64(data, 0)
-	data = binary.BigEndian.AppendUint64(data, 0)
+	data = binary.BigEndian.AppendUint64(data, end)
 
 	return binary.BigEndian.AppendUint64(data, 0)
 }

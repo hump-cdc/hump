@@ -3,7 +3,13 @@ import { type FC, type ReactNode, useMemo, useRef } from 'react'
 import { useFlowInspectorStore } from '@/entities/flows/inspector/@x/flows'
 import { useLiveOperations } from '@/shared/live'
 import type { ViewportInsets } from '@/shared/ui/flow'
-import { FlowDetailed, type FlowDetailedRef, FlowDetailedSink, FlowDetailedTable } from '@/shared/ui/flow-detailed'
+import {
+    FlowDetailed,
+    type FlowDetailedRef,
+    FlowDetailedSink,
+    FlowDetailedTable,
+    sinkTargetKey,
+} from '@/shared/ui/flow-detailed'
 
 import { type FlowsTopology, sinkId, tableId } from '../model/topology'
 import type { DetailedSinkSpec } from '../model/types'
@@ -20,7 +26,7 @@ export const FlowsDetailed: FC<{ topology: FlowsTopology; viewportInsets?: Viewp
 }) => {
     const selected = useFlowInspectorStore((state) => state.selected)
     const selectTable = useFlowInspectorStore((state) => state.selectTable)
-    const selectDetailedSink = useFlowInspectorStore((state) => state.selectDetailedSink)
+    const selectSink = useFlowInspectorStore((state) => state.selectSink)
     const selectTarget = useFlowInspectorStore((state) => state.selectTarget)
     const selectEdge = useFlowInspectorStore((state) => state.selectEdge)
     const clear = useFlowInspectorStore((state) => state.clear)
@@ -40,6 +46,7 @@ export const FlowsDetailed: FC<{ topology: FlowsTopology; viewportInsets?: Viewp
         () => new Map([...tables, ...detailedSinks].map((node) => [node.id, node.name])),
         [tables, detailedSinks],
     )
+    const sinkById = useMemo(() => new Map(detailedSinks.map((sink) => [sink.id, sink])), [detailedSinks])
 
     return (
         <FlowDetailed
@@ -48,16 +55,26 @@ export const FlowsDetailed: FC<{ topology: FlowsTopology; viewportInsets?: Viewp
             controls={controls}
             edges={detailedEdges}
             selected={selected?.id}
-            onTableNodeSelect={selectTable}
-            onSinkNodeSelect={selectDetailedSink}
+            onTableNodeSelect={(id, { name }) => selectTable({ id, name })}
+            onSinkNodeSelect={(id, { name, type, host }) => selectSink({ id, name, type, host: host ?? '' })}
             onSinkTargetSelect={(id, target) =>
-                selectTarget({ sinkId: id, sinkLabel: labelById.get(id) ?? id, target })
+                selectTarget({
+                    id: sinkTargetKey(id, target.id),
+                    name: target.name,
+                    sinkLabel: labelById.get(id) ?? id,
+                    type: sinkById.get(id)?.type ?? '',
+                    host: sinkById.get(id)?.host ?? '',
+                })
             }
             onEdgeSelect={(id, { source, target, targetHandle }) =>
                 selectEdge({
                     id,
                     sourceLabel: labelById.get(source) ?? source,
                     targetLabel: getTargetLabel(detailedSinks, labelById.get(target) ?? target, target, targetHandle),
+                    table: source,
+                    type: sinkById.get(target)?.type ?? '',
+                    host: sinkById.get(target)?.host ?? '',
+                    target: targetHandle ?? undefined,
                 })
             }
             onClearSelection={clear}

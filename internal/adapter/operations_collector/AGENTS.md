@@ -123,7 +123,9 @@ The whole ring is walked even once the window is full, because `Total` has to be
 what tells a client how far it can page.
 
 Every filter but `Text` is a list, and a record matches when it carries any one of its values;
-an empty list matches everything. `newMatcher` lowercases `Query.Text` once, before the scan, and
+an empty list matches everything. `Targets` matches `Record.TargetKey` — the configured target
+the metrics topology is keyed by — not the rendered `Target`, which a templated topic or URL
+makes differ per row; that is what lets the flows inspector list the deliveries of one node. `newMatcher` lowercases `Query.Text` once, before the scan, and
 `matchesTable` compares each `"schema.name"` in place against the record's schema, a dot and
 its name, so matching a record allocates nothing — the `schema + "." + name` a naive comparison
 would build is exactly the allocation this avoids. `containsFold` is generic over

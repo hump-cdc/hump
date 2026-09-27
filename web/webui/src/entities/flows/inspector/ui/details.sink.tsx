@@ -1,25 +1,39 @@
 import type { FC } from 'react'
 
-import { formatNumberCompact } from '@/shared/utils'
+import { InfoCard } from '@/shared/ui/card'
+import { ProgressChart } from '@/shared/ui/charts/progress-chart'
+import { NumberFlow } from '@/shared/ui/number-flow'
 
+import { resolveDelivery } from '../model/resolve'
 import type { SelectedItem } from '../model/types'
-import { IdentityCard } from './identity-card'
-import { InspectorMetrics } from './inspector-metrics'
+import { useInspectorTopology } from '../model/use-inspector-topology'
 
-/** Inspector details for a selected sink node: name + sink type and sink metrics. */
-export const SinkDetails: FC<{ selected: Extract<SelectedItem, { kind: 'sink' }> }> = ({ selected }) => (
-    <>
-        <IdentityCard eyebrow="SINK">
-            <div className="flex flex-col gap-0.5">
-                <span className="font-medium font-mono text-ink text-md">{selected.data.name}</span>
-                <span className="text-ink-subtle text-xs">{selected.data.type}</span>
+/** Inspector details for a selected sink, in either view: name, type and host, with its delivery figures. */
+export const SinkDetails: FC<{ selected: Extract<SelectedItem, { kind: 'sink' }> }> = ({ selected }) => {
+    const topology = useInspectorTopology()
+    const stats = topology && resolveDelivery(topology, selected)
+
+    return (
+        <>
+            <InfoCard title="Sink" footer={[selected.type, selected.host].filter(Boolean).join(' · ')}>
+                {selected.name}
+            </InfoCard>
+            <div className="grid grid-cols-2 gap-2">
+                <InfoCard title="Total events">
+                    <NumberFlow value={stats?.operations} kind="compact" />
+                </InfoCard>
+                <InfoCard title="Latency (p95)">
+                    <NumberFlow value={stats?.p95} kind="latency" />
+                </InfoCard>
+                <InfoCard title="Success" variant="success">
+                    <NumberFlow value={stats?.success} kind="compact" />
+                </InfoCard>
+                <InfoCard title="Failures" variant="failed">
+                    <NumberFlow value={stats?.failure} kind="compact" />
+                </InfoCard>
             </div>
-        </IdentityCard>
-        <InspectorMetrics
-            throughput="842/s"
-            successRate={selected.data.successRate}
-            totalEvents={formatNumberCompact(selected.data.operations)}
-            failures={selected.data.health === 'error' ? '37' : '2'}
-        />
-    </>
-)
+
+            <ProgressChart title="Success rate" value={stats?.successRate} showError />
+        </>
+    )
+}

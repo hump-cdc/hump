@@ -112,6 +112,7 @@ export const RunningTables: FC = () => {
 
     return (
         <Table
+            variant="bordered"
             columns={RUNNING_COLUMNS}
             header={
                 <div className="flex items-center gap-2.5">

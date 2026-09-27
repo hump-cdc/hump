@@ -50,11 +50,12 @@ type MetricsSink struct {
 }
 
 type MetricsConnection struct {
-	Table      string `json:"table"      doc:"Schema-qualified source table"`
-	Sink       string `json:"sink"       doc:"Sink type"`
-	Host       string `json:"host"       doc:"Connection host the sink URL renders to"`
-	Target     string `json:"target"     doc:"Rendered target the table is delivered to"`
-	Operations int64  `json:"operations" doc:"Deliveries finished over the connection since start, retries excluded"`
+	Table   string `json:"table"   doc:"Schema-qualified source table"`
+	Sink    string `json:"sink"    doc:"Sink type"`
+	Host    string `json:"host"    doc:"Connection host the sink URL renders to"`
+	Target  string `json:"target"  doc:"Rendered target the table is delivered to"`
+	Success int64  `json:"success" doc:"Successful deliveries over the connection since start"`
+	Failure int64  `json:"failure" doc:"Failed deliveries over the connection since start, retries excluded"`
 }
 
 type MetricsResponse struct {

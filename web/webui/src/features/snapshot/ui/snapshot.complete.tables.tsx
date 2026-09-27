@@ -92,6 +92,7 @@ export const CompleteTables: FC = () => {
 
     return (
         <Table
+            variant="bordered"
             columns={RESULT_COLUMNS}
             className="lg:flex-1"
             header={<span className="font-semibold text-ink text-md">Snapshotted tables</span>}

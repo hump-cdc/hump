@@ -36,6 +36,8 @@ func TestHandlerPassesTheFilterToTheCollector(t *testing.T) {
 		from:       10,
 		to:         35,
 		sinks:      []string{"kafka", "nats"},
+		hosts:      []string{"broker-1"},
+		targets:    []string{"users"},
 		tables:     []string{"public.users"},
 		operations: []string{"insert", "delete"},
 		statuses:   []string{"failure", "success"},
@@ -47,6 +49,8 @@ func TestHandlerPassesTheFilterToTheCollector(t *testing.T) {
 
 	want := operationscollector.Query{
 		SinkTypes:  []string{"kafka", "nats"},
+		Hosts:      []string{"broker-1"},
+		Targets:    []string{"users"},
 		Tables:     []string{"public.users"},
 		Operations: []domain.OperationType{domain.OperationTypeInsert, domain.OperationTypeDelete},
 		Statuses:   []domain.DeliveryStatus{domain.DeliveryStatusFailure, domain.DeliveryStatusSuccess},
@@ -131,6 +135,8 @@ type request struct {
 	from       int
 	to         int
 	sinks      []string
+	hosts      []string
+	targets    []string
 	tables     []string
 	operations []string
 	statuses   []string
@@ -143,6 +149,8 @@ func call(c *Controller, req request) (*OperationsResponse, error) {
 	input.Body.From = req.from
 	input.Body.To = req.to
 	input.Body.Sinks = req.sinks
+	input.Body.Hosts = req.hosts
+	input.Body.Targets = req.targets
 	input.Body.Tables = req.tables
 	input.Body.Operations = req.operations
 	input.Body.Statuses = req.statuses
@@ -164,7 +172,8 @@ func status(err error) int {
 // queriesEqual compares two queries field by field, since a Query holding
 // slices cannot be compared with ==.
 func queriesEqual(a, b operationscollector.Query) bool {
-	return slices.Equal(a.SinkTypes, b.SinkTypes) && slices.Equal(a.Tables, b.Tables) &&
+	return slices.Equal(a.SinkTypes, b.SinkTypes) && slices.Equal(a.Hosts, b.Hosts) &&
+		slices.Equal(a.Targets, b.Targets) && slices.Equal(a.Tables, b.Tables) &&
 		slices.Equal(a.Operations, b.Operations) && slices.Equal(a.Statuses, b.Statuses) &&
 		a.Text == b.Text && a.Start == b.Start && a.End == b.End
 }

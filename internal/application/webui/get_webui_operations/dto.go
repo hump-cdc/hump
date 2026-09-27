@@ -9,6 +9,8 @@ type OperationsRequest struct {
 		From       int      `json:"from"                 required:"true" minimum:"0" doc:"Index of the first record to return, counted from the newest match, so 0 is the most recent delivery"`
 		To         int      `json:"to"                   required:"true" minimum:"0" doc:"Index one past the last record to return, so from 0 to 50 asks for the 50 newest matches"`
 		Sinks      []string `json:"sinks,omitempty"      doc:"Sink types to filter by; an empty list matches all of them"`
+		Hosts      []string `json:"hosts,omitempty"      doc:"Connection hosts to filter by; an empty list matches all of them"`
+		Targets    []string `json:"targets,omitempty"    doc:"Configured targets to filter by, as the metrics topology reports them rather than as rendered for a row; an empty list matches all of them"`
 		Tables     []string `json:"tables,omitempty"     doc:"Schema-qualified tables to filter by; an empty list matches all of them"`
 		Operations []string `json:"operations,omitempty" enum:"insert,update,delete,truncate" doc:"Row operations to filter by; an empty list matches all of them"`
 		Statuses   []string `json:"statuses,omitempty"   enum:"success,failure" doc:"Terminal outcomes to filter by; an empty list matches all of them. Retry is an attempt status and never a record's"`

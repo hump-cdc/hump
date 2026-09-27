@@ -165,6 +165,7 @@ func (o *operation) begin(operationContext *sink.SinkContext, conn metricscollec
 		SinkType:  conn.SinkType,
 		Host:      conn.Host,
 		Target:    conn.Target,
+		TargetKey: conn.Target,
 		Attempts:  o.rec.Attempts[:0],
 	}
 }

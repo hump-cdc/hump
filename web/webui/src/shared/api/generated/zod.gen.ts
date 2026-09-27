@@ -110,14 +110,17 @@ export const ErrorModelSchema = z.object({
 export type ErrorModel = z.infer<typeof ErrorModelSchema>;
 
 export const MetricsConnectionSchema = z.object({
+    failure: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Failed deliveries over the connection since start, retries excluded'
+    }),
     host: z.string().register(z.globalRegistry, {
         description: 'Connection host the sink URL renders to'
     }),
-    operations: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Deliveries finished over the connection since start, retries excluded'
-    }),
     sink: z.string().register(z.globalRegistry, {
         description: 'Sink type'
+    }),
+    success: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Successful deliveries over the connection since start'
     }),
     table: z.string().register(z.globalRegistry, {
         description: 'Schema-qualified source table'
@@ -349,6 +352,7 @@ export const OperationsRequestBodySchema = z.object({
     from: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
         description: 'Index of the first record to return, counted from the newest match, so 0 is the most recent delivery'
     }),
+    hosts: z.array(z.string()).nullish(),
     operations: z.array(z.enum([
         'insert',
         'update',
@@ -358,6 +362,7 @@ export const OperationsRequestBodySchema = z.object({
     sinks: z.array(z.string()).nullish(),
     statuses: z.array(z.enum(['success', 'failure'])).nullish(),
     tables: z.array(z.string()).nullish(),
+    targets: z.array(z.string()).nullish(),
     text: z.string().register(z.globalRegistry, {
         description: 'Case-insensitive substring of the payload, target, error or metadata'
     }).optional(),

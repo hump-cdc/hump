@@ -11,6 +11,8 @@ export type SinkNodeData = {
     name: string
     /** Sink type (`kafka`, `rabbitmq`, …); picks the header logo. */
     type: string
+    /** Connection host; together with `type` it identifies the sink. Not rendered on the card. */
+    host?: string
     /** Total operations delivered. */
     operations: number
     /** p95 delivery latency in milliseconds; absent without an estimate. */

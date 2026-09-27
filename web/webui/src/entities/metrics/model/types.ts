@@ -62,7 +62,10 @@ export type MetricsConnection = {
     sink: string
     host: string
     target: string
-    operations: number
+    /** Successful deliveries over the connection since start. */
+    success: number
+    /** Failed deliveries over the connection since start, retries excluded. */
+    failure: number
 }
 
 /** Configured pipeline: tables, sinks and the connections between them, each sorted for a stable layout. */

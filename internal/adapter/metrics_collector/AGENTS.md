@@ -93,7 +93,8 @@ The topology is also the key set: a configured table or target with no traffic i
 reported, with zeros.
 
 `Connections` counts are pushed in through `Record`, called from `process_operation.binding`
-next to the Prometheus counters. Two consequences:
+next to the Prometheus counters. They are kept by status, so a connection reports its success
+and failure counts, retries left out. Two consequences:
 
 - `recorded` has **its own mutex**. `Record` runs per delivery on every worker goroutine, while
   `Dump` holds `c.mu` long enough to merge twenty buckets per sink key. Lock order is `g.mu`

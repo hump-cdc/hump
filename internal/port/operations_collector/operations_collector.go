@@ -32,6 +32,7 @@ type Record struct {
 	SinkType    string
 	Host        string
 	Target      string                // Target is what the sink rendered for this row, which a templated topic or URL makes differ from the configured one.
+	TargetKey   string                // TargetKey is the target of the configured connection, the one the metrics and topology are keyed by.
 	Status      domain.DeliveryStatus // Status is how the delivery ended once the retry loop was done: success or failure. Retry lives on the attempts.
 	Error       string                // Error is the terminal error of the retry loop; it is empty when the delivery succeeded.
 	Retries     int                   // Retries is len(Attempts)-1, so a list can say "failed after 4 retries" without walking them.
@@ -46,6 +47,8 @@ type Record struct {
 // A list filter matches a record carrying any one of its values.
 type Query struct {
 	SinkTypes  []string // SinkTypes must contain the record's sink type exactly.
+	Hosts      []string // Hosts must contain the record's connection host exactly.
+	Targets    []string // Targets must contain the record's TargetKey exactly, not its rendered Target.
 	Tables     []string // Tables are schema-qualified names, "schema.name".
 	Operations []domain.OperationType
 	Statuses   []domain.DeliveryStatus

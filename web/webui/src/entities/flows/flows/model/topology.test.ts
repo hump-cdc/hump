@@ -32,14 +32,16 @@ const topology: MetricsTopology = {
             sink: 'http',
             host: 'localhost:5050',
             target: 'http://localhost:5050/a',
-            operations: 10,
+            success: 10,
+            failure: 0,
         },
         {
             table: 'public.events',
             sink: 'http',
             host: 'localhost:5050',
             target: 'http://localhost:5050/b',
-            operations: 20,
+            success: 8,
+            failure: 12,
         },
     ],
 }
@@ -51,6 +53,7 @@ describe('toFlowsTopology', () => {
     test('ids match the fields of a live operation', () => {
         expect(flows.tables[0].id).toBe(tableId('public', 'events'))
         expect(flows.sinks[0].id).toBe(sink)
+        expect(flows.sinks[0].host).toBe('localhost:5050')
         expect(flows.detailedEdges.map(({ source, target, targetHandle }) => [source, target, targetHandle])).toEqual([
             ['public.events', sink, 'http://localhost:5050/a'],
             ['public.events', sink, 'http://localhost:5050/b'],

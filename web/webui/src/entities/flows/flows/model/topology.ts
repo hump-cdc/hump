@@ -70,6 +70,7 @@ const toSinkSpec = (sink: MetricsSink): SinkSpec => ({
     id: sinkId(sink.type, sink.host),
     name: sink.type,
     type: sink.type,
+    host: sink.host,
     operations: sink.operations,
     p95: sink.p95,
     successRate: toSuccessRate(sink.success),
@@ -105,12 +106,12 @@ export const toFlowsTopology = ({ tables, sinks, connections }: MetricsTopology)
         const target = sinkId(connection.sink, connection.host)
         const id = `${source}>${target}`
         const entry = summaryOps.get(id) ?? { source, target, operations: 0 }
-        entry.operations += connection.operations
+        entry.operations += connection.success + connection.failure
         summaryOps.set(id, entry)
     }
 
     const summaryMax = Math.max(0, ...[...summaryOps.values()].map(({ operations }) => operations))
-    const detailedMax = Math.max(0, ...connections.map(({ operations }) => operations))
+    const detailedMax = Math.max(0, ...connections.map(({ success, failure }) => success + failure))
 
     return {
         tables: tables.map((table) => ({
@@ -134,7 +135,7 @@ export const toFlowsTopology = ({ tables, sinks, connections }: MetricsTopology)
                 `${connection.table}>${target}>${connection.target}`,
                 connection.table,
                 target,
-                connection.operations,
+                connection.success + connection.failure,
                 detailedMax,
                 connection.target,
             )

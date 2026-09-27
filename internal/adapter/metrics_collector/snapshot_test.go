@@ -27,7 +27,7 @@ func TestSnapshotReportsTopologyWhileIdle(t *testing.T) {
 		t.Fatalf("got sinks %+v, want one endpoint with two targets", snapshot.Sinks)
 	}
 
-	if len(snapshot.Connections) != 2 || snapshot.Connections[0].Operations != 0 {
+	if len(snapshot.Connections) != 2 || snapshot.Connections[0].Success != 0 {
 		t.Fatalf("got connections %+v, want both edges at zero", snapshot.Connections)
 	}
 }
@@ -163,17 +163,18 @@ func TestRecordCountsConnectionsWithoutRetries(t *testing.T) {
 	c := New(&countingGatherer{metrics: newTestMetrics()}, WithTopology(testTopology()))
 	t.Cleanup(c.close)
 
-	users := testTopology()[0]
-	c.Record(users, domain.DeliveryStatusSuccess, 24)
-	c.Record(users, domain.DeliveryStatusFailure, 1)
-	c.Record(users, domain.DeliveryStatusRetry, 7)
+	conn := testTopology()[0]
+	c.Record(conn, domain.DeliveryStatusSuccess, 24)
+	c.Record(conn, domain.DeliveryStatusFailure, 1)
+	c.Record(conn, domain.DeliveryStatusRetry, 7)
 
 	connections := mustSnapshot(t, c, port.Duration1m).Connections
-	if connections[1].Table != identifier("users") || connections[1].Operations != 25 {
-		t.Fatalf("got %+v, want users at 25", connections[1])
+	users := connections[1]
+	if users.Table != identifier("users") || users.Success != 24 || users.Failure != 1 {
+		t.Fatalf("got %+v, want users at 24 successes and 1 failure", users)
 	}
 
-	if connections[0].Operations != 0 {
+	if connections[0].Success != 0 || connections[0].Failure != 0 {
 		t.Fatalf("got %+v, want posts at 0", connections[0])
 	}
 }
@@ -190,7 +191,7 @@ func TestRecordSurvivesIdleTimeout(t *testing.T) {
 
 	waitFor(t, func() bool { return len(mustDump(t, c, port.Duration1m)) == 0 })
 
-	if got := mustSnapshot(t, c, port.Duration1m).Connections[1].Operations; got != 3 {
+	if got := mustSnapshot(t, c, port.Duration1m).Connections[1].Success; got != 3 {
 		t.Fatalf("got %v after deactivation, want 3", got)
 	}
 }
@@ -255,7 +256,7 @@ func TestRecordIgnoredAfterClose(t *testing.T) {
 
 	c.Record(testTopology()[0], domain.DeliveryStatusSuccess, 5)
 
-	if got := mustSnapshot(t, c, port.Duration1m).Connections[1].Operations; got != 0 {
+	if got := mustSnapshot(t, c, port.Duration1m).Connections[1].Success; got != 0 {
 		t.Fatalf("got %v after close, want 0", got)
 	}
 }

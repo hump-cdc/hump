@@ -117,9 +117,9 @@ func (c *Collector) sinks(readings latest, windowed map[sinkKey]*histogram) []po
 	return sinks
 }
 
-// edges counts the deliveries reported over every configured connection. The
-// counts are pushed in by the pipeline through Record rather than scraped, since
-// the sink metrics carry no table.
+// edges counts the successful and failed deliveries reported over every
+// configured connection. The counts are pushed in by the pipeline through Record
+// rather than scraped, since the sink metrics carry no table.
 func (c *Collector) edges() []port.ConnectionOps {
 	c.recordedMu.Lock()
 	defer c.recordedMu.Unlock()
@@ -129,7 +129,8 @@ func (c *Collector) edges() []port.ConnectionOps {
 		byStatus := c.recorded[conn]
 		conns = append(conns, port.ConnectionOps{
 			Connection: conn,
-			Operations: byStatus[domain.DeliveryStatusSuccess] + byStatus[domain.DeliveryStatusFailure],
+			Success:    byStatus[domain.DeliveryStatusSuccess],
+			Failure:    byStatus[domain.DeliveryStatusFailure],
 		})
 	}
 

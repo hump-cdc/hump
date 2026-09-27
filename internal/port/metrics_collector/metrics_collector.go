@@ -113,7 +113,8 @@ type Sink struct {
 // ConnectionOps counts the deliveries that flowed along one connection.
 type ConnectionOps struct {
 	Connection
-	Operations float64
+	Success float64
+	Failure float64
 }
 
 // Snapshot is everything one Dump reports: the bucketed points, plus the flat

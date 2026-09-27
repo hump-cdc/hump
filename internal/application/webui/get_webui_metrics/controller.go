@@ -130,11 +130,12 @@ func (c *Controller) connections(source []metricscollector.ConnectionOps) []Metr
 
 	for _, conn := range source {
 		result = append(result, MetricsConnection{
-			Table:      string(conn.Table.Schema) + "." + string(conn.Table.Name),
-			Sink:       conn.SinkType,
-			Host:       conn.Host,
-			Target:     conn.Target,
-			Operations: toCount(conn.Operations),
+			Table:   string(conn.Table.Schema) + "." + string(conn.Table.Name),
+			Sink:    conn.SinkType,
+			Host:    conn.Host,
+			Target:  conn.Target,
+			Success: toCount(conn.Success),
+			Failure: toCount(conn.Failure),
 		})
 	}
 

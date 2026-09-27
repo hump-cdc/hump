@@ -66,16 +66,23 @@ const COLUMNS: TableRowColumn<Item>[] = [
 ]
 
 type StoryArgs = {
+    variant: 'default' | 'bordered'
     selectable: boolean
 }
 
 const meta: Meta<StoryArgs> = {
     title: 'UI Kit/Table',
     argTypes: {
+        variant: {
+            name: 'Variant',
+            control: 'inline-radio',
+            options: ['default', 'bordered'],
+            table: { category: 'Style' },
+        },
         selectable: { name: 'Selectable rows', control: 'boolean', table: { category: 'State' } },
     },
-    args: { selectable: false },
-    render: ({ selectable }) => {
+    args: { variant: 'default', selectable: false },
+    render: ({ variant, selectable }) => {
         const [checked, setChecked] = useState<Set<string>>(new Set())
         const toggle = (id: string) =>
             setChecked((prev) => {
@@ -88,6 +95,7 @@ const meta: Meta<StoryArgs> = {
             <div className="p-6">
                 <Table
                     columns={COLUMNS}
+                    variant={variant}
                     selectable={selectable}
                     header={<span className="font-semibold text-ink text-md">Items</span>}
                     headerAside={<span className="text-ink-subtle text-sm">{ITEMS.length} total</span>}

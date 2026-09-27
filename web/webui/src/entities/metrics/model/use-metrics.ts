@@ -151,7 +151,8 @@ const toConnection = (connection: MetricsConnectionModel): MetricsConnection => 
     sink: connection.sink,
     host: connection.host,
     target: connection.target,
-    operations: toNumber(connection.operations),
+    success: toNumber(connection.success),
+    failure: toNumber(connection.failure),
 })
 
 /** All-zero point standing in for a bucket the response has no data for. */

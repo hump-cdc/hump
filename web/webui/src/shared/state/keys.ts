@@ -13,6 +13,8 @@ export const keys = {
     queries: {
         metrics: (duration: MetricsRequestBodyModel['duration']) => [...METRICS, duration] as const,
         operations: (filter: OperationsFilterKey, block: number) => [...OPERATIONS, filter, block] as const,
+        /** Newest deliveries matching `filter`, as the flows inspector lists them. */
+        recentOperations: (filter: OperationsFilterKey) => [...OPERATIONS, 'recent', filter] as const,
     },
     /** Key prefixes, for invalidating every variant of a query at once. */
     prefixes: {

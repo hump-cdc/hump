@@ -34,6 +34,8 @@ func (c *Controller) Handler() func(ctx context.Context, input *OperationsReques
 
 		page := c.collector.Search(operationscollector.Query{
 			SinkTypes:  input.Body.Sinks,
+			Hosts:      input.Body.Hosts,
+			Targets:    input.Body.Targets,
 			Tables:     input.Body.Tables,
 			Operations: convert[domain.OperationType](input.Body.Operations),
 			Statuses:   convert[domain.DeliveryStatus](input.Body.Statuses),

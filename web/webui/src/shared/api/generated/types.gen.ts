@@ -139,17 +139,21 @@ export type ErrorModelModel = {
 
 export type MetricsConnectionModel = {
     /**
+     * Failed deliveries over the connection since start, retries excluded
+     */
+    failure: number;
+    /**
      * Connection host the sink URL renders to
      */
     host: string;
     /**
-     * Deliveries finished over the connection since start, retries excluded
-     */
-    operations: number;
-    /**
      * Sink type
      */
     sink: string;
+    /**
+     * Successful deliveries over the connection since start
+     */
+    success: number;
     /**
      * Schema-qualified source table
      */
@@ -443,6 +447,10 @@ export type OperationsRequestBodyModel = {
      */
     from: number;
     /**
+     * Connection hosts to filter by; an empty list matches all of them
+     */
+    hosts?: Array<string> | null;
+    /**
      * Row operations to filter by; an empty list matches all of them
      */
     operations?: Array<'insert' | 'update' | 'delete' | 'truncate'> | null;
@@ -458,6 +466,10 @@ export type OperationsRequestBodyModel = {
      * Schema-qualified tables to filter by; an empty list matches all of them
      */
     tables?: Array<string> | null;
+    /**
+     * Configured targets to filter by, as the metrics topology reports them rather than as rendered for a row; an empty list matches all of them
+     */
+    targets?: Array<string> | null;
     /**
      * Case-insensitive substring of the payload, target, error or metadata
      */

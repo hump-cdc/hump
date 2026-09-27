@@ -112,7 +112,14 @@ describe('normalizeMetrics', () => {
                     },
                 ],
                 connections: [
-                    { table: 'public.users', sink: 'kafka', host: 'a:9092', target: 'users', operations: big(3) },
+                    {
+                        table: 'public.users',
+                        sink: 'kafka',
+                        host: 'a:9092',
+                        target: 'users',
+                        success: big(2),
+                        failure: big(1),
+                    },
                 ],
             }),
             NOW,
@@ -148,7 +155,7 @@ describe('normalizeMetrics', () => {
         })
         expect(topology.sinks[1].targets).toEqual([])
         expect(topology.connections).toEqual([
-            { table: 'public.users', sink: 'kafka', host: 'a:9092', target: 'users', operations: 3 },
+            { table: 'public.users', sink: 'kafka', host: 'a:9092', target: 'users', success: 2, failure: 1 },
         ])
     })
 })

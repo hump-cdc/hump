@@ -61,6 +61,7 @@ export const StartTables: FC = () => {
 
     return (
         <Table
+            variant="bordered"
             columns={SELECT_COLUMNS}
             selectable
             header={

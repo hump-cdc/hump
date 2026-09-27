@@ -135,6 +135,14 @@ func (m *matcher) matches(rec *port.Record) bool {
 		return false
 	}
 
+	if len(q.Hosts) > 0 && !slices.Contains(q.Hosts, rec.Host) {
+		return false
+	}
+
+	if len(q.Targets) > 0 && !slices.Contains(q.Targets, rec.TargetKey) {
+		return false
+	}
+
 	if len(q.Tables) > 0 && !m.matchesTable(rec) {
 		return false
 	}

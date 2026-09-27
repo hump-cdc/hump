@@ -30,6 +30,7 @@ export const FlowsSummary: FC<{ topology: FlowsTopology; viewportInsets?: Viewpo
     })
 
     const labelById = useMemo(() => new Map([...tables, ...sinks].map((node) => [node.id, node.name])), [tables, sinks])
+    const sinkById = useMemo(() => new Map(sinks.map((sink) => [sink.id, sink])), [sinks])
 
     return (
         <FlowSummary
@@ -38,13 +39,16 @@ export const FlowsSummary: FC<{ topology: FlowsTopology; viewportInsets?: Viewpo
             controls={controls}
             edges={edges}
             selected={selected?.id}
-            onTableNodeSelect={selectTable}
-            onSinkNodeSelect={selectSink}
+            onTableNodeSelect={(id, { name }) => selectTable({ id, name })}
+            onSinkNodeSelect={(id, { name, type, host }) => selectSink({ id, name, type, host: host ?? '' })}
             onEdgeSelect={(id, { source, target }) =>
                 selectEdge({
                     id,
                     sourceLabel: labelById.get(source) ?? source,
                     targetLabel: labelById.get(target) ?? target,
+                    table: source,
+                    type: sinkById.get(target)?.type ?? '',
+                    host: sinkById.get(target)?.host ?? '',
                 })
             }
             onClearSelection={clear}

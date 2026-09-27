@@ -1,4 +1,5 @@
 export * from './table'
 export * from './table.types'
+export type { TableVariant } from './table-context'
 export * from './table-row'
 export * from './table-row-header'

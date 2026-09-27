@@ -13,6 +13,9 @@ type Resolved = { value: number; format: Format; locales: string; suffix?: strin
 const GROUPED_LOCALE = 'en-ZA'
 const DEFAULT_LOCALE = 'en-US'
 
+/** Vertical padding NumberFlow puts around digits (its digit and inner-number paddings, each half the mask height); the dash matches it so both states share one height. */
+const FLOW_PADDING_BLOCK = 'calc(round(nearest, calc(var(--number-flow-mask-height, 0.25em) / 2), 1px) * 2)'
+
 /** Fixed fraction digits without grouping; unit-scaled values stay below the grouping boundary except at rounding edges (999.6ms → `1000ms`). */
 const fixed = (fractionDigits: number): Format => ({
     minimumFractionDigits: fractionDigits,
@@ -71,7 +74,14 @@ type NumberFlowProps = {
 /** Animated number that inherits the surrounding typography; only the digit transitions are added. */
 export const NumberFlow: FC<NumberFlowProps> = ({ value, kind = 'integer', suffix, className }) => {
     if (value === undefined) {
-        return <span className={cn('inline-block py-0.5 font-mono leading-none', className)}>—</span>
+        return (
+            <span
+                className={cn('inline-block font-mono leading-none', className)}
+                style={{ paddingBlock: FLOW_PADDING_BLOCK }}
+            >
+                —
+            </span>
+        )
     }
 
     const resolved = resolve(value, kind)

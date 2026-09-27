@@ -121,6 +121,22 @@ func TestCaptureFilledOnFailedDelivery(t *testing.T) {
 	}
 }
 
+func TestRecordKeysTheConfiguredTarget(t *testing.T) {
+	log := &fakeOperationLog{connected: true}
+	b, _ := newTestBinding(t, log, 1)
+
+	deliver(t, b)
+
+	rec := log.records[0]
+	if rec.TargetKey != b.conn.Target || rec.Host != b.conn.Host {
+		t.Fatalf("TargetKey, Host = %q, %q, want the connection's %q, %q", rec.TargetKey, rec.Host, b.conn.Target, b.conn.Host)
+	}
+
+	if rec.Target != "target-a" {
+		t.Fatalf("Target = %q, want the rendered target-a", rec.Target)
+	}
+}
+
 func TestRecordCarriesTheTerminalError(t *testing.T) {
 	tests := map[string]struct {
 		errs      []error

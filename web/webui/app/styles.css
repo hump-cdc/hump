@@ -186,6 +186,12 @@
   --leading-relaxed: 1.6;
 }
 
+/* ── Shadows ── */
+@theme {
+  /* Radial glow (no offset); tint it with a shadow color utility, e.g. `shadow-glow shadow-primary/40` */
+  --shadow-glow: 0 0 24px 2px rgb(0 0 0 / 0.25);
+}
+
 /* ── Tier 3: expose semantic tokens (+ a couple base) as Tailwind utilities ── */
 @theme inline {
   --color-transparent: transparent;
@@ -259,29 +265,31 @@ body {
     fill 0.2s ease, stroke 0.2s ease !important;
 }
 
-/* Shiki YAML viewer (shared/ui/code). A single theme emits `var(--syntax-*)` colors
-   inline; those tokens flip light/dark via the cascade. Line numbers are CSS counters. */
+/* YAML viewer (shared/ui/code). TanStack Highlight emits `th-*` token classes; they map
+   onto `--syntax-*` tokens, which flip light/dark via the cascade. Line numbers are CSS counters. */
 .hump-code {
   --hump-code-ln: var(--ink-tertiary);
 }
-.hump-code .shiki {
+.hump-code .th-code {
   margin: 0;
   padding: 12px 14px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 13px;
   line-height: 1.55;
+  background: var(--syntax-bg);
+  color: var(--syntax-fg);
 }
-.hump-code .shiki code {
+.hump-code .th-code code {
   display: block;
   width: max-content;
   min-width: 100%;
   counter-reset: hump-line;
 }
-.hump-code .shiki .line {
+.hump-code .th-line {
   display: inline-block;
   width: 100%;
 }
-.hump-code .shiki .line::before {
+.hump-code .th-line::before {
   counter-increment: hump-line;
   content: counter(hump-line);
   display: inline-block;
@@ -291,11 +299,23 @@ body {
   color: var(--hump-code-ln);
   user-select: none;
 }
-.hump-code .hump-code-fallback {
-  margin: 0;
-  padding: 12px 14px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--ink-muted);
+.hump-code .th-property {
+  color: var(--syntax-tag);
+}
+.hump-code .th-string {
+  color: var(--syntax-string);
+}
+.hump-code .th-number {
+  color: var(--syntax-number);
+}
+.hump-code .th-literal,
+.hump-code .th-keyword {
+  color: var(--syntax-keyword);
+}
+.hump-code .th-comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.hump-code .th-operator {
+  color: var(--syntax-punctuation);
 }

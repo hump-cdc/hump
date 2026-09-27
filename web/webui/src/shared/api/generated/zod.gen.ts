@@ -109,7 +109,315 @@ export const ErrorModelSchema = z.object({
 
 export type ErrorModel = z.infer<typeof ErrorModelSchema>;
 
+export const MetricsConnectionSchema = z.object({
+    failure: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Failed deliveries over the connection since start, retries excluded'
+    }),
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    sink: z.string().register(z.globalRegistry, {
+        description: 'Sink type'
+    }),
+    success: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Successful deliveries over the connection since start'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Schema-qualified source table'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Rendered target the table is delivered to'
+    })
+});
+
+export type MetricsConnection = z.infer<typeof MetricsConnectionSchema>;
+
+export const MetricsPointSchema = z.object({
+    delivered: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Messages delivered successfully during the bucket'
+    }),
+    failed: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Messages that failed to deliver during the bucket'
+    }),
+    memoryAllocBytes: z.number().register(z.globalRegistry, {
+        description: 'Peak allocated heap in bytes'
+    }),
+    replicationLagBytes: z.number().register(z.globalRegistry, {
+        description: 'Peak replication lag in bytes'
+    }),
+    sinkDelivery: z.record(z.string(), z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' })).register(z.globalRegistry, {
+        description: 'Delivered and failed messages by sink type'
+    }),
+    sinkLatencyP95: z.record(z.string(), z.number()).register(z.globalRegistry, {
+        description: 'P95 sink write latency in milliseconds by sink type; a type without an estimate is absent'
+    }),
+    throughput: z.number().register(z.globalRegistry, {
+        description: 'Messages delivered successfully per second'
+    }),
+    timestamp: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'Start of the bucket'
+    })
+});
+
+export type MetricsPoint = z.infer<typeof MetricsPointSchema>;
+
+export const MetricsRequestBodySchema = z.object({
+    duration: z.enum([
+        '1m',
+        '5m',
+        '10m'
+    ]).register(z.globalRegistry, {
+        description: 'Width of the buckets the points are aggregated into'
+    })
+});
+
+export type MetricsRequestBody = z.infer<typeof MetricsRequestBodySchema>;
+
+export const MetricsSinkTargetSchema = z.object({
+    operations: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Deliveries finished since start, retries excluded'
+    }),
+    p95: z.number().register(z.globalRegistry, {
+        description: 'P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate'
+    }).optional(),
+    success: z.number().register(z.globalRegistry, {
+        description: 'Share of deliveries that succeeded, 0 to 1; absent without an operation'
+    }).optional(),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Rendered target: topic, subject, exchange, stream or URL'
+    })
+});
+
+export type MetricsSinkTarget = z.infer<typeof MetricsSinkTargetSchema>;
+
+export const MetricsSinkSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    operations: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Deliveries finished since start, retries excluded'
+    }),
+    p95: z.number().register(z.globalRegistry, {
+        description: 'P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate'
+    }).optional(),
+    success: z.number().register(z.globalRegistry, {
+        description: 'Share of deliveries that succeeded, 0 to 1; absent without an operation'
+    }).optional(),
+    targets: z.array(MetricsSinkTargetSchema).nullable(),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Sink type'
+    })
+});
+
+export type MetricsSink = z.infer<typeof MetricsSinkSchema>;
+
+export const MetricsTableOpSchema = z.object({
+    n: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Operations replicated since start'
+    }),
+    p95: z.number().register(z.globalRegistry, {
+        description: 'P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate'
+    }).optional()
+});
+
+export type MetricsTableOp = z.infer<typeof MetricsTableOpSchema>;
+
+export const MetricsTableOpsSchema = z.object({
+    d: MetricsTableOpSchema,
+    i: MetricsTableOpSchema,
+    t: MetricsTableOpSchema,
+    u: MetricsTableOpSchema
+});
+
+export type MetricsTableOps = z.infer<typeof MetricsTableOpsSchema>;
+
+export const MetricsResponseBodySchema = z.object({
+    bucketSeconds: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Bucket width in seconds'
+    }),
+    connections: z.array(MetricsConnectionSchema).nullable(),
+    duration: z.string().register(z.globalRegistry, {
+        description: 'Width of the buckets the points are aggregated into'
+    }),
+    points: z.array(MetricsPointSchema).nullable(),
+    sinks: z.array(MetricsSinkSchema).nullable(),
+    tables: z.record(z.string(), MetricsTableOpsSchema).register(z.globalRegistry, {
+        description: 'Row operations by configured table, keyed by schema-qualified name'
+    })
+});
+
+export type MetricsResponseBody = z.infer<typeof MetricsResponseBodySchema>;
+
+export const OperationAttemptSchema = z.object({
+    attempt: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Position of the attempt, counted from 1'
+    }),
+    duration: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'How long the attempt took in milliseconds, the timeout wait included'
+    }),
+    error: z.string().register(z.globalRegistry, {
+        description: 'Error the attempt failed with; absent when it succeeded'
+    }).optional(),
+    startedAt: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'When the attempt began'
+    }),
+    status: z.string().register(z.globalRegistry, {
+        description: 'How the attempt ended: success, retry or failure'
+    })
+});
+
+export type OperationAttempt = z.infer<typeof OperationAttemptSchema>;
+
+export const OperationEventSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the source table'
+    }),
+    sink: z.string().register(z.globalRegistry, {
+        description: 'Sink type the row was delivered to'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Name of the source table'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target the sink rendered for this row: topic, subject, exchange, stream or URL'
+    })
+});
+
+export type OperationEvent = z.infer<typeof OperationEventSchema>;
+
+export const OperationItemSchema = z.object({
+    attempts: z.array(OperationAttemptSchema).nullable(),
+    database: z.string().register(z.globalRegistry, {
+        description: 'Source database'
+    }),
+    duration: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'How long the delivery took in milliseconds, every attempt and backoff pause included'
+    }),
+    error: z.string().register(z.globalRegistry, {
+        description: 'Error the delivery ended with; absent when it succeeded'
+    }).optional(),
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    metadata: z.record(z.string(), z.string()).register(z.globalRegistry, {
+        description: 'What the sink reported about the call: headers under a header. prefix, HTTP method and status, acknowledgements'
+    }),
+    operation: z.string().register(z.globalRegistry, {
+        description: 'Row operation: insert, update, delete or truncate'
+    }),
+    payload: z.string().register(z.globalRegistry, {
+        description: 'Body as it went on the wire, truncated to the collector\'s limit'
+    }),
+    payloadSize: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Untruncated body size in bytes'
+    }),
+    retries: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Attempts beyond the first'
+    }),
+    seq: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Number ordering the record across the whole process'
+    }),
+    sink: z.string().register(z.globalRegistry, {
+        description: 'Sink type'
+    }),
+    startedAt: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'When the first attempt began'
+    }),
+    status: z.string().register(z.globalRegistry, {
+        description: 'How the delivery ended: success or failure'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Schema-qualified source table'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target the sink rendered for this row: topic, subject, exchange, stream or URL'
+    }),
+    timestamp: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'WAL commit time of the row'
+    })
+});
+
+export type OperationItem = z.infer<typeof OperationItemSchema>;
+
+export const OperationsEventSchema = z.object({
+    operations: z.array(OperationEventSchema).nullable()
+});
+
+export type OperationsEvent = z.infer<typeof OperationsEventSchema>;
+
+export const OperationsRequestBodySchema = z.object({
+    from: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Index of the first record to return, counted from the newest match, so 0 is the most recent delivery'
+    }),
+    hosts: z.array(z.string()).nullish(),
+    operations: z.array(z.enum([
+        'insert',
+        'update',
+        'delete',
+        'truncate'
+    ])).nullish(),
+    sinks: z.array(z.string()).nullish(),
+    statuses: z.array(z.enum(['success', 'failure'])).nullish(),
+    tables: z.array(z.string()).nullish(),
+    targets: z.array(z.string()).nullish(),
+    text: z.string().register(z.globalRegistry, {
+        description: 'Case-insensitive substring of the payload, target, error or metadata'
+    }).optional(),
+    to: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Index one past the last record to return, so from 0 to 50 asks for the 50 newest matches'
+    })
+});
+
+export type OperationsRequestBody = z.infer<typeof OperationsRequestBodySchema>;
+
+export const OperationsResponseBodySchema = z.object({
+    from: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Index the window starts at, clamped to total'
+    }),
+    items: z.array(OperationItemSchema).nullable(),
+    to: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Index the window ends before, clamped to total'
+    }),
+    total: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Records matching the filter, of which the window is one page'
+    }),
+    written: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Records stored since the log started, so a reader can tell the ring overwrote what it had not read'
+    })
+});
+
+export type OperationsResponseBody = z.infer<typeof OperationsResponseBodySchema>;
+
+export const WelcomeEventSchema = z.record(z.string(), z.never());
+
+export type WelcomeEvent = z.infer<typeof WelcomeEventSchema>;
+
 /**
  * OK
  */
 export const zGetApiConfigResponse = ConfigResponseBodySchema;
+
+/**
+ * OK
+ */
+export const zGetApiLiveResponse = z.union([
+    OperationsEventSchema,
+    WelcomeEventSchema
+]);
+
+export const zPostApiMetricsBody = MetricsRequestBodySchema;
+
+/**
+ * OK
+ */
+export const zPostApiMetricsResponse = MetricsResponseBodySchema;
+
+export const zPostApiOperationsBody = OperationsRequestBodySchema;
+
+/**
+ * OK
+ */
+export const zPostApiOperationsResponse = OperationsResponseBodySchema;

@@ -1,44 +1,39 @@
-import type { FC, HTMLAttributes, Ref } from 'react'
+import { barY, crosshair, defineChart, group, stack } from '@tanstack/charts'
+import { decorative } from '@tanstack/charts/mark/decorative'
+import { RendererChart } from '@tanstack/charts/react/tooltip'
+import { scaleBand } from '@tanstack/charts/scales/band'
+import { scaleLinear } from '@tanstack/charts/scales/linear'
 
-import { Bar, BarChart as RechartsBarChart, XAxis, YAxis } from 'recharts'
+import { type FC, type HTMLAttributes, type Ref, useMemo } from 'react'
 
 import {
-    type ChartConfig,
     ChartContainer,
-    ChartLegend,
-    ChartLegendContent,
-    ChartTooltip,
+    type ChartDataRow,
+    type ChartSeries,
     ChartTooltipContent,
     type ChartValueFormatter,
+    chartCursorSpring,
+    chartTooltipOptions,
+    createChartConfig,
+    getChartMaximum,
+    getSeriesColor,
+    toChartRows,
+    useChartRenderer,
 } from '@/shared/ui/charts/chart'
 import { cn } from '@/shared/utils'
 
-type BarVariant = 'success' | 'primary' | 'danger' | 'amber'
-
-const variantColor: Record<BarVariant, string> = {
-    success: 'var(--success)',
-    primary: 'var(--primary)',
-    danger: 'var(--danger)',
-    amber: 'var(--amber)',
-}
-
-const TOP_RADIUS = [2, 2, 0, 0] as const
-const FLAT_RADIUS = [0, 0, 0, 0] as const
+const BAR_RADIUS = 2
+/** Share of each x step left empty between bars. */
+const BAR_GAP = 0.1
+/** Height in pixels of the stand-in bar drawn where a stack sums to zero. */
 const MIN_BAR_SIZE = 1
-const FALLBACK_DOMAIN = [0, 1] as const
 
-/** Data key of the synthetic series that keeps a seriesless chart from rendering blank. */
-const BASELINE_KEY = '__baseline__'
-
-type BarSeries = {
-    dataKey: string
-    label?: string
-    variant: BarVariant
-}
+/** Paint of the stand-in bars when there is no series to take a color from. */
+const BASELINE_COLOR = 'var(--hairline-strong)'
 
 type BarChartProps = HTMLAttributes<HTMLDivElement> & {
-    data: Array<Record<string, number | string>>
-    series: BarSeries[]
+    data: ChartDataRow[]
+    series: ChartSeries[]
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
@@ -59,60 +54,111 @@ export const BarChart: FC<BarChartProps> = ({
     legend = false,
     ...props
 }) => {
-    const config: ChartConfig = Object.fromEntries(
-        series.map(({ dataKey, label, variant }) => [
-            dataKey,
-            { label: label ?? dataKey, color: variantColor[variant] },
-        ]),
+    const config = useMemo(() => createChartConfig(series), [series])
+    const renderer = useChartRenderer()
+    const seriesOrder = useMemo(() => series.map(({ dataKey }) => dataKey), [series])
+
+    // Without a series there is nothing to hover, so the tooltip stays off like on an empty plot.
+    const hasTooltip = tooltip && series.length > 0
+
+    const definition = useMemo(
+        () => createBarDefinition({ data, series, xAxisKey, stacked, tooltip: hasTooltip }),
+        [data, series, xAxisKey, stacked, hasTooltip],
     )
 
-    // Without a series there is nothing to plot, so stand in a zero-valued one that the
-    // `minPointSize` baseline below turns into the same flat hairline an all-zero chart draws.
-    const baselineOnly = series.length === 0
-    const rows = baselineOnly ? data.map((entry) => ({ ...entry, [BASELINE_KEY]: 0 })) : data
-    const allZero = rows.every((entry) => series.every(({ dataKey }) => Number(entry[dataKey] ?? 0) === 0))
-
     return (
-        <ChartContainer config={config} className={cn('aspect-auto h-40 w-full', className)} {...props}>
-            <RechartsBarChart data={rows} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barCategoryGap="10%">
-                {xAxisKey && <XAxis dataKey={xAxisKey} hide />}
-                {allZero && <YAxis domain={[...FALLBACK_DOMAIN]} allowDataOverflow hide />}
-                <ChartTooltip
-                    cursor={{ radius: 2 }}
-                    position={{ x: 0, y: 0 }}
-                    content={
-                        tooltip && !baselineOnly ? (
-                            <ChartTooltipContent valueFormatter={tooltipValueFormatter} />
-                        ) : (
-                            () => null
-                        )
-                    }
-                />
-                {legend && <ChartLegend content={<ChartLegendContent />} />}
-                {baselineOnly && (
-                    <Bar
-                        dataKey={BASELINE_KEY}
-                        fill="var(--hairline-strong)"
-                        legendType="none"
-                        radius={[...FLAT_RADIUS]}
-                        minPointSize={() => MIN_BAR_SIZE}
-                    />
-                )}
-                {series.map(({ dataKey }, index) => {
-                    const rounded = !stacked || index === series.length - 1
-
-                    return (
-                        <Bar
-                            key={dataKey}
-                            dataKey={dataKey}
-                            fill={`var(--color-${dataKey})`}
-                            stackId={stacked ? 'stack' : undefined}
-                            radius={[...(rounded ? TOP_RADIUS : FLAT_RADIUS)]}
-                            minPointSize={() => MIN_BAR_SIZE}
+        <ChartContainer config={config} legend={legend} className={cn('aspect-auto h-40 w-full', className)} {...props}>
+            {(chartId) => (
+                <RendererChart
+                    definition={definition}
+                    renderer={renderer}
+                    idPrefix={chartId}
+                    ariaLabel={seriesOrder.map((key) => config[key]?.label ?? key).join(', ') || 'Bar chart'}
+                    style={{ height: '100%' }}
+                    renderTooltipBody={({ points }) => (
+                        <ChartTooltipContent
+                            points={points}
+                            seriesOrder={seriesOrder}
+                            valueFormatter={tooltipValueFormatter}
                         />
-                    )
-                })}
-            </RechartsBarChart>
+                    )}
+                />
+            )}
         </ChartContainer>
+    )
+}
+
+/**
+ * Stacked (or grouped) bars per x step with only the outer end rounded, a band cursor behind
+ * the hovered step, and a one-pixel stand-in bar wherever a step sums to zero so empty steps
+ * stay visible.
+ */
+const createBarDefinition = ({
+    data,
+    series,
+    xAxisKey,
+    stacked,
+    tooltip,
+}: {
+    data: ChartDataRow[]
+    series: ChartSeries[]
+    xAxisKey: string | undefined
+    stacked: boolean
+    tooltip: boolean
+}) => {
+    const rows = toChartRows({ data, series, xAxisKey, stacked })
+    const maximum = getChartMaximum(rows)
+    const indices = data.map((_, index) => index)
+    const emptyIndices = indices.filter((index) => rows.every((row) => row.index !== index || row.value === 0))
+    const baselineColor = series.length ? getSeriesColor(series[0].dataKey) : BASELINE_COLOR
+
+    return defineChart(
+        ({ height }) => ({
+            marks: [
+                crosshair<number, number>({
+                    x: { band: { fill: 'var(--surface-2)', fillOpacity: 1, radius: BAR_RADIUS } },
+                    y: false,
+                    motion: { transition: chartCursorSpring },
+                }),
+                decorative(
+                    barY(emptyIndices, {
+                        id: 'baseline',
+                        x: (index) => index,
+                        y1: 0,
+                        y2: (maximum * MIN_BAR_SIZE) / Math.max(height, 1),
+                        key: (index) => String(index),
+                        fill: baselineColor,
+                    }),
+                ),
+                barY(rows, {
+                    id: 'bars',
+                    x: 'index',
+                    y: 'value',
+                    z: 'series',
+                    key: 'key',
+                    fill: (row) => getSeriesColor(row.series),
+                    layout: stacked ? stack({ order: series.map(({ dataKey }) => dataKey) }) : group(),
+                    radius: { end: BAR_RADIUS },
+                }),
+            ],
+            scales: {
+                x: {
+                    scale: scaleBand<number>()
+                        .domain(indices)
+                        .paddingInner(BAR_GAP)
+                        .paddingOuter(BAR_GAP / 2),
+                    axis: false,
+                },
+                y: { scale: scaleLinear().domain([0, maximum]), axis: false },
+            },
+            margin: 0,
+        }),
+        {
+            focus: 'group-x',
+            focusRing: false,
+            maxFocusDistance: Number.POSITIVE_INFINITY,
+            keyboard: true,
+            tooltip: tooltip ? chartTooltipOptions : false,
+        },
     )
 }

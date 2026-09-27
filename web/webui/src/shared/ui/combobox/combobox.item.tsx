@@ -10,8 +10,8 @@ const ComboboxItem: FC<ComboboxItemProps> = ({ className, ...props }) => (
     <ComboboxPrimitive.Item
         data-slot="combobox-item"
         className={cn(
-            'group/combobox-item flex w-full cursor-default items-center gap-2.5 rounded-md px-2 py-2 text-md outline-none select-none',
-            'data-highlighted:bg-surface-1 data-disabled:pointer-events-none data-disabled:opacity-50',
+            'group/combobox-item flex w-full cursor-default select-none items-center gap-2.5 rounded-md px-2 py-2 text-md outline-none',
+            'data-disabled:pointer-events-none data-highlighted:bg-surface-1 data-disabled:opacity-50',
             className,
         )}
         {...props}

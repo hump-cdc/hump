@@ -5,7 +5,10 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	getconfig "hump/internal/application/get_config"
+	getwebuiconfig "hump/internal/application/webui/get_webui_config"
+	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
+	getwebuioperations "hump/internal/application/webui/get_webui_operations"
+	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/middleware"
 	"hump/pkg/telemetry/log"
@@ -15,6 +18,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
@@ -23,12 +27,23 @@ import (
 var webuiFS embed.FS
 
 type WebUIController struct {
-	configController *getconfig.Controller
+	configController     *getwebuiconfig.Controller
+	metricsController    *getwebuimetrics.Controller
+	operationsController *getwebuioperations.Controller
+	liveController       *streamwebuiupdates.Controller
 }
 
-func NewWebUIController(configController *getconfig.Controller) *WebUIController {
+func NewWebUIController(
+	configController *getwebuiconfig.Controller,
+	metricsController *getwebuimetrics.Controller,
+	operationsController *getwebuioperations.Controller,
+	liveController *streamwebuiupdates.Controller,
+) *WebUIController {
 	return &WebUIController{
-		configController: configController,
+		configController:     configController,
+		metricsController:    metricsController,
+		operationsController: operationsController,
+		liveController:       liveController,
 	}
 }
 
@@ -91,52 +106,27 @@ func (c *WebUIController) routes(api huma.API) {
 		Tags:        []string{"Config"},
 	}, c.configController.Handler())
 
-	// huma.Register(api, huma.Operation{
-	// 	OperationID: "metrics.get",
-	// 	Method:      http.MethodGet,
-	// 	Path:        "/api/metrics",
-	// 	Summary:     "Get Prometheus metrics",
-	// 	Tags:        []string{"Metrics"},
-	// 	Responses: map[string]*huma.Response{
-	// 		"200": {
-	// 			Description: "Prometheus metrics in text exposition format",
-	// 			Content: map[string]*huma.MediaType{
-	// 				"text/plain": {Schema: &huma.Schema{Type: huma.TypeString}},
-	// 			},
-	// 		},
-	// 	},
-	// }, c.metricsController.Handler())
+	huma.Register(api, huma.Operation{
+		OperationID: "metrics.get",
+		Method:      http.MethodPost,
+		Path:        "/api/metrics",
+		Summary:     "Get dashboard metrics aggregated by duration",
+		Tags:        []string{"Metrics"},
+	}, c.metricsController.Handler())
 
-	// sse.Register(api, huma.Operation{
-	// 	OperationID: "operations.stream",
-	// 	Method:      http.MethodGet,
-	// 	Path:        "/api/operations",
-	// 	Summary:     "Stream change-data-capture operations",
-	// 	Tags:        []string{"Operations"},
-	// }, map[string]any{
-	// 	"operation": stream.Event{},
-	// 	"retry":     stream.RetryEvent{},
-	// }, func(ctx context.Context, _ *struct{}, send sse.Sender) {
-	// 	// s *streamer.FanOutStreamer[stream.Message]
-	// 	if s == nil {
-	// 		return
-	// 	}
+	huma.Register(api, huma.Operation{
+		OperationID: "operations.list",
+		Method:      http.MethodPost,
+		Path:        "/api/operations",
+		Summary:     "List sink deliveries matching a filter",
+		Tags:        []string{"Operations"},
+	}, c.operationsController.Handler())
 
-	// 	id, ch := s.Subscribe()
-	// 	defer s.Unsubscribe(id)
-
-	// 	for {
-	// 		select {
-	// 		case <-ctx.Done():
-	// 			return
-	// 		case event, ok := <-ch:
-	// 			if !ok {
-	// 				return
-	// 			}
-	// 			if err := send(sse.Message{Data: event}); err != nil {
-	// 				return
-	// 			}
-	// 		}
-	// 	}
-	// })
+	sse.Register(api, huma.Operation{
+		OperationID: "live.stream",
+		Method:      http.MethodGet,
+		Path:        "/api/live",
+		Summary:     "Stream live updates",
+		Tags:        []string{"Live"},
+	}, c.liveController.Events(), c.liveController.Handler())
 }

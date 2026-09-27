@@ -13,7 +13,7 @@ const SAMPLE_VALUES = {
 const asides = {
     auto: undefined,
     none: null,
-    label: <span className="text-xs font-medium text-ink-tertiary">depth</span>,
+    label: <span className="font-medium text-ink-tertiary text-xs">depth</span>,
 } satisfies Record<string, ReactNode>
 
 type StoryArgs = Pick<ComponentProps<typeof MetricCard>, 'title' | 'hint' | 'variant' | 'asideTrend' | 'separated'> & {

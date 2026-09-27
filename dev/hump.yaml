@@ -39,14 +39,27 @@ sinks:
               name: "hump.{{.Schema}}.{{.Table}}"
     - name: http1
       http:
-          url: "http://localhost:3050/submit"
+          url: "http://localhost:5050/submit1?schema={{.Schema}}&table={{.Table}}"
           method: "POST"
       failure: skip
+      retry:
+          maxAttempts: 10
+          attemptTimeout: 50ms
+          backoff:
+              max: 50ms
 
 tables:
     - tables:
           - schema: public
             table: users
+      sinks:
+          # - preset: http1
+          - preset: kafka1
+          # - preset: nats-core
+          # - preset: nats-jetstream
+          # - preset: rabbitmq1
+          # - preset: rabbitmq-stream
+    - tables:
           - schema: public
             table: posts
           - schema: public
@@ -55,7 +68,7 @@ tables:
             table: events
       sinks:
           # - preset: http1
-          - preset: kafka1
+          # - preset: kafka1
           - preset: nats-core
           # - preset: nats-jetstream
           # - preset: rabbitmq1

@@ -14,9 +14,9 @@ import (
 // renders the message, ensures the producer for the rendered stream exists
 // (running the per-(URL, stream) reconciler on first use), then publishes
 // under the producer's serialization mutex and waits for the publisher
-// confirmation. When streamEvent is non-nil the rendered message's fields are recorded
-// on it for the operations stream.
-func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext) error {
+// confirmation. When capture is non-nil the rendered message's fields are
+// recorded on it for the operations log.
+func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -42,7 +42,18 @@ func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationConte
 
 	confirmCh := rp.prod.NotifyPublishConfirmation()
 
-	if err := rp.prod.Send(msg); err != nil {
+	err = rp.prod.Send(msg)
+
+	if capture != nil {
+		capture.Target = streamName
+		capture.SetPayload([]byte(payload))
+
+		for name, value := range headers {
+			capture.Set("header."+name, value)
+		}
+	}
+
+	if err != nil {
 		return wrapError(err)
 	}
 

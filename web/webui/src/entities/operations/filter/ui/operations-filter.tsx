@@ -3,7 +3,7 @@ import { type FC, useEffect, useMemo } from 'react'
 import { Search } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useConfig } from '@/entities/config/config'
+import { useConfig } from '@/entities/config/config/@x/operations'
 import { MultiComboBox, type MultiComboBoxItem } from '@/shared/ui/multi-combo-box'
 import { TextInput } from '@/shared/ui/text-input'
 
@@ -94,7 +94,7 @@ export const OperationsFilter: FC = () => {
             <TextInput
                 value={search}
                 onValueChange={setSearch}
-                placeholder="Search table, sink, error…"
+                placeholder="Search payload, target, error…"
                 icon={<Search />}
                 font="sans"
                 className="w-full"

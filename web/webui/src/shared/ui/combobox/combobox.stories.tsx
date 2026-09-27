@@ -92,8 +92,8 @@ const meta: Meta<StoryArgs> = {
                         <ComboboxList>
                             {(item: Sink) => (
                                 <ComboboxItem key={item.value} value={item}>
-                                    <span className="flex-1 truncate text-md font-medium text-ink">{item.label}</span>
-                                    <span className="shrink-0 font-mono text-sm text-ink-tertiary tabular-nums">
+                                    <span className="flex-1 truncate font-medium text-ink text-md">{item.label}</span>
+                                    <span className="shrink-0 font-mono text-ink-tertiary text-sm tabular-nums">
                                         {item.aside}
                                     </span>
                                     <Check className="size-4 shrink-0 text-primary opacity-0 group-data-[selected]/combobox-item:opacity-100" />

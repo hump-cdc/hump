@@ -37,15 +37,31 @@
     border-bottom: none;
 }
 
+/* Toggle-style control buttons (e.g. a view switch): the active one is highlighted. */
+.react-flow__controls-button[aria-pressed="true"] {
+    color: var(--primary);
+}
+
+/* Buttons of one group (e.g. a view switch) sit flush, without a divider below. */
+.react-flow__controls-button.flow-controls-joined {
+    border-bottom: none;
+}
+
 /* Connection handles: small filled circles; primary border on a selected node. */
 .react-flow__handle {
-    width: 8px;
-    height: 8px;
-    min-width: 8px;
-    min-height: 8px;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
     border-width: 2px;
 }
 
-.react-flow__node.selected .react-flow__handle {
+.react-flow__node.selected .react-flow__handle,
+.react-flow__handle.selected-target {
     border-color: var(--primary);
+}
+
+/* Lucide control icons are stroked; xyflow fills control svgs with currentColor. */
+.react-flow__controls-button svg {
+    fill: none;
 }

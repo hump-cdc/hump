@@ -1,0 +1,100 @@
+import type { FC } from 'react'
+
+import type { Node, NodeProps } from '@xyflow/react'
+import { cva } from 'class-variance-authority'
+
+import { type FlowNodeBase, type FlowNodeConfig, MetricHint, SinkIconTile } from '@/shared/ui/flow'
+import { NumberFlow } from '@/shared/ui/number-flow'
+import { cn } from '@/shared/utils'
+
+import { sinkTargetKey, useTargetSelection } from './flow-detailed.context'
+import { TargetRow } from './node.sink.target'
+
+/** A delivery target inside a sink (topic, queue, subject, …); edges attach to it via `targetHandle`. */
+export type SinkTarget = {
+    /** Handle id; referenced by an edge's `targetHandle`. Unique within the sink. */
+    id: string
+    name: string
+    /** Target kind label (e.g. `topic`, `queue`). */
+    kind: string
+    /** Operations delivered to this target. */
+    count: number
+    /** p95 delivery latency in milliseconds; absent without an estimate. */
+    p95?: number
+    /** Success rate (0–100); absent without an operation. */
+    successRate?: number
+    health: 'ok' | 'error'
+}
+
+export type SinkNodeData = {
+    name: string
+    /** Sink type (`kafka`, `rabbitmq`, …); picks the header logo. */
+    type: string
+    host?: string
+    /** Total operations across all targets. */
+    count: number
+    targets: SinkTarget[]
+}
+
+type SinkNodeModel = Node<SinkNodeData, 'sink'>
+
+const sinkNodeVariants = cva('flex w-95 flex-col gap-2.5 rounded-xl border bg-surface-1 p-3 shadow-lg transition', {
+    variants: {
+        selected: {
+            true: 'border-primary shadow-glow shadow-primary/40',
+            // The glow shows on any hover (target rows included); the border reacts to the card only.
+            false: [
+                'border-hairline hover:not-has-[button:hover]:border-hairline-strong',
+                'hover:shadow-glow hover:shadow-ink-subtle/30',
+            ],
+        },
+        /** A target row inside is selected: the card glows in the accent color, its border stays neutral. */
+        targetSelected: {
+            true: 'shadow-glow shadow-primary/40 hover:shadow-primary/40',
+            false: '',
+        },
+    },
+    defaultVariants: {
+        selected: false,
+        targetSelected: false,
+    },
+})
+
+export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ id, data, selected }) => {
+    const { selected: selectedId } = useTargetSelection()
+    const targetSelected = data.targets.some((target) => sinkTargetKey(id, target.id) === selectedId)
+
+    return (
+        <div className={cn(sinkNodeVariants({ selected: Boolean(selected), targetSelected }))}>
+            <div className="flex h-8.5 items-center gap-2.5">
+                <SinkIconTile type={data.type} />
+                <div className="flex flex-col gap-0.5">
+                    <span className="font-medium text-ink text-sm leading-tight">{data.name}</span>
+                    {data.host ? (
+                        <span className="font-mono text-ink-subtle text-xs leading-tight">{data.host}</span>
+                    ) : null}
+                </div>
+                <div className="flex-1" />
+                <MetricHint hint="Messages dispatched to this sink across all targets">
+                    <span className="font-mono font-semibold text-base text-ink">
+                        <NumberFlow value={data.count} kind="compact" />
+                    </span>
+                </MetricHint>
+            </div>
+
+            <div className="h-px bg-hairline-strong" />
+
+            <div className="flex flex-col gap-2">
+                {data.targets.map((target) => (
+                    <TargetRow key={target.id} sinkId={id} target={target} />
+                ))}
+            </div>
+        </div>
+    )
+}
+
+/** Declarative config element: `<FlowDetailedSink id name type host count targets />`. */
+export const SinkNode: FlowNodeConfig<'sink', SinkNodeData> = Object.assign(
+    (_props: FlowNodeBase & SinkNodeData) => null,
+    { flowNodeType: 'sink' as const },
+)

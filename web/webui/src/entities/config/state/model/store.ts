@@ -1,9 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-import type { MetricBucket } from '@/shared/storage'
-
-export const CHART_STEPS = ['1m', '5m', '10m'] as const satisfies readonly MetricBucket[]
+export const CHART_STEPS = ['1m', '5m', '10m'] as const
 
 export type ChartStep = (typeof CHART_STEPS)[number]
 

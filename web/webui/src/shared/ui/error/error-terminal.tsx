@@ -24,13 +24,13 @@ export const ErrorTerminal: FC<ErrorTerminalProps> = ({
         }}
     >
         <div className="w-full max-w-190 overflow-hidden rounded-xl border border-[#23252a] bg-[#0f1011] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.4)]">
-            <div className="flex h-10 items-center border-b border-[#23252a] bg-[#141516] px-3.5">
+            <div className="flex h-10 items-center border-[#23252a] border-b bg-[#141516] px-3.5">
                 <div className="flex items-center gap-2">
                     <span className="size-3 rounded-full bg-[#eb5757]" />
                     <span className="size-3 rounded-full bg-[#f2c94c]" />
                     <span className="size-3 rounded-full bg-[#27a644]" />
                 </div>
-                <span className="flex-1 text-center font-mono text-sm text-[#8a8f98]">{terminalTitle}</span>
+                <span className="flex-1 text-center font-mono text-[#8a8f98] text-sm">{terminalTitle}</span>
                 <span className="w-13" />
             </div>
 
@@ -45,8 +45,8 @@ export const ErrorTerminal: FC<ErrorTerminalProps> = ({
         </div>
 
         <div className="flex flex-col items-center gap-3.5 text-center">
-            <h1 className="text-5xl font-bold text-ink">{title}</h1>
-            <p className="text-lg text-ink-subtle">{description}</p>
+            <h1 className="font-bold text-5xl text-ink">{title}</h1>
+            <p className="text-ink-subtle text-lg">{description}</p>
             {action ? <div className="mt-2">{action}</div> : null}
         </div>
     </div>

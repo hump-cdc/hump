@@ -2,25 +2,45 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	"hump/config"
-	getconfig "hump/internal/application/get_config"
+	getwebuiconfig "hump/internal/application/webui/get_webui_config"
+	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
+	getwebuioperations "hump/internal/application/webui/get_webui_operations"
+	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
 	"hump/pkg/app/options"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 )
 
 const outEnv = "OPENAPI_OUT"
 
+// sseMediaType is the content type huma documents an SSE response under.
+const sseMediaType = "text/event-stream"
+
 func main() {
 	// Handlers are only registered, never invoked, so their dependencies can stay empty.
 	api := controller.NewWebUIController(
-		getconfig.NewController(options.Options{}, config.Configuration{}, nil),
+		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
+		getwebuimetrics.NewController(nil),
+		getwebuioperations.NewController(nil),
+		streamwebuiupdates.NewController(nil, nil, nil),
 	).Api(chi.NewMux())
+
+	if err := flattenSSESchema(
+		api.OpenAPI(),
+		"/api/live",
+		"#/components/schemas/OperationsEvent",
+		"#/components/schemas/WelcomeEvent",
+	); err != nil {
+		log.Fatalf("flatten sse schema: %v", err)
+	}
 
 	spec, err := api.OpenAPI().MarshalJSON()
 	if err != nil {
@@ -41,6 +61,39 @@ func main() {
 	}
 
 	log.Printf("done: %s", out)
+}
+
+// flattenSSESchema replaces the SSE response schema of path with a oneOf of refs.
+//
+// huma documents an SSE response as an array of {data, event, id, retry} envelopes, but the
+// generated TypeScript client applies the response schema to the `data` of a single event.
+// Reducing the schema to a union of event payloads is what makes that client validate and type
+// events correctly. The trade-off is that the spec drops the event names, so the payloads must
+// stay distinguishable by shape alone.
+func flattenSSESchema(spec *huma.OpenAPI, path string, refs ...string) error {
+	item := spec.Paths[path]
+	if item == nil || item.Get == nil {
+		return fmt.Errorf("no GET operation on %s", path)
+	}
+
+	response := item.Get.Responses["200"]
+	if response == nil {
+		return fmt.Errorf("no 200 response on GET %s", path)
+	}
+
+	media := response.Content[sseMediaType]
+	if media == nil {
+		return fmt.Errorf("GET %s has no %s response content", path, sseMediaType)
+	}
+
+	oneOf := make([]*huma.Schema, 0, len(refs))
+	for _, ref := range refs {
+		oneOf = append(oneOf, &huma.Schema{Ref: ref})
+	}
+
+	media.Schema = &huma.Schema{OneOf: oneOf}
+
+	return nil
 }
 
 // outputPath returns the file to write, taken from OPENAPI_OUT. It is required.

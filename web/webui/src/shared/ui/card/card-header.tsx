@@ -9,7 +9,7 @@ import { useCardContext } from './card-context'
 const cardHeaderVariants = cva('flex shrink-0 items-center justify-between gap-2', {
     variants: {
         separated: {
-            true: 'border-b border-hairline p-4',
+            true: 'border-hairline border-b p-4',
             false: '',
         },
     },

@@ -9,8 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// New returns a [promauto.Factory] over a namespaced registry and the [http.Handler] exposing it.
-func New(namespace string) (promauto.Factory, http.Handler) {
+// New returns a [promauto.Factory] over a namespaced registry, the [http.Handler]
+// exposing it and the registry itself as a [prometheus.Gatherer].
+func New(namespace string) (promauto.Factory, http.Handler, prometheus.Gatherer) {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
 		collectors.NewGoCollector(
@@ -20,5 +21,6 @@ func New(namespace string) (promauto.Factory, http.Handler) {
 	)
 
 	return promauto.With(prometheus.WrapRegistererWithPrefix(namespace+"_", registry)),
-		promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
+		registry
 }

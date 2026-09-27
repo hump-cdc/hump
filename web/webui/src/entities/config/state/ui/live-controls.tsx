@@ -1,14 +1,12 @@
 import type { FC } from 'react'
 
-import { Play, Square } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 import { CHART_STEPS, type ChartStep, useLiveControlsStore } from '../model/store'
+import { LiveStatus } from './live-status'
 
 export const LiveControls: FC = () => {
     const { chartStep, setChartStep } = useLiveControlsStore(
@@ -18,27 +16,14 @@ export const LiveControls: FC = () => {
         })),
     )
 
-    // TODO: update later
-    const running = false
-    const toggle = () => {}
-
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Badge variant={running ? 'healthy' : 'neutral'} dot className="cursor-pointer">
-                    {running ? 'live' : 'paused'}
-                </Badge>
+                <LiveStatus className="cursor-pointer" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="flex w-56 flex-col gap-3 p-3">
-                <Button variant={running ? 'secondary' : 'primary'} className="w-full" onClick={toggle}>
-                    {running ? <Square /> : <Play />}
-                    {running ? 'Stop' : 'Start'}
-                </Button>
-
-                <div className="h-px w-full bg-hairline" />
-
                 <div className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold tracking-wide text-ink-subtle uppercase">Chart step</span>
+                    <span className="font-semibold text-ink-subtle text-xs uppercase tracking-wide">Chart step</span>
                     <Tabs value={chartStep} onValueChange={(value) => setChartStep(value as ChartStep)}>
                         <TabsList className="w-full">
                             {CHART_STEPS.map((option) => (

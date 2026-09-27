@@ -17,7 +17,7 @@ export const CompleteInfo: FC = () => {
         <div className="flex items-center gap-3.5 rounded-xl border border-success/30 bg-success-soft p-5">
             <CircleCheck className="size-6 shrink-0 text-success" />
             <div className="flex flex-col gap-0.5">
-                <span className="text-md font-semibold text-ink">Snapshot complete</span>
+                <span className="font-semibold text-ink text-md">Snapshot complete</span>
                 <span className="text-base text-ink-subtle">
                     All {tables.length} {tables.length === 1 ? 'table' : 'tables'} re-read and streamed to sinks ·
                     finished {formatDateTime(finishedAt)}

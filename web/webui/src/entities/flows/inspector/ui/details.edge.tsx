@@ -1,21 +1,40 @@
 import type { FC } from 'react'
 
-import { ArrowRight } from 'lucide-react'
+import { InfoCard } from '@/shared/ui/card'
+import { ProgressChart } from '@/shared/ui/charts/progress-chart'
+import { NumberFlow } from '@/shared/ui/number-flow'
 
+import { resolveDelivery } from '../model/resolve'
 import type { SelectedItem } from '../model/types'
-import { IdentityCard } from './identity-card'
-import { InspectorMetrics } from './inspector-metrics'
+import { useInspectorTopology } from '../model/use-inspector-topology'
 
-/** Inspector details for a selected edge: source→target identity and edge metrics. */
-export const EdgeDetails: FC<{ selected: Extract<SelectedItem, { kind: 'edge' }> }> = ({ selected }) => (
-    <>
-        <IdentityCard eyebrow="EDGE">
-            <div className="flex items-center gap-2">
-                <span className="font-mono text-md font-medium text-ink">{selected.sourceLabel}</span>
-                <ArrowRight className="size-3.5 shrink-0 text-primary" />
-                <span className="font-mono text-md font-medium text-ink">{selected.targetLabel}</span>
+/**
+ * Inspector details for a selected edge: its source table, its target with the owning sink, and the
+ * deliveries along it. A summary edge has no single target, so it names the sink instead.
+ */
+export const EdgeDetails: FC<{ selected: Extract<SelectedItem, { kind: 'edge' }> }> = ({ selected }) => {
+    const topology = useInspectorTopology()
+    const stats = topology && resolveDelivery(topology, selected)
+
+    return (
+        <>
+            <InfoCard title="Source">{selected.sourceLabel}</InfoCard>
+            <InfoCard title="Target" footer={[selected.type, selected.host].filter(Boolean).join(' · ')}>
+                {selected.target ?? selected.targetLabel}
+            </InfoCard>
+            <div className="grid grid-cols-2 gap-2">
+                <InfoCard title="Total events" className="col-span-2">
+                    <NumberFlow value={stats?.operations} kind="compact" />
+                </InfoCard>
+                <InfoCard title="Success" variant="success">
+                    <NumberFlow value={stats?.success} kind="compact" />
+                </InfoCard>
+                <InfoCard title="Failures" variant="failed">
+                    <NumberFlow value={stats?.failure} kind="compact" />
+                </InfoCard>
             </div>
-        </IdentityCard>
-        <InspectorMetrics throughput="842/s" successRate={98.2} totalEvents="1.24M" failures="2" />
-    </>
-)
+
+            <ProgressChart title="Success rate" value={stats?.successRate} showError />
+        </>
+    )
+}

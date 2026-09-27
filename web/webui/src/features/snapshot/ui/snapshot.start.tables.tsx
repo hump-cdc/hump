@@ -61,11 +61,12 @@ export const StartTables: FC = () => {
 
     return (
         <Table
+            variant="bordered"
             columns={SELECT_COLUMNS}
             selectable
             header={
                 <div className="flex items-center gap-2.5">
-                    <span className="text-lg font-semibold tracking-heading text-ink">Select tables</span>
+                    <span className="font-semibold text-ink text-lg tracking-heading">Select tables</span>
                     <Badge variant="active" border>
                         {selectedCount} of {SNAPSHOT_TABLES.length}
                     </Badge>
@@ -74,7 +75,7 @@ export const StartTables: FC = () => {
             headerAside={
                 <label
                     htmlFor="snapshot-select-all"
-                    className="flex cursor-pointer items-center gap-2 text-base text-ink-muted select-none"
+                    className="flex cursor-pointer select-none items-center gap-2 text-base text-ink-muted"
                 >
                     <Checkbox id="snapshot-select-all" checked={selectAllState} onCheckedChange={toggleAll} />
                     <span>Select all</span>

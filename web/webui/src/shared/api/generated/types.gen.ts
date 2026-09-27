@@ -137,6 +137,376 @@ export type ErrorModelModel = {
     type?: string;
 };
 
+export type MetricsConnectionModel = {
+    /**
+     * Failed deliveries over the connection since start, retries excluded
+     */
+    failure: number;
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Sink type
+     */
+    sink: string;
+    /**
+     * Successful deliveries over the connection since start
+     */
+    success: number;
+    /**
+     * Schema-qualified source table
+     */
+    table: string;
+    /**
+     * Rendered target the table is delivered to
+     */
+    target: string;
+};
+
+export type MetricsPointModel = {
+    /**
+     * Messages delivered successfully during the bucket
+     */
+    delivered: number;
+    /**
+     * Messages that failed to deliver during the bucket
+     */
+    failed: number;
+    /**
+     * Peak allocated heap in bytes
+     */
+    memoryAllocBytes: number;
+    /**
+     * Peak replication lag in bytes
+     */
+    replicationLagBytes: number;
+    /**
+     * Delivered and failed messages by sink type
+     */
+    sinkDelivery: {
+        [key: string]: number;
+    };
+    /**
+     * P95 sink write latency in milliseconds by sink type; a type without an estimate is absent
+     */
+    sinkLatencyP95: {
+        [key: string]: number;
+    };
+    /**
+     * Messages delivered successfully per second
+     */
+    throughput: number;
+    /**
+     * Start of the bucket
+     */
+    timestamp: string;
+};
+
+export type MetricsRequestBodyModel = {
+    /**
+     * Width of the buckets the points are aggregated into
+     */
+    duration: '1m' | '5m' | '10m';
+};
+
+export type MetricsResponseBodyModel = {
+    /**
+     * Bucket width in seconds
+     */
+    bucketSeconds: number;
+    /**
+     * Configured table-to-target edges of the pipeline
+     */
+    connections: Array<MetricsConnectionModel> | null;
+    /**
+     * Width of the buckets the points are aggregated into
+     */
+    duration: string;
+    /**
+     * Newest points, oldest first
+     */
+    points: Array<MetricsPointModel> | null;
+    /**
+     * Configured sinks, with the targets they render to
+     */
+    sinks: Array<MetricsSinkModel> | null;
+    /**
+     * Row operations by configured table, keyed by schema-qualified name
+     */
+    tables: {
+        [key: string]: MetricsTableOpsModel;
+    };
+};
+
+export type MetricsSinkModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Deliveries finished since start, retries excluded
+     */
+    operations: number;
+    /**
+     * P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+    /**
+     * Share of deliveries that succeeded, 0 to 1; absent without an operation
+     */
+    success?: number;
+    /**
+     * Distinct targets the sink renders to; tables sharing a target collapse into one entry
+     */
+    targets: Array<MetricsSinkTargetModel> | null;
+    /**
+     * Sink type
+     */
+    type: string;
+};
+
+export type MetricsSinkTargetModel = {
+    /**
+     * Deliveries finished since start, retries excluded
+     */
+    operations: number;
+    /**
+     * P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+    /**
+     * Share of deliveries that succeeded, 0 to 1; absent without an operation
+     */
+    success?: number;
+    /**
+     * Rendered target: topic, subject, exchange, stream or URL
+     */
+    target: string;
+};
+
+export type MetricsTableOpModel = {
+    /**
+     * Operations replicated since start
+     */
+    n: number;
+    /**
+     * P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate
+     */
+    p95?: number;
+};
+
+export type MetricsTableOpsModel = {
+    /**
+     * Deleted rows
+     */
+    d: MetricsTableOpModel;
+    /**
+     * Inserted rows
+     */
+    i: MetricsTableOpModel;
+    /**
+     * Table truncations
+     */
+    t: MetricsTableOpModel;
+    /**
+     * Updated rows
+     */
+    u: MetricsTableOpModel;
+};
+
+export type OperationAttemptModel = {
+    /**
+     * Position of the attempt, counted from 1
+     */
+    attempt: number;
+    /**
+     * How long the attempt took in milliseconds, the timeout wait included
+     */
+    duration: number;
+    /**
+     * Error the attempt failed with; absent when it succeeded
+     */
+    error?: string;
+    /**
+     * When the attempt began
+     */
+    startedAt: string;
+    /**
+     * How the attempt ended: success, retry or failure
+     */
+    status: string;
+};
+
+export type OperationEventModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Schema of the source table
+     */
+    schema: string;
+    /**
+     * Sink type the row was delivered to
+     */
+    sink: string;
+    /**
+     * Name of the source table
+     */
+    table: string;
+    /**
+     * Target the sink rendered for this row: topic, subject, exchange, stream or URL
+     */
+    target: string;
+};
+
+export type OperationItemModel = {
+    /**
+     * Every attempt the delivery took, oldest first
+     */
+    attempts: Array<OperationAttemptModel> | null;
+    /**
+     * Source database
+     */
+    database: string;
+    /**
+     * How long the delivery took in milliseconds, every attempt and backoff pause included
+     */
+    duration: number;
+    /**
+     * Error the delivery ended with; absent when it succeeded
+     */
+    error?: string;
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * What the sink reported about the call: headers under a header. prefix, HTTP method and status, acknowledgements
+     */
+    metadata: {
+        [key: string]: string;
+    };
+    /**
+     * Row operation: insert, update, delete or truncate
+     */
+    operation: string;
+    /**
+     * Body as it went on the wire, truncated to the collector's limit
+     */
+    payload: string;
+    /**
+     * Untruncated body size in bytes
+     */
+    payloadSize: number;
+    /**
+     * Attempts beyond the first
+     */
+    retries: number;
+    /**
+     * Number ordering the record across the whole process
+     */
+    seq: number;
+    /**
+     * Sink type
+     */
+    sink: string;
+    /**
+     * When the first attempt began
+     */
+    startedAt: string;
+    /**
+     * How the delivery ended: success or failure
+     */
+    status: string;
+    /**
+     * Schema-qualified source table
+     */
+    table: string;
+    /**
+     * Target the sink rendered for this row: topic, subject, exchange, stream or URL
+     */
+    target: string;
+    /**
+     * WAL commit time of the row
+     */
+    timestamp: string;
+};
+
+export type OperationsEventModel = {
+    /**
+     * Deliveries made since the previous event, oldest first
+     */
+    operations: Array<OperationEventModel> | null;
+};
+
+export type OperationsRequestBodyModel = {
+    /**
+     * Index of the first record to return, counted from the newest match, so 0 is the most recent delivery
+     */
+    from: number;
+    /**
+     * Connection hosts to filter by; an empty list matches all of them
+     */
+    hosts?: Array<string> | null;
+    /**
+     * Row operations to filter by; an empty list matches all of them
+     */
+    operations?: Array<'insert' | 'update' | 'delete' | 'truncate'> | null;
+    /**
+     * Sink types to filter by; an empty list matches all of them
+     */
+    sinks?: Array<string> | null;
+    /**
+     * Terminal outcomes to filter by; an empty list matches all of them. Retry is an attempt status and never a record's
+     */
+    statuses?: Array<'success' | 'failure'> | null;
+    /**
+     * Schema-qualified tables to filter by; an empty list matches all of them
+     */
+    tables?: Array<string> | null;
+    /**
+     * Configured targets to filter by, as the metrics topology reports them rather than as rendered for a row; an empty list matches all of them
+     */
+    targets?: Array<string> | null;
+    /**
+     * Case-insensitive substring of the payload, target, error or metadata
+     */
+    text?: string;
+    /**
+     * Index one past the last record to return, so from 0 to 50 asks for the 50 newest matches
+     */
+    to: number;
+};
+
+export type OperationsResponseBodyModel = {
+    /**
+     * Index the window starts at, clamped to total
+     */
+    from: number;
+    /**
+     * The window, strictly newest first: index 0 is the most recent delivery and the last item the oldest
+     */
+    items: Array<OperationItemModel> | null;
+    /**
+     * Index the window ends before, clamped to total
+     */
+    to: number;
+    /**
+     * Records matching the filter, of which the window is one page
+     */
+    total: number;
+    /**
+     * Records stored since the log started, so a reader can tell the ring overwrote what it had not read
+     */
+    written: number;
+};
+
+export type WelcomeEventModel = {
+    [key: string]: never;
+};
+
 export type GetApiConfigData = {
     body?: never;
     path?: never;
@@ -161,3 +531,78 @@ export type GetApiConfigResponses = {
 };
 
 export type GetApiConfigResponse = GetApiConfigResponses[keyof GetApiConfigResponses];
+
+export type GetApiLiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/live';
+};
+
+export type GetApiLiveErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type GetApiLiveError = GetApiLiveErrors[keyof GetApiLiveErrors];
+
+export type GetApiLiveResponses = {
+    /**
+     * OK
+     */
+    200: OperationsEventModel | WelcomeEventModel;
+};
+
+export type GetApiLiveResponse = GetApiLiveResponses[keyof GetApiLiveResponses];
+
+export type PostApiMetricsData = {
+    body: MetricsRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/metrics';
+};
+
+export type PostApiMetricsErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiMetricsError = PostApiMetricsErrors[keyof PostApiMetricsErrors];
+
+export type PostApiMetricsResponses = {
+    /**
+     * OK
+     */
+    200: MetricsResponseBodyModel;
+};
+
+export type PostApiMetricsResponse = PostApiMetricsResponses[keyof PostApiMetricsResponses];
+
+export type PostApiOperationsData = {
+    body: OperationsRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/operations';
+};
+
+export type PostApiOperationsErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiOperationsError = PostApiOperationsErrors[keyof PostApiOperationsErrors];
+
+export type PostApiOperationsResponses = {
+    /**
+     * OK
+     */
+    200: OperationsResponseBodyModel;
+};
+
+export type PostApiOperationsResponse = PostApiOperationsResponses[keyof PostApiOperationsResponses];

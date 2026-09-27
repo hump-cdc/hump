@@ -66,7 +66,7 @@ export const BarChartCard: FC<BarChartCardProps> = ({
                         {series.map(({ dataKey, label, variant }) => (
                             <span
                                 key={dataKey}
-                                className="flex items-center gap-1.5 text-xs font-medium text-ink-subtle"
+                                className="flex items-center gap-1.5 font-medium text-ink-subtle text-xs"
                             >
                                 <span className={swatchVariants({ variant })} />
                                 {label ?? dataKey}
@@ -78,7 +78,7 @@ export const BarChartCard: FC<BarChartCardProps> = ({
         >
             <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold tracking-tight text-ink">{title}</span>
+                    <span className="font-semibold text-ink text-sm tracking-tight">{title}</span>
                     {hint && (
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -90,7 +90,7 @@ export const BarChartCard: FC<BarChartCardProps> = ({
                         </Tooltip>
                     )}
                 </span>
-                {subtitle && <span className="font-mono text-xs text-ink-tertiary">{subtitle}</span>}
+                {subtitle && <span className="font-mono text-ink-tertiary text-xs">{subtitle}</span>}
             </div>
         </CardHeader>
 

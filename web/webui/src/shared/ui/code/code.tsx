@@ -1,59 +1,40 @@
-import type { FC } from 'react'
-import { useEffect, useState } from 'react'
+import { createHighlighter } from '@tanstack/highlight/core'
+import { json } from '@tanstack/highlight/languages/json'
+import { plaintext } from '@tanstack/highlight/languages/plaintext'
+import { yaml } from '@tanstack/highlight/languages/yaml'
 
-import yaml from '@shikijs/langs/yaml'
-import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
+import type { FC } from 'react'
+import { useMemo } from 'react'
 
 import { cn } from '@/shared/utils'
 
-import { humpCode } from './code.theme'
+import { detectGrammar, formatCode } from './code.grammar'
 
-let highlighterPromise: Promise<HighlighterCore> | undefined
-
-const getHighlighter = (): Promise<HighlighterCore> => {
-    highlighterPromise ??= createHighlighterCore({
-        themes: [humpCode],
-        langs: [yaml],
-        engine: createJavaScriptRegexEngine(),
-    })
-    return highlighterPromise
-}
+const highlighter = createHighlighter({ languages: [yaml, json, plaintext] })
 
 type CodeProps = {
-    /** Source text to display (read-only). */
+    /** Source text to display (read-only); its grammar is detected from the content. */
     value: string
+    /** Show a line-number gutter. Defaults to `true`. */
+    lineNumbers?: boolean
+    /** Pretty-print JSON and YAML before highlighting. Defaults to `false` (shown as written). */
+    format?: boolean
     /** Wrapper class — control sizing from the consumer (the viewer fills it). */
     className?: string
 }
 
-export const Code: FC<CodeProps> = ({ value, className }) => {
-    const [html, setHtml] = useState<string | null>(null)
-
-    useEffect(() => {
-        let active = true
-        getHighlighter().then((highlighter) => {
-            if (!active) return
-            setHtml(
-                highlighter.codeToHtml(value, {
-                    lang: 'yaml',
-                    theme: 'hump-code',
-                }),
-            )
-        })
-        return () => {
-            active = false
-        }
-    }, [value])
+export const Code: FC<CodeProps> = ({ value, lineNumbers = true, format = false, className }) => {
+    const { lang, text } = useMemo(
+        () => (format ? formatCode(value) : { lang: detectGrammar(value), text: value }),
+        [value, format],
+    )
+    const html = useMemo(() => highlighter.highlightToHtml(text, { lang, lineNumbers }), [text, lang, lineNumbers])
 
     return (
-        <div className={cn('hump-code min-h-0 flex-1 overflow-auto', className)}>
-            {html ? (
-                // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki output is server-grade sanitized HTML built from `value`.
-                <div dangerouslySetInnerHTML={{ __html: html }} />
-            ) : (
-                <pre className="hump-code-fallback">{value}</pre>
-            )}
-        </div>
+        <div
+            className={cn('hump-code min-h-0 flex-1 overflow-auto', className)}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: TanStack Highlight escapes `value` while rendering.
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     )
 }

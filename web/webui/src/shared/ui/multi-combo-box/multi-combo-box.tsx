@@ -72,7 +72,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                         {selectedItems.map((item) => (
                             <span
                                 key={item.value}
-                                className="inline-flex h-5.5 shrink-0 items-center gap-1 rounded-md pr-1 pl-2 text-sm font-medium whitespace-nowrap"
+                                className="inline-flex h-5.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-md pr-1 pl-2 font-medium text-sm"
                             >
                                 {item.label}
                                 <span className="size-4" />
@@ -89,7 +89,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                             return (
                                 <>
                                     {allSelected ? (
-                                        <span className="flex h-5.5 shrink-0 items-center rounded-md bg-surface-3 px-2 text-sm font-medium text-ink-muted select-none">
+                                        <span className="flex h-5.5 shrink-0 select-none items-center rounded-md bg-surface-3 px-2 font-medium text-ink-muted text-sm">
                                             All
                                         </span>
                                     ) : (
@@ -98,7 +98,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                                                 <ComboboxChip key={item.value}>{item.label}</ComboboxChip>
                                             ))}
                                             {hidden > 0 && (
-                                                <span className="flex h-5.5 shrink-0 items-center rounded-md bg-primary-soft px-2 text-sm font-semibold text-primary select-none">
+                                                <span className="flex h-5.5 shrink-0 select-none items-center rounded-md bg-primary-soft px-2 font-semibold text-primary text-sm">
                                                     +{hidden}
                                                 </span>
                                             )}
@@ -120,7 +120,11 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                     {(item: MultiComboBoxItem) => <MultiComboBoxOption key={item.value} item={item} />}
                 </ComboboxList>
                 <ComboboxEmpty>{emptyText}</ComboboxEmpty>
-                <MultiComboBoxFooter selectedCount={selectedItems.length} />
+                <MultiComboBoxFooter
+                    selectedCount={selectedItems.length}
+                    totalCount={items.length}
+                    onSelectAll={() => commit(items)}
+                />
             </ComboboxContent>
         </Combobox>
     )

@@ -4,7 +4,7 @@ import { operationItems, statusItems } from './options'
 
 /**
  * Operations filter state, consumed by the operations list to filter the
- * IndexedDB feed. `sinks`/`tables` start empty and are hydrated once from the
+ * `/api/operations` log. `sinks`/`tables` start empty and are hydrated once from the
  * loaded config (see `hydrateSinks`/`hydrateTables`); `operations`/`statuses`
  * default to every known value. An empty facet matches nothing.
  */
@@ -17,7 +17,7 @@ export type OperationsFilterState = {
     operations: string[]
     /** Selected delivery statuses (delivered/failed). */
     statuses: string[]
-    /** Free-text search; space-separated words are ANDed (substring, case-insensitive). */
+    /** Free-text search: a case-insensitive substring of the payload, target, error or metadata. */
     search: string
     /** Whether `sinks` has been seeded from config yet. */
     sinksHydrated: boolean

@@ -56,7 +56,7 @@ export const Sidebar: FC<SidebarProps> = ({ side = 'left', className, children, 
                     'fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear lg:flex',
                     side === 'left' ? 'left-0' : 'right-0',
                     'group-data-[collapsible=icon]:w-(--sidebar-width-icon)',
-                    'group-data-[side=left]:border-r group-data-[side=right]:border-l border-hairline',
+                    'border-hairline group-data-[side=left]:border-r group-data-[side=right]:border-l',
                     className,
                 )}
                 {...props}

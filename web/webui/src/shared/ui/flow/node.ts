@@ -7,7 +7,7 @@ export type FlowNodeBase = {
 
 /**
  * A declarative node-config element (e.g. `<TableNode>`): a marker component that
- * renders nothing and carries a `flowNodeType` discriminator so `<Flow>` can turn
+ * renders nothing and carries a `flowNodeType` discriminator so the flow canvas can turn
  * it into a React Flow node bound to the matching registered renderer.
  */
 export type FlowNodeConfig<T extends string, D> = FC<FlowNodeBase & D> & {

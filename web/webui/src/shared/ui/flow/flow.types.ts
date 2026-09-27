@@ -1,20 +1,17 @@
-import type { SinkNodeData } from './node.sink'
 import type { TableNodeData } from './node.table'
 
-/** Fired when a `<TableNode>` is selected; carries its id and rendered data. */
+/** A declarative node-config child resolved to its React Flow node type and data (no position yet). */
+export type FlowNodeSpec = { id: string; type: string; data: Record<string, unknown> }
+
+/** Fired when a table node is selected; carries its id and rendered data. */
 export type TableNodeSelectHandler = (id: string, data: TableNodeData) => void
-/** Fired when a `<SinkNode>` is selected; carries its id and rendered data. */
-export type SinkNodeSelectHandler = (id: string, data: SinkNodeData) => void
-/** Fired when an edge is selected; carries its id and connected node ids. */
-export type EdgeSelectHandler = (id: string, edge: { source: string; target: string }) => void
+/** Fired when an edge is selected; carries its id, connected node ids and the target handle id, if any. */
+export type EdgeSelectHandler = (
+    id: string,
+    edge: { source: string; target: string; targetHandle?: string | null },
+) => void
 /** Fired when the current selection is cleared (re-click selected item or click empty pane). */
 export type ClearSelectionHandler = () => void
 
-/** Imperative API exposed via `ref`. */
-export type FlowRef = {
-    /**
-     * Animate the edge from `tableId` (source) to `sinkId` (target) as a dashed
-     * marching-ants line for `durationMs`, then revert. No-op if no such edge exists.
-     */
-    animate: (tableId: string, sinkId: string, durationMs?: number) => void
-}
+/** Canvas margins (px) covered by floating overlays (toolbar, inspector), excluded when revealing a selection. */
+export type ViewportInsets = { top: number; right: number; bottom: number; left: number }

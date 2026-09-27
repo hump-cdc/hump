@@ -26,13 +26,13 @@ const ComboboxContent: FC<ComboboxContentProps> = ({
             align={align}
             alignOffset={alignOffset}
             anchor={anchor}
-            className="isolate z-50"
+            className="pointer-events-auto isolate z-50"
         >
             <ComboboxPrimitive.Popup
                 data-slot="combobox-content"
                 className={cn(
                     'group/combobox-content w-(--anchor-width) min-w-(--anchor-width) max-w-(--available-width) origin-(--transform-origin) overflow-hidden rounded-xl border border-hairline bg-canvas shadow-lg',
-                    'fade-in-0 zoom-in-95 animate-in data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:animate-out',
+                    'fade-in-0 zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 animate-in data-closed:animate-out',
                     'data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1',
                     className,
                 )}

@@ -1,7 +1,7 @@
 import type { ComponentProps, FC, ReactNode, Ref } from 'react'
 
 import { cva } from 'class-variance-authority'
-import { ArrowDownRight, ArrowUpRight, Info, Minus } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react'
 
 import { BarChart } from '@/shared/ui/charts/bar-chart'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
@@ -15,7 +15,7 @@ type MetricVariant = NonNullable<ComponentProps<typeof BarChart>['series']>[numb
 
 type AsideTrend = 'positive' | 'negative'
 
-const valueVariants = cva('flex items-center gap-2 font-mono text-3xl font-semibold tracking-tight', {
+const valueVariants = cva('flex items-center gap-2 font-mono font-semibold text-3xl tracking-tight', {
     variants: {
         variant: {
             primary: 'text-ink',
@@ -82,7 +82,7 @@ export const MetricCard: FC<MetricCardProps> = ({
 }) => {
     const label = (
         <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-ink-subtle">{title}</span>
+            <span className="font-medium text-ink-subtle text-sm">{title}</span>
             {hint && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -115,7 +115,7 @@ export const MetricCard: FC<MetricCardProps> = ({
                 />
             )}
 
-            {footer != null && <span className="text-xs font-medium text-ink-subtle">{footer}</span>}
+            {footer != null && <span className="font-medium text-ink-subtle text-xs">{footer}</span>}
         </>
     )
 
@@ -129,7 +129,7 @@ export const MetricCard: FC<MetricCardProps> = ({
     }
 
     return (
-        <Card separated={false} className={cn('gap-3 p-5 overflow-visible', className)} {...props}>
+        <Card separated={false} className={cn('gap-3 overflow-visible p-5', className)} {...props}>
             <div className="flex items-center justify-between">
                 {label}
                 {headerAside}

@@ -1,10 +1,25 @@
 import type { ReactNode } from 'react'
 import { Fragment } from 'react'
 
+import { cva } from 'class-variance-authority'
+
 import { Checkbox } from '@/shared/ui/checkbox'
 import { cn } from '@/shared/utils'
 
 import type { MobileZone, TableRowColumn } from './table.types'
+import { useTableContext } from './table-context'
+
+const tableRowVariants = cva('border-hairline border-b py-3 last:border-0', {
+    variants: {
+        variant: {
+            default: '',
+            bordered: 'px-4',
+        },
+    },
+    defaultVariants: {
+        variant: 'default',
+    },
+})
 
 export type SelectableProps = {
     id: string
@@ -29,13 +44,16 @@ const ZONE_BASE: Record<MobileZone, string> = {
 }
 
 export function TableRow<T>({ row, columns, selectable, mobileZoneClasses }: TableRowProps<T>): ReactNode {
+    const { variant } = useTableContext()
+
     if (selectable) {
         const { id, checked, onToggle } = selectable
         return (
             <label
                 htmlFor={id}
                 className={cn(
-                    'flex cursor-pointer items-start gap-3 border-b border-hairline px-4 py-3 transition-colors last:border-0 hover:bg-surface-2 lg:items-center',
+                    tableRowVariants({ variant }),
+                    'flex cursor-pointer items-start gap-3 transition-colors hover:bg-surface-2 lg:items-center',
                     checked && 'bg-primary-soft/40',
                 )}
             >
@@ -50,7 +68,7 @@ export function TableRow<T>({ row, columns, selectable, mobileZoneClasses }: Tab
     }
 
     return (
-        <div className="border-b border-hairline px-4 py-3 last:border-0">
+        <div className={tableRowVariants({ variant })}>
             <div className="hidden items-center gap-4 lg:flex">
                 {columns.map((col) => (
                     <div key={col.key} className={col.className}>

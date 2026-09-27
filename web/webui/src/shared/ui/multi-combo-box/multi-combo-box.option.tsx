@@ -15,9 +15,9 @@ export const MultiComboBoxOption: FC<MultiComboBoxOptionProps> = ({ item }) => (
         <span className="flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border-[1.5px] border-hairline-strong text-on-primary transition-colors group-data-selected/combobox-item:border-transparent group-data-selected/combobox-item:bg-primary">
             <Check className="size-3 opacity-0 group-data-selected/combobox-item:opacity-100" />
         </span>
-        <span className="flex-1 truncate text-md font-medium text-ink">{item.label}</span>
+        <span className="flex-1 truncate font-medium text-ink text-md">{item.label}</span>
         {item.aside !== undefined && (
-            <span className="shrink-0 font-mono text-sm text-ink-tertiary tabular-nums">{item.aside}</span>
+            <span className="shrink-0 font-mono text-ink-tertiary text-sm tabular-nums">{item.aside}</span>
         )}
     </ComboboxItem>
 )

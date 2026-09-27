@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 
 import { SiGithub as Github } from '@icons-pack/react-simple-icons'
-import { BookOpen, ChevronsLeft, ExternalLink, Trash2 } from 'lucide-react'
+import { BookOpen, ChevronsLeft, ExternalLink } from 'lucide-react'
 
 import { Badge } from '@/shared/ui/badge'
 import {
@@ -48,20 +48,14 @@ export const AppSidebar: FC = () => {
                     <AppSidebarMenu />
                 </SidebarMenu>
 
-                <div className="flex lg:hidden flex-col gap-4 pt-4">
-                    <h3 className="text-ink-tertiary font-semibold text-sm uppercase">Connection</h3>
+                <div className="flex flex-col gap-4 pt-4 lg:hidden">
+                    <h3 className="font-semibold text-ink-tertiary text-sm uppercase">Connection</h3>
                     <ConnectionInfo />
                 </div>
             </SidebarContent>
 
             <SidebarFooter>
                 <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton tooltip="Clear data">
-                            <Trash2 />
-                            <span>Clear data</span>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
                     <AppSidebarTheme />
                 </SidebarMenu>
                 <SidebarSeparator />
@@ -72,7 +66,7 @@ export const AppSidebar: FC = () => {
                                 <Github />
                                 <span>
                                     Github
-                                    <ExternalLink className="ml-2 mb-0.5 inline-block size-3.5 text-ink-tertiary" />
+                                    <ExternalLink className="mb-0.5 ml-2 inline-block size-3.5 text-ink-tertiary" />
                                 </span>
                             </a>
                         </SidebarMenuButton>
@@ -83,7 +77,7 @@ export const AppSidebar: FC = () => {
                                 <BookOpen />
                                 <span>
                                     Documentation
-                                    <ExternalLink className="ml-2 mb-0.5 inline-block size-3.5 text-ink-tertiary" />
+                                    <ExternalLink className="mb-0.5 ml-2 inline-block size-3.5 text-ink-tertiary" />
                                 </span>
                             </a>
                         </SidebarMenuButton>

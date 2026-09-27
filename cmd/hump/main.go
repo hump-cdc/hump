@@ -6,15 +6,26 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	cfg "hump/config"
 	sinkcfg "hump/config/sink"
+	liveStreamerAdapter "hump/internal/adapter/live_streamer"
+	metricsCollectorAdapter "hump/internal/adapter/metrics_collector"
+	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
-	getConfigFeature "hump/internal/application/get_config"
-	processOperationFeature "hump/internal/application/process_operation"
+	processOperationFeature "hump/internal/application/processing/process_operation"
+	getWebuiConfigFeature "hump/internal/application/webui/get_webui_config"
+	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
+	getWebUIOperationsFeature "hump/internal/application/webui/get_webui_operations"
+	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
 	"hump/internal/controller"
+	"hump/internal/domain"
 	databasePort "hump/internal/port/database"
+	livestreamPort "hump/internal/port/live_stream"
+	metricsCollectorPort "hump/internal/port/metrics_collector"
+	operationsCollectorPort "hump/internal/port/operations_collector"
 	sinkPort "hump/internal/port/sink"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
@@ -56,12 +67,31 @@ func main() {
 		os.Exit(1)
 		return
 	}
-	metrics, metricHandler := metric.New("hump")
+	metrics, metricHandler, metricGatherer := metric.New("hump")
 
 	// Adapters
-	pg := postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
-	var db databasePort.Database = pg
+	var db databasePort.Database = postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
 	var sink sinkPort.Sink = sinkAdapter.New()
+	var collector metricsCollectorPort.Collector
+	if opts.TelemetryPort != nil {
+		collector = metricsCollectorAdapter.New(metricGatherer,
+			metricsCollectorAdapter.WithTopology(topology(configuration)))
+	}
+
+	// The operations log only serves the web UI, and it stays idle, holding no
+	// buffer at all, until a client connects. The live streamer wraps it, so the
+	// pipeline keeps writing to one collector while the SSE stream reads the
+	// same deliveries off the wrapper.
+	var operations operationsCollectorPort.Collector
+	var live livestreamPort.Streamer
+	if opts.WebPort != nil {
+		streamer := liveStreamerAdapter.New(
+			operationsCollectorAdapter.New(),
+			liveStreamerAdapter.WithInterval(500*time.Millisecond),
+			liveStreamerAdapter.WithScraper(collector),
+		)
+		operations, live = streamer, streamer
+	}
 
 	// Application
 	if !opts.Cleanup {
@@ -92,7 +122,10 @@ func main() {
 				// Web UI
 				func(ctx context.Context) error {
 					server := controller.NewWebUIController(
-						getConfigFeature.NewController(opts, configuration, db),
+						getWebuiConfigFeature.NewController(opts, configuration, db),
+						getWebUIMetricsFeature.NewController(collector),
+						getWebUIOperationsFeature.NewController(operations),
+						streamWebuiUpdatesFeature.NewController(collector, operations, live),
 					)
 					return server.Serve(ctx, *opts.WebPort)
 				})
@@ -101,7 +134,7 @@ func main() {
 		// WAL
 		r.Run(
 			func(ctx context.Context) error {
-				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics)
+				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics, collector, operations)
 				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
 
 				return controller.Listen(ctx)
@@ -135,4 +168,28 @@ func formatSinks(sinks []sinkcfg.Config) string {
 		parts = append(parts, s.Sink.DisplayName())
 	}
 	return strings.Join(parts, ", ")
+}
+
+// topology resolves every table-to-sink-target edge of configuration, rendering
+// host and target the way the bindings do, so both match the metric labels.
+func topology(configuration cfg.Configuration) []metricsCollectorPort.Connection {
+	conns := make([]metricsCollectorPort.Connection, 0, len(configuration.Tables))
+
+	for _, table := range configuration.ResolveAll() {
+		for _, sc := range table.Sinks {
+			if sc.Sink == nil {
+				continue
+			}
+
+			host, target := sc.Sink.Metadata(sinkPort.SinkContext{Schema: table.Schema, Table: table.Name})
+			conns = append(conns, metricsCollectorPort.Connection{
+				Table:    domain.TableIdentifier{Schema: table.Schema, Name: table.Name},
+				SinkType: string(sc.Sink.Type()),
+				Host:     host,
+				Target:   target,
+			})
+		}
+	}
+
+	return conns
 }

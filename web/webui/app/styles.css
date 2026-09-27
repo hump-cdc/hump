@@ -26,8 +26,10 @@
   --base-black: #010102;
 
   /* neutral ramp (light → dark) */
+  --base-neutral-10:  #fbfbfc;
   --base-neutral-25:  #f7f8f9;
   --base-neutral-50:  #f7f8f8;
+  --base-neutral-75:  #f3f4f6;
   --base-neutral-100: #eef0f2;
   --base-neutral-150: #e7e9ec;
   --base-neutral-175: #e6e8eb;
@@ -79,7 +81,8 @@
 
 /* ── Tier 2: semantic tokens — light (base, no class) ── */
 :root {
-  --canvas:          var(--base-white);
+  --canvas:          var(--base-neutral-10);
+  --sidebar:         var(--base-neutral-75);
   --surface-1:       var(--base-neutral-25);
   --surface-2:       var(--base-neutral-100);
   --surface-3:       var(--base-neutral-150);
@@ -116,6 +119,7 @@
 /* ── Tier 2: semantic tokens — dark overrides (re-point to other base tokens) ── */
 .dark {
   --canvas:          var(--base-black);
+  --sidebar:         var(--base-neutral-950);
   --surface-1:       var(--base-neutral-900);
   --surface-2:       var(--base-neutral-875);
   --surface-3:       var(--base-neutral-850);
@@ -200,6 +204,7 @@
   --color-black: var(--base-black);
 
   --color-canvas:          var(--canvas);
+  --color-sidebar:         var(--sidebar);
   --color-surface-1:       var(--surface-1);
   --color-surface-2:       var(--surface-2);
   --color-surface-3:       var(--surface-3);

@@ -24,7 +24,7 @@ export type TableNodeData = {
 type TableNodeModel = Node<TableNodeData, 'table'>
 
 const tableNodeVariants = cva(
-    'flex w-70 flex-col gap-2.5 rounded-xl border bg-surface-2 px-4 py-2.5 shadow-lg transition',
+    'flex w-70 flex-col gap-2.5 rounded-xl border bg-surface-1 px-4 py-2.5 shadow-lg transition',
     {
         variants: {
             selected: {

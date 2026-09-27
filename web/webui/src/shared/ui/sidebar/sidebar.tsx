@@ -22,7 +22,7 @@ export const Sidebar: FC<SidebarProps> = ({ side = 'left', className, children, 
                     data-mobile="true"
                     side={side}
                     showCloseButton={false}
-                    className="w-(--sidebar-width) select-none bg-canvas p-0 text-ink"
+                    className="w-(--sidebar-width) select-none bg-sidebar p-0 text-ink"
                     style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as CSSProperties}
                 >
                     <SheetHeader className="sr-only">
@@ -61,7 +61,7 @@ export const Sidebar: FC<SidebarProps> = ({ side = 'left', className, children, 
                 )}
                 {...props}
             >
-                <div data-slot="sidebar-inner" className="flex h-full w-full flex-col bg-canvas">
+                <div data-slot="sidebar-inner" className="flex h-full w-full flex-col bg-sidebar">
                     {children}
                 </div>
                 <SidebarRail />

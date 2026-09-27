@@ -64,6 +64,7 @@ export const OperationsFilter: FC = () => {
         <div className="@container flex w-full flex-col gap-2">
             <div className="flex w-full @3xl:flex-row flex-col gap-2">
                 <MultiComboBox
+                    clearToAll
                     items={tableItems}
                     value={tables ?? allValues(tableItems)}
                     onValueChange={(value) => setTables(orAll(value, tableItems))}
@@ -73,6 +74,7 @@ export const OperationsFilter: FC = () => {
                     className="@3xl:w-1/3 w-full"
                 />
                 <MultiComboBox
+                    clearToAll
                     items={sinkItems}
                     value={sinks ?? allValues(sinkItems)}
                     onValueChange={(value) => setSinks(orAll(value, sinkItems))}
@@ -82,6 +84,7 @@ export const OperationsFilter: FC = () => {
                     className="@3xl:w-1/3 w-full"
                 />
                 <MultiComboBox
+                    clearToAll
                     items={targetItems}
                     value={targets ?? allValues(targetItems)}
                     onValueChange={(value) => setTargets(orAll(value, targetItems))}
@@ -94,6 +97,7 @@ export const OperationsFilter: FC = () => {
 
             <div className="flex w-full @3xl:flex-row flex-col gap-2">
                 <MultiComboBox
+                    clearToAll
                     items={operationItems}
                     value={operations}
                     onValueChange={setOperations}
@@ -103,6 +107,7 @@ export const OperationsFilter: FC = () => {
                     className="@3xl:w-92 w-full"
                 />
                 <MultiComboBox
+                    clearToAll
                     items={statusItems}
                     value={statuses}
                     onValueChange={setStatuses}

@@ -31,6 +31,8 @@ type MultiComboBoxProps = {
     hint?: ReactNode
     invalid?: boolean
     disabled?: boolean
+    /** Makes the clear button select every item instead of none, for a filter where "All" is the reset state. */
+    clearToAll?: boolean
     className?: string
     ref?: Ref<HTMLDivElement>
 }
@@ -45,12 +47,15 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
     hint,
     invalid,
     disabled,
+    clearToAll,
     className,
     ref,
 }) => {
     const { selectedItems, commit } = useMultiComboBoxSelection(items, value, onValueChange)
     const { anchor, setChipsRef } = useChipsRef(ref)
     const { containerRef, measureRef, visibleCount } = useChipOverflow(selectedItems.length)
+    const isAllSelected = items.length > 0 && selectedItems.length === items.length
+    const canClear = clearToAll ? !isAllSelected : selectedItems.length > 0
 
     return (
         <Combobox
@@ -58,7 +63,9 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
             autoHighlight
             items={items}
             value={selectedItems}
-            onValueChange={commit}
+            onValueChange={(next: MultiComboBoxItem[], details) =>
+                commit(clearToAll && details.reason === 'clear-press' ? items : next)
+            }
             itemToStringLabel={(item: MultiComboBoxItem) => item.label}
             isItemEqualToValue={(a: MultiComboBoxItem, b: MultiComboBoxItem) => a.value === b.value}
             disabled={disabled}
@@ -127,7 +134,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                     </ComboboxValue>
                 </div>
 
-                {selectedItems.length > 0 && <ComboboxClear disabled={disabled} />}
+                {canClear && <ComboboxClear keepMounted={clearToAll} disabled={disabled} />}
                 <ChevronsUpDown className="pointer-events-none size-4 shrink-0 text-ink-subtle" />
             </ComboboxChips>
 

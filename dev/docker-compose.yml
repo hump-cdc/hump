@@ -165,7 +165,7 @@ services:
                 $$RMQ declare binding --source hump.public --destination-type queue \
                   --destination hump.public.demo --routing-key '#'
 
-    # HTTP sink target: /submit1 → 200, /submit2 → 50/50 200/500, /submit3 → 500
+    # HTTP sink target: /submit1 → 200, /submit2 → 5/95 200/500 after 950ms, logs body, /submit3 → 500
     http-sink:
         image: openresty/openresty:alpine
         restart: unless-stopped

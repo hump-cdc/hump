@@ -53,6 +53,13 @@ type wal struct {
 	// the keepAlive ticker and spin the receive loop.
 	standbyInterval time.Duration
 
+	// processing is set while the receive loop is inside processMessage, the only
+	// time the keepalive worker writes to session; processingPosition is what it
+	// reports then. processingMu guards both and is held across a worker flush.
+	processingMu       sync.Mutex
+	processing         bool
+	processingPosition pglogrepl.LSN
+
 	// shutdownAt is when Start noticed a shutdown; zero when it ended otherwise.
 	shutdownAt time.Time
 
@@ -103,7 +110,8 @@ func newWal(
 // Start begins streaming from the configured slot at LSN 0 and blocks until
 // ctx is cancelled or a fatal protocol error occurs. Cancelling ctx stops the
 // receive only: a change already received is processed to the end on a
-// detached context. The WAL position is flushed on every standby tick and exit.
+// detached context. The WAL position is flushed on every standby tick, while a
+// change is processed, and on exit.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 	workCtx := context.WithoutCancel(ctx)
@@ -132,6 +140,9 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
 	w.inTransaction = false
+
+	stopKeepAlive := w.keepAlive(workCtx)
+	defer stopKeepAlive()
 
 	for {
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
@@ -207,7 +218,10 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			commitEnd, err := w.processMessage(workCtx, xld.WALData, xld.ServerTime, walPosition, handler)
+			w.beginProcessing(walPosition)
+			commitEnd, err := w.processMessage(workCtx, xld.WALData, xld.ServerTime, handler)
+			w.endProcessing()
+
 			if err == nil {
 				if commitEnd > walPosition {
 					walPosition = commitEnd
@@ -281,28 +295,22 @@ func (w *wal) fail(ctx context.Context, position pglogrepl.LSN, err error) error
 	return err
 }
 
-// resolveTable resolves table to the configured table that owns it. A lookup the
-// registry cannot answer goes to the database, which can block for a long time,
-// so the stream is kept alive for the duration.
-func (w *wal) resolveTable(ctx context.Context, table domain.TableIdentifier, position pglogrepl.LSN) (domain.TableIdentifier, error) {
+// resolveTable resolves table to the configured table that owns it, going to
+// the database only when the registry cannot answer.
+func (w *wal) resolveTable(ctx context.Context, table domain.TableIdentifier) (domain.TableIdentifier, error) {
 	ref, err := w.introspector.ResolveKnownTableConfiguration(table)
 	if !errors.Is(err, errIntrospectionRequired) {
 		return ref, err
 	}
 
-	stop := w.keepAlive(ctx, position)
-	defer stop()
-
 	return w.introspector.ResolveTableConfiguration(ctx, table)
 }
 
-// keepAlive sends standby status updates for position every standbyInterval
-// until the returned stop is called, which waits for the sender to finish. It
-// exists so a blocking introspection — catalog round trips, connection retries,
-// an ALTER waiting on AccessExclusiveLock — cannot let the upstream walsender
-// time the session out. Its caller is parked inside the introspector and touches
-// w.session nowhere else, so the socket keeps a single writer throughout.
-func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func()) {
+// keepAlive starts the worker that sends a standby status update every
+// standbyInterval while a message is being processed, so a slow sink or a
+// blocking introspection cannot let the upstream walsender time the session
+// out. The returned stop waits for the worker to exit.
+func (w *wal) keepAlive(ctx context.Context) (stop func()) {
 	done := make(chan struct{})
 	finished := make(chan struct{})
 
@@ -317,9 +325,13 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 			case <-done:
 				return
 			case <-ticker.C:
-				// A failure here already marks the sender unhealthy; the receive
-				// loop reports it once it regains control.
-				_ = w.flush(ctx, position)
+				w.processingMu.Lock()
+				if w.processing {
+					// A failure here already marks the sender unhealthy; the receive
+					// loop reports it once it regains control.
+					_ = w.flush(ctx, w.processingPosition)
+				}
+				w.processingMu.Unlock()
 			}
 		}
 	}()
@@ -330,11 +342,30 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 	}
 }
 
+// beginProcessing hands session to the keepalive worker, which reports position
+// until endProcessing takes it back.
+func (w *wal) beginProcessing(position pglogrepl.LSN) {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	w.processing = true
+	w.processingPosition = position
+}
+
+// endProcessing takes session back from the keepalive worker, waiting out a
+// flush it has in flight, so the receive loop stays its only user.
+func (w *wal) endProcessing() {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	w.processing = false
+}
+
 // processMessage parses a single pgoutput v2 message and dispatches it: a
 // relation updates the cache, a transactional logical message is buffered as
 // context, a row change is decoded and forwarded to handler, and a commit drops
 // the buffer and returns the transaction's end LSN; any other message returns 0.
-func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
+func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
 	if len(walData) == 0 {
 		return 0, errEmptyWalRecord
 	}
@@ -370,7 +401,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			relationID:    message.RelationID,
 			prevTupleType: pglogrepl.UpdateMessageTupleTypeNone,
 			nextTuple:     message.Tuple,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.UpdateMessageV2:
 		return 0, w.processRow(ctx, rowChange{
@@ -379,7 +410,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
 			nextTuple:     message.NewTuple,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.DeleteMessageV2:
 		return 0, w.processRow(ctx, rowChange{
@@ -387,7 +418,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.TruncateMessageV2:
 		resultErrs := make([]error, 0, len(message.RelationIDs))
@@ -400,7 +431,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			}
 
 			table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-			ref, err := w.resolveTable(ctx, table, position)
+			ref, err := w.resolveTable(ctx, table)
 			if errors.Is(err, ErrTableIgnored) {
 				continue
 			}
@@ -442,7 +473,7 @@ type rowChange struct {
 
 // processRow resolves the relation behind change, decodes its tuples and
 // forwards the result to handler, recording the time the whole path took.
-func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.Time, handler database.ProcessMessageHandler) error {
 	start := time.Now()
 
 	relation, ok := w.relations[change.relationID]
@@ -451,7 +482,7 @@ func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.T
 	}
 
 	table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-	ref, err := w.resolveTable(ctx, table, position)
+	ref, err := w.resolveTable(ctx, table)
 	if errors.Is(err, ErrTableIgnored) {
 		return nil
 	}

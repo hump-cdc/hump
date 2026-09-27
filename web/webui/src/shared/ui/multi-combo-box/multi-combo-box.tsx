@@ -13,6 +13,7 @@ import {
     ComboboxList,
     ComboboxValue,
 } from '@/shared/ui/combobox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 import { MultiComboBoxFooter } from './multi-combo-box.footer'
 import { useChipOverflow, useChipsRef, useMultiComboBoxSelection } from './multi-combo-box.helpers'
@@ -26,6 +27,8 @@ type MultiComboBoxProps = {
     placeholder?: string
     emptyText?: string
     icon?: ReactNode
+    /** Tooltip shown on hovering the icon; ignored without `icon`. */
+    hint?: ReactNode
     invalid?: boolean
     disabled?: boolean
     className?: string
@@ -39,6 +42,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
     placeholder,
     emptyText = 'No items found.',
     icon,
+    hint,
     invalid,
     disabled,
     className,
@@ -60,7 +64,19 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
             disabled={disabled}
         >
             <ComboboxChips ref={setChipsRef} aria-invalid={invalid || undefined} className={className}>
-                {icon && <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">{icon}</span>}
+                {icon &&
+                    (hint ? (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">
+                                    {icon}
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56 text-pretty">{hint}</TooltipContent>
+                        </Tooltip>
+                    ) : (
+                        <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">{icon}</span>
+                    ))}
 
                 <div ref={containerRef} className="relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                     {/* Invisible measurement row: all chips at natural width, read by useChipOverflow. */}

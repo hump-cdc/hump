@@ -5,7 +5,7 @@ import type { OperationsFilterKey } from '@/shared/state'
 /** Filter store fields the request is built from. */
 export type OperationsFilterInput = Pick<
     OperationsFilterState,
-    'sinks' | 'tables' | 'operations' | 'statuses' | 'sinksHydrated' | 'tablesHydrated'
+    'sinks' | 'targets' | 'tables' | 'operations' | 'statuses'
 >
 
 /** API status of each filter status value. */
@@ -16,21 +16,22 @@ const API_STATUSES: Record<string, 'success' | 'failure'> = {
 
 /**
  * Request filter for the store's state, or `undefined` when an empty facet
- * matches nothing. A facet that allows everything is left out, as is a sink or
- * table facet not yet seeded from config; lists are sorted so query keys stay stable.
+ * matches nothing. A facet that allows everything is left out; lists are sorted so query keys stay stable.
  */
 export const toOperationsFilter = (state: OperationsFilterInput, text: string): OperationsFilterKey | undefined => {
-    const isSinkFacetEmpty = state.sinksHydrated && state.sinks.length === 0
-    const isTableFacetEmpty = state.tablesHydrated && state.tables.length === 0
-    if (isSinkFacetEmpty || isTableFacetEmpty || state.operations.length === 0 || state.statuses.length === 0) {
+    const facets = [state.sinks, state.targets, state.tables, state.operations, state.statuses]
+    if (facets.some((facet) => facet?.length === 0)) {
         return undefined
     }
 
     const filter: OperationsFilterKey = {}
-    if (state.sinksHydrated) {
+    if (state.sinks) {
         filter.sinks = sorted(state.sinks)
     }
-    if (state.tablesHydrated) {
+    if (state.targets) {
+        filter.targets = sorted(state.targets)
+    }
+    if (state.tables) {
         filter.tables = sorted(state.tables)
     }
     if (!coversAll(state.operations, operationItems)) {

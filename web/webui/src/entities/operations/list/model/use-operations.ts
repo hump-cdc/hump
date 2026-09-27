@@ -90,11 +90,10 @@ const useRequestFilter = (): OperationsFilterKey | undefined => {
     const state = useOperationsFilter(
         useShallow((store) => ({
             sinks: store.sinks,
+            targets: store.targets,
             tables: store.tables,
             operations: store.operations,
             statuses: store.statuses,
-            sinksHydrated: store.sinksHydrated,
-            tablesHydrated: store.tablesHydrated,
         })),
     )
     const search = useOperationsFilter((store) => store.search)

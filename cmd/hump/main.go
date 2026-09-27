@@ -73,7 +73,7 @@ func main() {
 	var db databasePort.Database = postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
 	var sink sinkPort.Sink = sinkAdapter.New()
 	var collector metricsCollectorPort.Collector
-	if opts.TelemetryPort != nil {
+	if opts.WebPort != nil {
 		collector = metricsCollectorAdapter.New(metricGatherer,
 			metricsCollectorAdapter.WithTopology(topology(configuration)))
 	}

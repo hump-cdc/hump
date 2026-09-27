@@ -248,7 +248,12 @@ func TestCollectorScrapeIgnoredWhileIdle(t *testing.T) {
 	c := New(g, WithInterval(time.Hour), WithIdleTimeout(time.Hour), WithDebounce(0))
 	t.Cleanup(c.close)
 
-	c.Scrape()
+	select {
+	case <-c.Scrape():
+	default:
+		t.Fatal("Scrape while idle answered an open channel")
+	}
+
 	time.Sleep(30 * time.Millisecond)
 
 	if g.calls.Load() != 0 {
@@ -309,6 +314,83 @@ func TestCollectorTickServesDeferredScrape(t *testing.T) {
 
 	if g.calls.Load() != 2 {
 		t.Fatalf("gathered %d times, want 2", g.calls.Load())
+	}
+}
+
+func TestCollectorScrapeClosesAfterTheTick(t *testing.T) {
+	g := &countingGatherer{metrics: newTestMetrics()}
+	c := New(g, WithInterval(time.Hour), WithIdleTimeout(time.Hour), WithDebounce(50*time.Millisecond))
+	t.Cleanup(c.close)
+
+	c.Connect()
+	waitFor(t, func() bool { return g.calls.Load() == 1 })
+
+	scraped := c.Scrape()
+	select {
+	case <-scraped:
+		t.Fatal("Scrape closed before the deferred tick")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	waitClosed(t, scraped)
+
+	if g.calls.Load() != 2 {
+		t.Fatalf("gathered %d times when Scrape closed, want 2", g.calls.Load())
+	}
+}
+
+func TestCollectorScrapeBurstSharesOneTick(t *testing.T) {
+	g := &countingGatherer{metrics: newTestMetrics()}
+	c := New(g, WithInterval(time.Hour), WithIdleTimeout(time.Hour), WithDebounce(50*time.Millisecond))
+	t.Cleanup(c.close)
+
+	c.Connect()
+	waitFor(t, func() bool { return g.calls.Load() == 1 })
+
+	first := c.Scrape()
+	for range 4 {
+		if c.Scrape() != first {
+			t.Fatal("a Scrape within the burst answered a different channel")
+		}
+	}
+
+	waitClosed(t, first)
+
+	if g.calls.Load() != 2 {
+		t.Fatalf("gathered %d times for the burst, want 2", g.calls.Load())
+	}
+
+	if c.Scrape() == first {
+		t.Fatal("a Scrape after the tick answered the channel it already closed")
+	}
+}
+
+func TestCollectorScrapeClosesOnFailedGather(t *testing.T) {
+	g := &countingGatherer{metrics: newTestMetrics(), err: errors.New("gather failed")}
+	c := New(g, WithInterval(time.Hour), WithIdleTimeout(time.Hour), WithDebounce(0))
+	t.Cleanup(c.close)
+
+	c.Connect()
+	waitFor(t, func() bool { return g.calls.Load() == 1 })
+
+	waitClosed(t, c.Scrape())
+}
+
+func TestCollectorScrapeClosesOnStop(t *testing.T) {
+	g := &countingGatherer{metrics: newTestMetrics()}
+	c := New(g, WithInterval(time.Hour), WithIdleTimeout(10*time.Millisecond), WithDebounce(time.Hour))
+	t.Cleanup(c.close)
+
+	c.Connect()
+	waitFor(t, func() bool { return g.calls.Load() == 1 })
+
+	scraped := c.Scrape()
+	c.Disconnect()
+
+	waitClosed(t, scraped)
+
+	if g.calls.Load() != 1 {
+		t.Fatalf("gathered %d times, want the deferred scrape dropped by stop", g.calls.Load())
 	}
 }
 
@@ -396,5 +478,16 @@ func waitFor(t *testing.T, cond func() bool) {
 			t.Fatal("condition not met in time")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// waitClosed waits for ch to close, failing t after a second.
+func waitClosed(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatal("the channel was not closed within a second")
 	}
 }

@@ -155,6 +155,92 @@ func TestStreamerScrapesTheMetricsBeforeAWindowGoesOut(t *testing.T) {
 	}
 }
 
+func TestStreamerHoldsAWindowUntilTheScrapeCompletes(t *testing.T) {
+	scraper := &fakeScraper{scraped: make(chan struct{})}
+	s := newTestStreamer(t, &fakeCollector{}, WithScraper(scraper))
+
+	_, batches := s.Subscribe()
+	write(s, "a")
+	waitForScrapes(t, scraper, 1)
+
+	select {
+	case <-batches:
+		t.Fatal("a batch arrived before the scrape completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(scraper.scraped)
+
+	if got := targets(receive(t, batches)); !equal(got, []string{"a"}) {
+		t.Fatalf("batch = %v, want [a]", got)
+	}
+}
+
+func TestStreamerSendsDeliveriesDuringAScrapeAsTheNextWindow(t *testing.T) {
+	scraper := &fakeScraper{scraped: make(chan struct{})}
+	s := newTestStreamer(t, &fakeCollector{}, WithScraper(scraper))
+
+	_, batches := s.Subscribe()
+	write(s, "a")
+	waitForScrapes(t, scraper, 1)
+	write(s, "b")
+	write(s, "c")
+
+	select {
+	case <-batches:
+		t.Fatal("a batch arrived before the scrape completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	if got := scraper.calls.Load(); got != 1 {
+		t.Fatalf("Scrape was called %d times while one was pending, want 1", got)
+	}
+
+	close(scraper.scraped)
+
+	if got := targets(receive(t, batches)); !equal(got, []string{"a"}) {
+		t.Fatalf("first batch = %v, want [a]", got)
+	}
+	if got := targets(receive(t, batches)); !equal(got, []string{"b", "c"}) {
+		t.Fatalf("second batch = %v, want [b c]", got)
+	}
+}
+
+func TestStreamerDropsAWindowWhoseSubscribersLeftDuringAScrape(t *testing.T) {
+	scraper := &fakeScraper{scraped: make(chan struct{})}
+	s := newTestStreamer(t, &fakeCollector{}, WithScraper(scraper))
+
+	id, _ := s.Subscribe()
+	write(s, "a")
+	waitForScrapes(t, scraper, 1)
+	s.Unsubscribe(id)
+
+	_, batches := s.Subscribe()
+	close(scraper.scraped)
+
+	select {
+	case batch := <-batches:
+		t.Fatalf("got %v, want the dropped window to stay dropped", targets(batch))
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestStreamerCloseReleasesAFlushWaitingOnAScrape(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	scraper := &fakeScraper{scraped: make(chan struct{})}
+	s := newTestStreamer(t, &fakeCollector{}, WithScraper(scraper))
+
+	_, batches := s.Subscribe()
+	write(s, "a")
+	waitForScrapes(t, scraper, 1)
+	s.close()
+
+	if batch, ok := <-batches; ok {
+		t.Fatalf("got %v after close, want a closed channel", targets(batch))
+	}
+}
+
 func TestStreamerLastUnsubscribeDropsTheOpenWindow(t *testing.T) {
 	s := newTestStreamer(t, &fakeCollector{})
 
@@ -364,12 +450,39 @@ func (c *fakeCollector) Search(q operationscollector.Query) operationscollector.
 	return c.page
 }
 
-// fakeScraper counts the out-of-schedule scrapes a closing window asks for.
+// fakeScraper counts the out-of-schedule scrapes a closing window asks for and
+// answers each with scraped, or with a closed channel when scraped is nil.
 type fakeScraper struct {
-	calls atomic.Int64
+	calls   atomic.Int64
+	scraped chan struct{}
 }
 
-func (s *fakeScraper) Scrape() { s.calls.Add(1) }
+func (s *fakeScraper) Scrape() <-chan struct{} {
+	s.calls.Add(1)
+
+	if s.scraped == nil {
+		ch := make(chan struct{})
+		close(ch)
+
+		return ch
+	}
+
+	return s.scraped
+}
+
+// waitForScrapes waits until scraper was asked for n scrapes, failing t after a second.
+func waitForScrapes(t *testing.T, scraper *fakeScraper, n int64) {
+	t.Helper()
+
+	deadline := time.Now().Add(time.Second)
+	for scraper.calls.Load() < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("Scrape was called %d times within a second, want %d", scraper.calls.Load(), n)
+		}
+
+		time.Sleep(time.Millisecond)
+	}
+}
 
 // newTestStreamer returns a streamer with a short window that is closed when the
 // test ends, bypassing the global shutdown hook New registers.

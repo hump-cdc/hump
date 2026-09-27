@@ -77,26 +77,26 @@ sinks:
               max: 50ms
     - name: slow-http
       http:
-          url: "http://localhost:5050/submit2?schema={{.Schema}}&table={{.Table}}"
+          url: "http://localhost:5050/submit4?schema={{.Schema}}&table={{.Table}}"
           method: "POST"
       failure: skip
       retry:
           maxAttempts: 50
-          attemptTimeout: 5000ms
+          attemptTimeout: 35000ms
           backoff:
               max: 1500ms
 
 tables:
-    # - tables:
-    #       - schema: public
-    #         table: users
-    #   sinks:
-    #       # - preset: http1
-    #       - preset: kafka1
-    #       # - preset: nats-core
-    #       # - preset: nats-jetstream
-    #       # - preset: rabbitmq1
-    #       # - preset: rabbitmq-stream
+    - tables:
+          - schema: public
+            table: users
+      sinks:
+          # - preset: http1
+          - preset: kafka1
+          # - preset: nats-core
+          # - preset: nats-jetstream
+          # - preset: rabbitmq1
+          # - preset: rabbitmq-stream
     - tables:
           - schema: public
             table: posts
@@ -104,14 +104,12 @@ tables:
             table: comments
           - schema: public
             table: events
-          - schema: public
-            table: users
       sinks:
-          - preset: slow-http
+          # - preset: slow-http
           # - preset: http1
-          # - preset: kafka1
+          - preset: kafka1
           # - preset: nats-core
-          # - preset: nats-jetstream
+          - preset: nats-jetstream
           # - preset: rabbitmq1
           # - preset: rabbitmq-stream
     # - table: events

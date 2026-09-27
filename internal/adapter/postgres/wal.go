@@ -16,6 +16,7 @@ import (
 
 	"hump/internal/domain"
 	"hump/internal/port/database"
+	"hump/pkg/app/shutdown"
 )
 
 // wal owns a single logical replication session: the dedicated pgconn used to
@@ -108,10 +109,11 @@ func newWal(
 }
 
 // Start begins streaming from the configured slot at LSN 0 and blocks until
-// ctx is cancelled or a fatal protocol error occurs. Cancelling ctx stops the
-// receive only: a change already received is processed to the end on a
-// detached context. The WAL position is flushed on every standby tick, while a
-// change is processed, and on exit.
+// ctx is cancelled or a fatal protocol error occurs. Cancelling ctx between
+// transactions stops at once; inside one, the rest of it is received and
+// processed on a detached context so its commit can be confirmed. The WAL
+// position is flushed on every standby tick, while a change is processed, and
+// on exit.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 	workCtx := context.WithoutCancel(ctx)
@@ -130,11 +132,21 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	standbyCtx, cancelStandby := context.WithTimeout(ctx, w.standbyInterval)
 	defer func() { cancelStandby() }()
 
+	// draining is set once ctx is cancelled inside a transaction: receive windows
+	// then open on workCtx until its commit arrives.
+	draining := false
+
 	// resetStandby cancels the previous receive context and opens the next window.
 	// It stays a closure so vet's lostcancel sees one defended assignment.
 	resetStandby := func() {
 		cancelStandby()
-		standbyCtx, cancelStandby = context.WithTimeout(ctx, w.standbyInterval)
+
+		parent := ctx
+		if draining {
+			parent = workCtx
+		}
+
+		standbyCtx, cancelStandby = context.WithTimeout(parent, w.standbyInterval)
 	}
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
@@ -144,16 +156,28 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	stopKeepAlive := w.keepAlive(workCtx)
 	defer stopKeepAlive()
 
+	shutdown.OnShutdown(shutdown.StageWorkers, "wal_position", w.onShutdown)
+
 	for {
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
 
 		if err != nil {
+			// A cancelled ctx means "take no new work", and the rest of an open
+			// transaction is not new: its commit, confirmed on exit, is what keeps
+			// the rows already delivered from being replayed after a restart.
+			if !draining && w.inTransaction && ctx.Err() != nil {
+				draining = true
+				resetStandby()
+
+				continue
+			}
+
 			// The receive deadline is the standby tick, so a timeout is the send
 			// window closing, not a broken stream. A finished ctx surfaces either way —
 			// pgx reports a cancelled one as a bare context.Canceled and an expired
 			// deadline as a timeout — and fail tells the two apart from the real faults.
 			if pgconn.Timeout(err) {
-				if ctxErr := ctx.Err(); ctxErr != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil && !draining {
 					return w.fail(ctx, walPosition, ctxErr)
 				}
 
@@ -230,6 +254,10 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, database.ErrWal))
 				return w.fail(ctx, walPosition, err)
 			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil && !w.inTransaction {
+				return w.fail(ctx, walPosition, ctxErr)
+			}
 		}
 	}
 
@@ -269,6 +297,20 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 	}
 
 	return err
+}
+
+// onShutdown confirms the last processed position when shutdown finds a change
+// still in flight, as after a drain timeout: Start never flushes on its way out
+// then, since the process exits first. Otherwise Start has flushed already.
+func (w *wal) onShutdown(ctx context.Context) error {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	if !w.processing {
+		return nil
+	}
+
+	return w.flush(ctx, w.processingPosition)
 }
 
 // fail flushes position back to the server on a best-effort basis, marks the

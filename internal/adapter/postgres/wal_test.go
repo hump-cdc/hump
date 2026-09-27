@@ -199,6 +199,89 @@ func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
 	}
 }
 
+func TestStartConfirmsInFlightTransactionOnShutdown(t *testing.T) {
+	server := usersServer(t)
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-release
+
+		return nil
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+
+	<-entered
+	cancel()
+	close(release)
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() error = %v, want context.Canceled", err)
+	}
+
+	if errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error = %v, want a shutdown rather than a WAL failure", err)
+	}
+
+	if failures := health.failures(); len(failures) != 0 {
+		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
+	}
+
+	server.waitForStandbyPosition(t, 0x180)
+}
+
+func TestStartDoesNotConfirmTransactionWhenHandlerFailsOnShutdown(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wantErr := errors.New("sink unavailable")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-release
+
+		return wantErr
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+
+	<-entered
+	cancel()
+	close(release)
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Start() error = %v, want %v", err, wantErr)
+	}
+
+	for _, update := range server.waitForStandbyUpdates(t, 1) {
+		if update.WALWritePosition >= 0x180 {
+			t.Errorf("standby update reports %s, want below %s: a transaction with a failed change must not be confirmed", update.WALWritePosition, pglogrepl.LSN(0x180))
+		}
+	}
+}
+
 func TestStartKeepsWaitingAfterReceiveTimeout(t *testing.T) {
 	server := usersServer(t)
 	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
@@ -972,6 +1055,56 @@ func TestStartKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
 
 	if got := len(recorder.recorded()); got != 1 {
 		t.Errorf("handler called %d times, want 1", got)
+	}
+}
+
+func TestOnShutdownConfirmsPositionOfInFlightChange(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
+	released := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-released
+
+		return nil
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(keepalive(0x100, true))
+	server.waitForStandbyPosition(t, 0x100)
+
+	server.stream(xLogData(0x200, 0x1000, beginMessage()))
+	server.stream(xLogData(0x200, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x200, 0x1000, insertMessage(1, textColumn("7"))))
+	<-entered
+
+	before := len(server.standbyUpdates())
+	if err := w.onShutdown(context.Background()); err != nil {
+		t.Fatalf("onShutdown() error = %v", err)
+	}
+
+	updates := server.waitForStandbyUpdates(t, before+1)
+	if got := updates[before].WALWritePosition; got != 0x100 {
+		t.Errorf("standby update position = %s, want the last confirmed %s", got, pglogrepl.LSN(0x100))
+	}
+
+	close(released)
+	server.stream(xLogData(0x250, 0x1000, commitMessage(0x280)))
+	cancel()
+	awaitStart(t, errs)
+}
+
+func TestOnShutdownLeavesIdleSessionAlone(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+
+	if err := w.onShutdown(context.Background()); err != nil {
+		t.Fatalf("onShutdown() error = %v", err)
 	}
 }
 

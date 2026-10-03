@@ -160,6 +160,66 @@ export type ErrorModelModel = {
     type?: string;
 };
 
+export type EstimateErrorEventModel = {
+    /**
+     * Why the table could not be counted: an invalid filter, a missing table or a failed query
+     */
+    error: string;
+    /**
+     * Schema of the table, as requested
+     */
+    schema: string;
+    /**
+     * Name of the table, as requested
+     */
+    table: string;
+};
+
+export type EstimateEventModel = {
+    /**
+     * Number of rows matching the filter
+     */
+    count: number;
+    /**
+     * Whether count is the planner's estimate rather than an exact count
+     */
+    rough: boolean;
+    /**
+     * Schema of the table, as requested
+     */
+    schema: string;
+    /**
+     * Name of the table, as requested
+     */
+    table: string;
+};
+
+export type EstimateTableModel = {
+    /**
+     * Schema of the table; empty resolves the table through search_path
+     */
+    schema?: string;
+    /**
+     * Name of the table
+     */
+    table: string;
+    /**
+     * Boolean expression the rows are filtered with, as it would follow WHERE; empty counts every row
+     */
+    where?: string;
+};
+
+export type EstimatesDoneEventModel = {
+    [key: string]: never;
+};
+
+export type EstimatesRequestBodyModel = {
+    /**
+     * Tables to estimate, each counted independently
+     */
+    tables: Array<EstimateTableModel> | null;
+};
+
 export type MetricsConnectionModel = {
     /**
      * Failed deliveries over the connection since start, retries excluded
@@ -526,6 +586,214 @@ export type OperationsResponseBodyModel = {
     written: number;
 };
 
+export type SnapshotColumnModel = {
+    /**
+     * Column name
+     */
+    name: string;
+    /**
+     * Whether the column accepts NULL
+     */
+    nullable: boolean;
+    /**
+     * Whether the column is part of the primary key
+     */
+    primaryKey: boolean;
+    /**
+     * Column type as PostgreSQL formats it, e.g. timestamp with time zone
+     */
+    type: string;
+};
+
+export type SnapshotDoneEventModel = {
+    /**
+     * When the snapshot finished, UTC
+     */
+    finishedAt: string;
+    /**
+     * When the snapshot started, UTC
+     */
+    startedAt: string;
+    /**
+     * Snapshot state
+     */
+    state: 'done';
+    /**
+     * Tables of the snapshot, in the order they were requested
+     */
+    tables: Array<SnapshotDoneTableModel> | null;
+};
+
+export type SnapshotDoneTableModel = {
+    /**
+     * Why the table was not read completely
+     */
+    error?: string;
+    /**
+     * Name of the table
+     */
+    name: string;
+    /**
+     * Rows read
+     */
+    rows: number;
+    /**
+     * Schema of the table
+     */
+    schema: string;
+    /**
+     * Sinks the table was delivered to
+     */
+    sinks: Array<SnapshotRunSinkModel> | null;
+    /**
+     * Whether the table was read completely
+     */
+    status: 'success' | 'error';
+};
+
+export type SnapshotIdleEventModel = {
+    /**
+     * Snapshot state
+     */
+    state: 'idle';
+};
+
+export type SnapshotProcessingEventModel = {
+    /**
+     * When the snapshot started, UTC
+     */
+    startedAt: string;
+    /**
+     * Snapshot state
+     */
+    state: 'processing';
+    /**
+     * Tables of the snapshot, in the order they were requested
+     */
+    tables: Array<SnapshotProcessingTableModel> | null;
+};
+
+export type SnapshotProcessingTableModel = {
+    /**
+     * Rows the snapshot expects to read
+     */
+    estimatedRows: number;
+    /**
+     * Name of the table
+     */
+    name: string;
+    /**
+     * Rows read so far
+     */
+    rows: number;
+    /**
+     * Schema of the table
+     */
+    schema: string;
+    /**
+     * Sinks the table is delivered to
+     */
+    sinks: Array<SnapshotRunSinkModel> | null;
+    /**
+     * Phase of the table: waiting for its turn, being read, or read
+     */
+    status: 'wait' | 'processing' | 'done';
+    /**
+     * Boolean expression the rows are filtered with, as it would follow WHERE; empty reads every row
+     */
+    where?: string;
+};
+
+export type SnapshotRunSinkModel = {
+    /**
+     * Rows delivered to the sink so far
+     */
+    count: number;
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Target the sink renders for the table: topic, subject, exchange, stream or URL
+     */
+    target: string;
+    /**
+     * Sink type the rows are delivered to
+     */
+    type: string;
+};
+
+export type SnapshotSinkModel = {
+    /**
+     * Connection host the sink URL renders to
+     */
+    host: string;
+    /**
+     * Target rendered for the table: topic, subject, exchange, stream or URL
+     */
+    target: string;
+    /**
+     * Sink type, e.g. kafka or nats
+     */
+    type: string;
+};
+
+export type SnapshotStartRequestBodyModel = {
+    /**
+     * Tables to snapshot
+     */
+    tables: Array<SnapshotStartTableModel> | null;
+};
+
+export type SnapshotStartTableModel = {
+    /**
+     * Schema of the table; empty resolves the table through search_path
+     */
+    schema?: string;
+    /**
+     * Name of the table
+     */
+    table: string;
+    /**
+     * Boolean expression the rows are filtered with, as it would follow WHERE; empty reads every row
+     */
+    where?: string;
+};
+
+export type SnapshotTableModel = {
+    /**
+     * Columns of the table, in table order
+     */
+    columns: Array<SnapshotColumnModel> | null;
+    /**
+     * Schema of the table
+     */
+    schema: string;
+    /**
+     * Sinks the table is delivered to, one entry per distinct sink and target
+     */
+    sinks: Array<SnapshotSinkModel> | null;
+    /**
+     * Name of the table
+     */
+    table: string;
+    /**
+     * How the table stores its rows
+     */
+    type: 'regular' | 'partitioned' | 'hypertable';
+    /**
+     * Suggested filter keeping recent rows, as it would follow WHERE; empty suggests none
+     */
+    where: string;
+};
+
+export type SnapshotTablesResponseBodyModel = {
+    /**
+     * Configured tables found in the database, in configuration order
+     */
+    tables: Array<SnapshotTableModel> | null;
+};
+
 export type WelcomeEventModel = {
     [key: string]: never;
 };
@@ -629,3 +897,126 @@ export type PostApiOperationsResponses = {
 };
 
 export type PostApiOperationsResponse = PostApiOperationsResponses[keyof PostApiOperationsResponses];
+
+export type GetApiSnapshotData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/snapshot';
+};
+
+export type GetApiSnapshotErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type GetApiSnapshotError = GetApiSnapshotErrors[keyof GetApiSnapshotErrors];
+
+export type GetApiSnapshotResponses = {
+    /**
+     * OK
+     */
+    200: SnapshotIdleEventModel | SnapshotProcessingEventModel | SnapshotDoneEventModel;
+};
+
+export type GetApiSnapshotResponse = GetApiSnapshotResponses[keyof GetApiSnapshotResponses];
+
+export type PostApiSnapshotEstimateData = {
+    body: EstimatesRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/snapshot/estimate';
+};
+
+export type PostApiSnapshotEstimateErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiSnapshotEstimateError = PostApiSnapshotEstimateErrors[keyof PostApiSnapshotEstimateErrors];
+
+export type PostApiSnapshotEstimateResponses = {
+    /**
+     * OK
+     */
+    200: EstimateEventModel | EstimateErrorEventModel | EstimatesDoneEventModel;
+};
+
+export type PostApiSnapshotEstimateResponse = PostApiSnapshotEstimateResponses[keyof PostApiSnapshotEstimateResponses];
+
+export type PostApiSnapshotStartData = {
+    body: SnapshotStartRequestBodyModel;
+    path?: never;
+    query?: never;
+    url: '/api/snapshot/start';
+};
+
+export type PostApiSnapshotStartErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiSnapshotStartError = PostApiSnapshotStartErrors[keyof PostApiSnapshotStartErrors];
+
+export type PostApiSnapshotStartResponses = {
+    /**
+     * Accepted
+     */
+    202: unknown;
+};
+
+export type PostApiSnapshotStopData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/snapshot/stop';
+};
+
+export type PostApiSnapshotStopErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiSnapshotStopError = PostApiSnapshotStopErrors[keyof PostApiSnapshotStopErrors];
+
+export type PostApiSnapshotStopResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type PostApiSnapshotStopResponse = PostApiSnapshotStopResponses[keyof PostApiSnapshotStopResponses];
+
+export type PostApiSnapshotTablesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/snapshot/tables';
+};
+
+export type PostApiSnapshotTablesErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModelModel;
+};
+
+export type PostApiSnapshotTablesError = PostApiSnapshotTablesErrors[keyof PostApiSnapshotTablesErrors];
+
+export type PostApiSnapshotTablesResponses = {
+    /**
+     * OK
+     */
+    200: SnapshotTablesResponseBodyModel;
+};
+
+export type PostApiSnapshotTablesResponse = PostApiSnapshotTablesResponses[keyof PostApiSnapshotTablesResponses];

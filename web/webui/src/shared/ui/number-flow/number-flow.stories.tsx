@@ -16,7 +16,7 @@ const meta: Meta<StoryArgs> = {
         kind: {
             name: 'Kind',
             control: 'select',
-            options: ['integer', 'decimal', 'compact', 'percent', 'bytes', 'latency'],
+            options: ['integer', 'decimal', 'compact', 'percent', 'bytes', 'latency', 'duration'],
             table: { category: 'Style' },
         },
     },

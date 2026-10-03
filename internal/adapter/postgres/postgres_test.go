@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -626,12 +627,18 @@ func (s *fakeServer) record(sql string) queryResult {
 	return s.respond(sql)
 }
 
-// recordParams stores the parameters of one Bind.
+// recordParams stores a copy of the parameters of one Bind, whose values alias
+// the backend's read buffer and are overwritten by the next message.
 func (s *fakeServer) recordParams(params [][]byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.params = append(s.params, append([][]byte(nil), params...))
+	copied := make([][]byte, len(params))
+	for i, value := range params {
+		copied[i] = bytes.Clone(value)
+	}
+
+	s.params = append(s.params, copied)
 }
 
 // recordStandby stores the standby status update a client copy frame carries,

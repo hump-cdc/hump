@@ -14,6 +14,7 @@ type TextInputProps = {
     type?: 'text' | 'password'
     name?: string
     icon?: ReactNode
+    suffix?: ReactNode
     invalid?: boolean
     disabled?: boolean
     font?: 'mono' | 'sans'
@@ -29,6 +30,7 @@ export const TextInput: FC<TextInputProps> = ({
     type = 'text',
     name,
     icon,
+    suffix,
     invalid,
     disabled,
     font = 'mono',
@@ -81,6 +83,8 @@ export const TextInput: FC<TextInputProps> = ({
                     <X className="size-3.5" />
                 </button>
             )}
+
+            {suffix && <span className="flex shrink-0 items-center">{suffix}</span>}
         </div>
     )
 }

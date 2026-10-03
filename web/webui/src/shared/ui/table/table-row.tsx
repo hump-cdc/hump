@@ -13,7 +13,7 @@ const tableRowVariants = cva('border-hairline border-b py-3 last:border-0', {
     variants: {
         variant: {
             default: '',
-            bordered: 'px-4',
+            bordered: 'px-4 last:rounded-b-xl',
         },
     },
     defaultVariants: {

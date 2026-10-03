@@ -1,0 +1,63 @@
+import type { FC, HTMLAttributes, ReactNode } from 'react'
+
+import { cn } from '@/shared/utils'
+
+type ActionBarProps = HTMLAttributes<HTMLDivElement> & {
+    asideIcon?: ReactNode
+    asideIconClassName?: string
+    asideTitle?: ReactNode
+    asideSubTitle?: ReactNode
+}
+
+/**
+ * Bottom action bar pinned to the viewport while the page scrolls.
+ * The outer wrapper bleeds past the page padding so its `bg-canvas` backdrop
+ * hides content scrolling underneath and adds breathing room below the card.
+ */
+export const ActionBar: FC<ActionBarProps> = ({
+    className,
+    asideIcon,
+    asideIconClassName,
+    asideTitle,
+    asideSubTitle,
+    children,
+    ...props
+}) => {
+    const hasAside = asideIcon || asideTitle || asideSubTitle
+
+    return (
+        <>
+            <div className="h-0 md:h-0.5"></div>
+            <div className="sticky bottom-0 z-10 -mx-6 mt-auto -mb-6 bg-canvas px-6 pt-1 pb-6">
+                <div className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-linear-to-b from-transparent to-canvas" />
+                <div
+                    className={cn(
+                        'flex flex-col gap-3 rounded-xl border border-hairline bg-surface-1 p-3 lg:flex-row lg:items-center',
+                        className,
+                    )}
+                    {...props}
+                >
+                    {hasAside && (
+                        <div className="flex items-center gap-3">
+                            {asideIcon && (
+                                <div
+                                    className={cn(
+                                        'flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary [&_svg]:size-4.5',
+                                        asideIconClassName,
+                                    )}
+                                >
+                                    {asideIcon}
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-0.5">
+                                {asideTitle && <span className="font-semibold text-base text-ink">{asideTitle}</span>}
+                                {asideSubTitle && <span className="text-ink-subtle text-sm">{asideSubTitle}</span>}
+                            </div>
+                        </div>
+                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row">{children}</div>
+                </div>
+            </div>
+        </>
+    )
+}

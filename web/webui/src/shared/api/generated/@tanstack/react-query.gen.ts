@@ -3,8 +3,8 @@
 import { queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { Config, Metrics, Operations, type Options } from '../sdk.gen';
-import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse, PostApiMetricsData, PostApiMetricsError, PostApiMetricsResponse, PostApiOperationsData, PostApiOperationsError, PostApiOperationsResponse } from '../types.gen';
+import { Config, Metrics, Operations, type Options, Snapshot } from '../sdk.gen';
+import type { GetApiConfigData, GetApiConfigError, GetApiConfigResponse, PostApiMetricsData, PostApiMetricsError, PostApiMetricsResponse, PostApiOperationsData, PostApiOperationsError, PostApiOperationsResponse, PostApiSnapshotStartData, PostApiSnapshotStartError, PostApiSnapshotStopData, PostApiSnapshotStopError, PostApiSnapshotStopResponse, PostApiSnapshotTablesData, PostApiSnapshotTablesError, PostApiSnapshotTablesResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -122,6 +122,66 @@ export const postApiOperationsMutation = (options?: Partial<Options<PostApiOpera
             return data;
         },
         mutationKey: postApiOperationsMutationKey(options)
+    };
+    return mutationOptions;
+};
+
+export const postApiSnapshotStartMutationKey = (options?: Partial<Options<PostApiSnapshotStartData>>) => createMutationKey('postApiSnapshotStart', options);
+
+/**
+ * Start a snapshot of tables
+ */
+export const postApiSnapshotStartMutation = (options?: Partial<Options<PostApiSnapshotStartData>>): UseMutationOptions<unknown, PostApiSnapshotStartError, Options<PostApiSnapshotStartData>> => {
+    const mutationOptions: UseMutationOptions<unknown, PostApiSnapshotStartError, Options<PostApiSnapshotStartData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await Snapshot.start({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        },
+        mutationKey: postApiSnapshotStartMutationKey(options)
+    };
+    return mutationOptions;
+};
+
+export const postApiSnapshotStopMutationKey = (options?: Partial<Options<PostApiSnapshotStopData>>) => createMutationKey('postApiSnapshotStop', options);
+
+/**
+ * Stop the snapshot in progress, or clear a finished one
+ */
+export const postApiSnapshotStopMutation = (options?: Partial<Options<PostApiSnapshotStopData>>): UseMutationOptions<PostApiSnapshotStopResponse, PostApiSnapshotStopError, Options<PostApiSnapshotStopData>> => {
+    const mutationOptions: UseMutationOptions<PostApiSnapshotStopResponse, PostApiSnapshotStopError, Options<PostApiSnapshotStopData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await Snapshot.stop({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        },
+        mutationKey: postApiSnapshotStopMutationKey(options)
+    };
+    return mutationOptions;
+};
+
+export const postApiSnapshotTablesMutationKey = (options?: Partial<Options<PostApiSnapshotTablesData>>) => createMutationKey('postApiSnapshotTables', options);
+
+/**
+ * Describe configured tables with a suggested snapshot filter
+ */
+export const postApiSnapshotTablesMutation = (options?: Partial<Options<PostApiSnapshotTablesData>>): UseMutationOptions<PostApiSnapshotTablesResponse, PostApiSnapshotTablesError, Options<PostApiSnapshotTablesData>> => {
+    const mutationOptions: UseMutationOptions<PostApiSnapshotTablesResponse, PostApiSnapshotTablesError, Options<PostApiSnapshotTablesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await Snapshot.tables({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        },
+        mutationKey: postApiSnapshotTablesMutationKey(options)
     };
     return mutationOptions;
 };

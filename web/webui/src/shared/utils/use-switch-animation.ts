@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 
 type SwitchAnimation<T> = {
-    /** The value switched to. */
     current: T
-    /** The value switched away from while its exit animation runs, else `null`. */
     leaving: T | null
-    /** Values to render: the leaving one (if any) followed by the current one. */
     views: T[]
-    /** Call when the leaving view's exit animation ends to unmount it. */
     onLeaveEnd: () => void
 }
+
+/**
+ * Value a view of a switch animation renders: the live one, or, while the view fades out after `value` moved on,
+ * the last value it had.
+ */
+export const SwitchViewValueContext = createContext<unknown>(undefined)
 
 /**
  * Keep the previous `value` mounted through its exit animation when `value` changes, so the
@@ -30,3 +32,6 @@ export const useSwitchAnimation = <T>(value: T): SwitchAnimation<T> => {
         onLeaveEnd: () => setLeaving(null),
     }
 }
+
+/** Value of the switch animation view enclosing the caller; `T` is not checked against what the provider holds. */
+export const useSwitchViewValue = <T>(): T | undefined => useContext(SwitchViewValueContext) as T | undefined

@@ -1,7 +1,7 @@
 import { type Document, isCollection, parseDocument, visit } from 'yaml'
 
 /** Grammars the code viewer can highlight with. */
-export type CodeGrammar = 'yaml' | 'json' | 'plaintext'
+export type CodeGrammar = 'yaml' | 'json' | 'sql' | 'plaintext'
 
 /** Text to render and the grammar to highlight it with. */
 export type CodeSource = { lang: CodeGrammar; text: string }

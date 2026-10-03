@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "prism-react-editor/layout.css";
 
 /* ── Self-hosted variable fonts (fetched on page open via these @font-face rules) ──
    Design uses weights 400/500/600, normal only; the weight-axis range below covers them. */
@@ -309,7 +310,8 @@ body {
   color: var(--hump-code-ln);
   user-select: none;
 }
-.hump-code .th-property {
+.hump-code .th-property,
+.hump-code .th-function {
   color: var(--syntax-tag);
 }
 .hump-code .th-string {
@@ -328,4 +330,55 @@ body {
 }
 .hump-code .th-operator {
   color: var(--syntax-punctuation);
+}
+
+/* WHERE editor (shared/ui/where-input), built on prism-react-editor. Overrides keep its box
+   in sync with the component's height math (20px lines, 7px vertical padding); Prism `token`
+   classes map onto the same `--syntax-*` tokens as the code viewer. */
+.prism-code-editor.hump-where {
+  --padding-inline: 0;
+  --pce-cursor: var(--ink);
+  --pce-selection: color-mix(in oklab, var(--primary) 25%, transparent);
+  line-height: 20px;
+  overflow: hidden auto;
+}
+.prism-code-editor.hump-where.pce-nowrap {
+  overflow: hidden;
+}
+.hump-where .pce-wrapper {
+  margin: 7px 0;
+}
+.hump-where-collapsed .pce-line {
+  visibility: hidden;
+}
+/* Prism re-enables pointer events on its textarea; a disabled input lets clicks fall through. */
+.hump-where .pce-textarea:disabled {
+  pointer-events: none;
+}
+.hump-where .pce-textarea::placeholder {
+  color: var(--ink-tertiary);
+  opacity: 1;
+}
+.hump-where .token.operator,
+.hump-where .token.punctuation {
+  color: var(--syntax-punctuation);
+}
+.hump-where .token.keyword,
+.hump-where .token.boolean {
+  color: var(--syntax-keyword);
+}
+.hump-where .token.string {
+  color: var(--syntax-string);
+}
+.hump-where .token.number {
+  color: var(--syntax-number);
+}
+.hump-where .token.comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.hump-where .token.function,
+.hump-where .token.cast,
+.hump-where .token.identifier {
+  color: var(--syntax-tag);
 }

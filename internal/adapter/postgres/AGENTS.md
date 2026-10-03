@@ -15,6 +15,10 @@ application layer keyed by the *configured* table.
 | `wal.go` | pgoutput stream: relation cache, row decoding, standby keepalive |
 | `replication_lag.go` | polls `pg_replication_slots` on its own session for the `replication_lag_bytes` gauge |
 | `connection.go` | self-healing `pgconn` session with retry/backoff |
+| `row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
+| `tables.go` | `GetTables`: one catalog query per call, on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
+| `tables_where.go` | `suggestWhere`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
+| `where.go` | lexer + recursive-descent parser for the `GetRowCount` filter; re-renders it with every identifier and literal quoted, so the raw string never reaches the server |
 | `sql/` | every statement, one file each, pulled in with `//go:embed` |
 
 ## Conventions

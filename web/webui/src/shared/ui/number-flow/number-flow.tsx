@@ -4,7 +4,12 @@ import Flow, { type Format } from '@number-flow/react'
 
 import { cn, scaleBytes, scaleLatency } from '@/shared/utils'
 
-type Kind = 'integer' | 'decimal' | 'compact' | 'percent' | 'bytes' | 'latency'
+import { DurationFlow } from './duration-flow'
+
+type Kind = 'integer' | 'decimal' | 'compact' | 'percent' | 'bytes' | 'latency' | 'duration'
+
+/** Kinds that format into a single animated number; `duration` spans several units and renders through `DurationFlow`. */
+type ScalarKind = Exclude<Kind, 'duration'>
 
 /** What NumberFlow renders: the value to animate plus how to format it. */
 type Resolved = { value: number; format: Format; locales: string; suffix?: string }
@@ -24,7 +29,7 @@ const fixed = (fractionDigits: number): Format => ({
 })
 
 /** Mirrors the string formatters in `@/shared/utils`, so an animated value reads the same as a formatted one. */
-const resolve = (value: number, kind: Kind): Resolved => {
+const resolve = (value: number, kind: ScalarKind): Resolved => {
     switch (kind) {
         case 'integer':
             return { value, format: { maximumFractionDigits: 0 }, locales: GROUPED_LOCALE }
@@ -63,7 +68,7 @@ const resolve = (value: number, kind: Kind): Resolved => {
 }
 
 type NumberFlowProps = {
-    /** Rendered as a dash while undefined. */
+    /** Rendered as a dash while undefined. Seconds for `duration`. */
     value: number | undefined
     kind?: Kind
     /** Appended after the kind's own suffix. */
@@ -82,6 +87,10 @@ export const NumberFlow: FC<NumberFlowProps> = ({ value, kind = 'integer', suffi
                 —
             </span>
         )
+    }
+
+    if (kind === 'duration') {
+        return <DurationFlow seconds={value} suffix={suffix} className={className} />
     }
 
     const resolved = resolve(value, kind)

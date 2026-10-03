@@ -4,14 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 
 	"hump/config"
-	getwebuiconfig "hump/internal/application/webui/get_webui_config"
-	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
-	getwebuioperations "hump/internal/application/webui/get_webui_operations"
-	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
+	getconfig "hump/internal/application/webui/get_config"
+	getmetrics "hump/internal/application/webui/get_metrics"
+	getoperations "hump/internal/application/webui/get_operations"
+	getsnapshotestimates "hump/internal/application/webui/get_snapshot_estimates"
+	getsnapshottables "hump/internal/application/webui/get_snapshot_tables"
+	startsnapshot "hump/internal/application/webui/start_snapshot"
+	stopsnapshot "hump/internal/application/webui/stop_snapshot"
+	streamsnapshot "hump/internal/application/webui/stream_snapshot"
+	streamupdates "hump/internal/application/webui/stream_updates"
 	"hump/internal/controller"
 	"hump/pkg/app/options"
 
@@ -27,17 +33,45 @@ const sseMediaType = "text/event-stream"
 func main() {
 	// Handlers are only registered, never invoked, so their dependencies can stay empty.
 	api := controller.NewWebUIController(
-		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
-		getwebuimetrics.NewController(nil),
-		getwebuioperations.NewController(nil),
-		streamwebuiupdates.NewController(nil, nil, nil),
+		getconfig.NewController(getconfig.NewUseCase(options.Options{}, config.Configuration{}, nil)),
+		getmetrics.NewController(getmetrics.NewUseCase(nil)),
+		getoperations.NewController(getoperations.NewUseCase(nil)),
+		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil)),
+		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
+		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
+		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
+		startsnapshot.NewController(startsnapshot.NewUseCase(nil)),
+		stopsnapshot.NewController(stopsnapshot.NewUseCase(nil)),
 	).Api(chi.NewMux())
 
 	if err := flattenSSESchema(
 		api.OpenAPI(),
+		http.MethodGet,
 		"/api/live",
 		"#/components/schemas/OperationsEvent",
 		"#/components/schemas/WelcomeEvent",
+	); err != nil {
+		log.Fatalf("flatten sse schema: %v", err)
+	}
+
+	if err := flattenSSESchema(
+		api.OpenAPI(),
+		http.MethodPost,
+		"/api/snapshot/estimate",
+		"#/components/schemas/EstimateEvent",
+		"#/components/schemas/EstimateErrorEvent",
+		"#/components/schemas/EstimatesDoneEvent",
+	); err != nil {
+		log.Fatalf("flatten sse schema: %v", err)
+	}
+
+	if err := flattenSSESchema(
+		api.OpenAPI(),
+		http.MethodGet,
+		"/api/snapshot",
+		"#/components/schemas/SnapshotIdleEvent",
+		"#/components/schemas/SnapshotProcessingEvent",
+		"#/components/schemas/SnapshotDoneEvent",
 	); err != nil {
 		log.Fatalf("flatten sse schema: %v", err)
 	}
@@ -63,27 +97,37 @@ func main() {
 	log.Printf("done: %s", out)
 }
 
-// flattenSSESchema replaces the SSE response schema of path with a oneOf of refs.
+// flattenSSESchema replaces the SSE response schema of the method operation on
+// path with a oneOf of refs.
 //
 // huma documents an SSE response as an array of {data, event, id, retry} envelopes, but the
 // generated TypeScript client applies the response schema to the `data` of a single event.
 // Reducing the schema to a union of event payloads is what makes that client validate and type
 // events correctly. The trade-off is that the spec drops the event names, so the payloads must
 // stay distinguishable by shape alone.
-func flattenSSESchema(spec *huma.OpenAPI, path string, refs ...string) error {
-	item := spec.Paths[path]
-	if item == nil || item.Get == nil {
-		return fmt.Errorf("no GET operation on %s", path)
+func flattenSSESchema(spec *huma.OpenAPI, method, path string, refs ...string) error {
+	var operation *huma.Operation
+	if item := spec.Paths[path]; item != nil {
+		switch method {
+		case http.MethodGet:
+			operation = item.Get
+		case http.MethodPost:
+			operation = item.Post
+		}
 	}
 
-	response := item.Get.Responses["200"]
+	if operation == nil {
+		return fmt.Errorf("no %s operation on %s", method, path)
+	}
+
+	response := operation.Responses["200"]
 	if response == nil {
-		return fmt.Errorf("no 200 response on GET %s", path)
+		return fmt.Errorf("no 200 response on %s %s", method, path)
 	}
 
 	media := response.Content[sseMediaType]
 	if media == nil {
-		return fmt.Errorf("GET %s has no %s response content", path, sseMediaType)
+		return fmt.Errorf("%s %s has no %s response content", method, path, sseMediaType)
 	}
 
 	oneOf := make([]*huma.Schema, 0, len(refs))

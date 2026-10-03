@@ -14,6 +14,8 @@ type Database interface {
 	GetSlotName() string
 	Listen(ctx context.Context, handler ProcessMessageHandler) error
 	Cleanup(ctx context.Context) error
+	GetTables(ctx context.Context, tables []domain.TableIdentifier) ([]TableDescription, error)
+	GetRowCount(ctx context.Context, table domain.TableIdentifier, where string) (<-chan RowCount, error)
 }
 
 type ProcessMessageHandler func(

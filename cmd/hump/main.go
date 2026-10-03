@@ -15,11 +15,17 @@ import (
 	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
+	snapshotMockAdapter "hump/internal/adapter/snapshot_mock"
 	processOperationFeature "hump/internal/application/processing/process_operation"
-	getWebuiConfigFeature "hump/internal/application/webui/get_webui_config"
-	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
-	getWebUIOperationsFeature "hump/internal/application/webui/get_webui_operations"
-	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
+	getConfigFeature "hump/internal/application/webui/get_config"
+	getMetricsFeature "hump/internal/application/webui/get_metrics"
+	getOperationsFeature "hump/internal/application/webui/get_operations"
+	getSnapshotEstimatesFeature "hump/internal/application/webui/get_snapshot_estimates"
+	getSnapshotTablesFeature "hump/internal/application/webui/get_snapshot_tables"
+	startSnapshotFeature "hump/internal/application/webui/start_snapshot"
+	stopSnapshotFeature "hump/internal/application/webui/stop_snapshot"
+	streamSnapshotFeature "hump/internal/application/webui/stream_snapshot"
+	streamUpdatesFeature "hump/internal/application/webui/stream_updates"
 	"hump/internal/controller"
 	"hump/internal/domain"
 	databasePort "hump/internal/port/database"
@@ -27,6 +33,7 @@ import (
 	metricsCollectorPort "hump/internal/port/metrics_collector"
 	operationsCollectorPort "hump/internal/port/operations_collector"
 	sinkPort "hump/internal/port/sink"
+	snapshotPort "hump/internal/port/snapshot"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
 	"hump/pkg/telemetry/health"
@@ -93,6 +100,13 @@ func main() {
 		operations, live = streamer, streamer
 	}
 
+	// The snapshot runner is a mock for now: it plays a fake run so the web UI
+	// has a backend to drive.
+	var snapshot snapshotPort.Runner
+	if opts.WebPort != nil {
+		snapshot = snapshotMockAdapter.New()
+	}
+
 	// Application
 	if !opts.Cleanup {
 		cfgResult, _ := yaml.Marshal(&configuration)
@@ -122,10 +136,15 @@ func main() {
 				// Web UI
 				func(ctx context.Context) error {
 					server := controller.NewWebUIController(
-						getWebuiConfigFeature.NewController(opts, configuration, db),
-						getWebUIMetricsFeature.NewController(collector),
-						getWebUIOperationsFeature.NewController(operations),
-						streamWebuiUpdatesFeature.NewController(collector, operations, live),
+						getConfigFeature.NewController(getConfigFeature.NewUseCase(opts, configuration, db)),
+						getMetricsFeature.NewController(getMetricsFeature.NewUseCase(collector)),
+						getOperationsFeature.NewController(getOperationsFeature.NewUseCase(operations)),
+						streamUpdatesFeature.NewController(streamUpdatesFeature.NewUseCase(collector, operations, live)),
+						getSnapshotEstimatesFeature.NewController(getSnapshotEstimatesFeature.NewUseCase(db)),
+						getSnapshotTablesFeature.NewController(getSnapshotTablesFeature.NewUseCase(configuration, db)),
+						streamSnapshotFeature.NewController(streamSnapshotFeature.NewUseCase(snapshot)),
+						startSnapshotFeature.NewController(startSnapshotFeature.NewUseCase(snapshot)),
+						stopSnapshotFeature.NewController(stopSnapshotFeature.NewUseCase(snapshot)),
 					)
 					return server.Serve(ctx, *opts.WebPort)
 				})

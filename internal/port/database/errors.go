@@ -17,4 +17,9 @@ var (
 	ErrTablesNotFound = errors.New("requested tables are not in database schema")
 	// ErrWalClosed indicates that the walsender connection was closed.
 	ErrWalClosed = errors.New("wal sender connection closed")
+	// ErrInvalidWhere indicates that a row filter is not a plain WHERE
+	// expression hump accepts.
+	ErrInvalidWhere = errors.New("invalid where expression")
+	// ErrTableNotFound indicates that a requested table does not exist.
+	ErrTableNotFound = errors.New("table not found")
 )

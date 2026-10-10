@@ -33,7 +33,17 @@ the new goroutine gathers outside any lock, then waits on `c.mu` until `activate
 while `recorded` has to be cleared even on a collector that never connected — which is what
 `TestRecordIgnoredAfterClose` pins.
 
-`Scrape` requests an out-of-schedule scrape and is debounced in `run`.
+`Scrape` requests an out-of-schedule scrape, debounced in `run`, and returns a channel the caller
+can wait on — `live_streamer` holds a window back until it closes. The contract:
+
+- The channel is `waiting`, shared by every `Scrape` until the next tick **starts**; that tick
+  closes it when it is done, whether or not the gather succeeded.
+- `tick` takes `waiting` *before* gathering. A `Scrape` that arrives mid-gather may follow a
+  delivery the registry read has already missed, so it gets a new channel and waits for the next
+  tick.
+- An idle collector answers `closedCh`, already closed, and `stop` closes a pending `waiting`, so
+  nobody waits on a loop that is gone.
+- `Scrape` never blocks: `requests` has one slot and a full one is skipped.
 
 ## Two clocks in one response
 
@@ -53,7 +63,7 @@ This is the thing to get right before touching `snapshot.go`.
 
 ## What it reads, and what it cannot
 
-Four families, named in `scrape.go`:
+Five families, named in `scrape.go`:
 
 | Family | Used for |
 |---|---|
@@ -106,9 +116,10 @@ and failure counts, retries left out. Two consequences:
 
 ## Tests
 
-`newTestMetrics` registers the four families on a fresh registry; `countingGatherer` wraps it
+`newTestMetrics` registers the five families on a fresh registry; `countingGatherer` wraps it
 and counts calls so a test can assert the loop is or is not running. `mustDump` returns points,
-`mustSnapshot` the whole snapshot, `waitFor` polls a condition for a second.
+`mustSnapshot` the whole snapshot, `waitFor` polls a condition for a second, `waitClosed` waits
+for a `Scrape` channel to close.
 
 A latency test has to **observe once before the collector starts**: the first scrape is the
 baseline, so observations made before it are invisible. Prime the series, wait for the first

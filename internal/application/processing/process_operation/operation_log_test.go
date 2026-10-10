@@ -240,7 +240,8 @@ func BenchmarkBindingProcessWithoutLog(b *testing.B) {
 // BenchmarkBindingProcessLogged measures the connected path. It is not
 // allocation free and cannot be: building the Metadata entries concatenates a
 // prefix per header, which is the price of the single map the record carries.
-// The ring itself still adds nothing — see BenchmarkRecordActive.
+// The ring itself still adds nothing — see BenchmarkRingWrite in
+// adapter/operations_collector.
 func BenchmarkBindingProcessLogged(b *testing.B) {
 	log := &benchOperationLog{}
 	binding, _ := newTestBinding(b, log, 1)

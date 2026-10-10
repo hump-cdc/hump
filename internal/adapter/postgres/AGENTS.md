@@ -19,6 +19,11 @@ application layer keyed by the *configured* table.
 | `wal.go` | pgoutput stream: relation cache, row decoding, standby keepalive |
 | `replication_lag.go` | polls `pg_replication_slots` on its own session for the `replication_lag_bytes` gauge |
 | `connection.go` | self-healing `pgconn` session with retry/backoff |
+| `connection_config.go` | `connectionOptions`: connection string parsing, the replication flag, the retry policy and its options |
+| `table.go` | `tableType` / `tableMetadata`, the param builders (`tableArrayParams`, `tableScalarParams`, `textParam`) and `quoteIdentifier` / `quoteLiteral` / `qualifiedTableName` |
+| `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the catalog query for tables with their partitions |
+| `metrics.go` | the `replication_lag_bytes` gauge and the `processed_rows_duration_seconds` histogram, with its cached per-table observers |
+| `errors.go` | `ErrTableIgnored` and the package-internal sentinels |
 | `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
 | `tables.go` | `GetTables`: one catalog query per call, on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
 | `snapshot_where_suggester.go` | `snapshotWhereSuggester`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
@@ -114,7 +119,9 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   retries keeps `StartSnapshot` waiting until the run is stopped.
 - **Holder.** One session runs `BEGIN REPEATABLE READ READ ONLY; LOCK TABLE … IN ACCESS SHARE MODE;
   SELECT pg_export_snapshot()` and stays idle in that transaction (`idle_in_transaction_session_timeout`
-  is zeroed for it) until `FinishSnapshot` commits. The lock recurses to partitions and chunks and
+  is zeroed for it) until `FinishSnapshot` commits. The `LOCK` waits at most `snapshotLockTimeout`
+  (5s, set as `lock_timeout`), so `StartSnapshot` fails rather than queue behind DDL holding those
+  tables. The lock recurses to partitions and chunks and
   is what keeps `ctid`s stable: without it `VACUUM FULL`/`CLUSTER`/`TRUNCATE` could rewrite a table
   between chunks. It also holds back DDL on those tables, and the snapshot holds `xmin`.
 - **Not aligned with the slot.** The slot is created by `pg_create_logical_replication_slot`, so
@@ -147,8 +154,12 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   Commit is ignored: the sender reads a transaction's commit record before replaying it, so its
   `ServerWALEnd` can already lie past rows not yet processed, and confirming it would make the
   server skip that transaction on restart.
-- A registry miss can block on the database for a long time (catalog round trips, reconnects,
-  an `ALTER` waiting on a lock), so `wal.resolveTable` starts a standby-keepalive goroutine for
-  the duration; otherwise the upstream walsender times the session out.
-- See `docs/TRACE_ID.md` before enabling streaming — `pendingTrace` is keyed by xid and would
-  need `StreamAbortMessageV2` handling.
+- Processing one message can block for a long time — a registry miss (catalog round trips,
+  reconnects, an `ALTER` waiting on a lock), a sink stuck in retries, a paused `walGate` — so
+  `Start` runs one `keepAlive` worker for the whole stream. It sends a standby status update
+  every `standbyInterval`, but only while the receive loop is inside `processMessage`
+  (`beginProcessing`/`endProcessing`), reporting the position the loop held on entry; otherwise
+  the upstream walsender times the session out. Outside `processMessage` the receive loop is the
+  session's only user, and `endProcessing` waits out a flush the worker has in flight.
+- See `docs/TRACE_ID.md` before enabling streaming — the `pendingTrace` map it proposes (not
+  implemented) is keyed by xid and would need `StreamAbortMessageV2` handling.

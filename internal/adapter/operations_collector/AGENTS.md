@@ -62,7 +62,7 @@ useful can be correlated through them.
 `Metadata` and `Attempts`, and the caller gets the slot's previous ones back. The writer refills
 those on the next delivery, so `Record` itself allocates nothing at all in steady state.
 `TestRingWriteDoesNotAllocateInSteadyState` pins that with `testing.AllocsPerRun`, and
-`BenchmarkRecordActive`/`BenchmarkRingWrite` report it. All three need a priming lap: until
+`BenchmarkRingWrite` reports it. Both need a priming lap: until
 every slot has been written once, the buffers handed back are the zero value's nil ones.
 
 Scope that claim to `Record`. The **delivery** path, while connected, is not allocation free:
@@ -167,8 +167,8 @@ The allocation claims live in tests, not only in benchmarks: `AllocsPerRun` asse
 steady-state `write`, 1 for a truncating one and 0 for an empty `page`, and
 `TestRingWrite1MRecordsStaysBounded` writes a million records through a 1000-slot ring and
 checks the heap did not grow with them. Those counts hold under
-`-race` and `-cover`, so they need no build-tag escape hatch. Benchmarks are split the same way
-as the tests — `bench_test.go` for the collector, `ring_bench_test.go` for the ring — and
+`-race` and `-cover`, so they need no build-tag escape hatch. The benchmarks all live in
+`ring_bench_test.go` and exercise the ring directly — the collector has none of its own — and
 `BenchmarkRingPage` is report-only: a page allocates per record it clones, and that count is not
 a contract.
 

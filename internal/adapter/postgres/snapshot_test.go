@@ -8,10 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	dto "github.com/prometheus/client_model/go"
 
+	"hump/config"
 	"hump/internal/domain"
 	"hump/internal/port/database"
 )
@@ -101,6 +104,72 @@ func TestStartSnapshotRequiresTables(t *testing.T) {
 	}
 }
 
+func TestStartSnapshotRejectsUnusableConnectionString(t *testing.T) {
+	p := New("mysql://u@127.0.0.1/db", config.Configuration{}, "hump_pub", "hump_slot", newFakeHealth(), newFakeHealth(), promauto.With(nil))
+
+	_, err := p.StartSnapshot(context.Background(), []domain.TableIdentifier{usersTable()})
+	if err == nil || !strings.Contains(err.Error(), "unable to connect to database") {
+		t.Fatalf("StartSnapshot() error = %v, want it to mention an unusable connection string", err)
+	}
+
+	if gatePaused(p.gate) {
+		t.Error("WAL gate is paused, want it open after a failed start")
+	}
+}
+
+func TestStartSnapshotRejectsEmptySnapshotId(t *testing.T) {
+	tests := []struct {
+		name   string
+		export queryResult
+	}{
+		{"no rows", queryResult{}},
+		{"empty id", singleValue("")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(snapshotResponder(map[string]queryResult{"snapshot: export": tt.export}))
+			p, _, _ := newTestPostgres(t, server)
+
+			_, err := p.StartSnapshot(context.Background(), []domain.TableIdentifier{usersTable()})
+			if !errors.Is(err, errEmptySnapshotId) || !errors.Is(err, database.ErrSnapshot) {
+				t.Fatalf("StartSnapshot() error = %v, want errEmptySnapshotId wrapped in ErrSnapshot", err)
+			}
+
+			if gatePaused(p.gate) {
+				t.Error("WAL gate is paused, want it open after a failed start")
+			}
+		})
+	}
+}
+
+func TestStartSnapshotEndsWithContextWhileWalCallIsInFlight(t *testing.T) {
+	server := newFakeServer(t)
+	p, _, _ := newTestPostgres(t, server)
+
+	if err := p.gate.enter(context.Background()); err != nil {
+		t.Fatalf("enter() error = %v", err)
+	}
+	t.Cleanup(p.gate.leave)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.StartSnapshot(ctx, []domain.TableIdentifier{usersTable()})
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, database.ErrSnapshot) {
+		t.Fatalf("StartSnapshot() error = %v, want context.Canceled wrapped in ErrSnapshot", err)
+	}
+
+	if gatePaused(p.gate) {
+		t.Error("WAL gate is paused, want it open after a failed start")
+	}
+
+	if exports := countStatements(server.recorded(), "snapshot: export"); exports != 0 {
+		t.Errorf("exports = %d, want none", exports)
+	}
+}
+
 func TestFinishSnapshotCommitsAndResumesWal(t *testing.T) {
 	server := newFakeServer(t)
 	server.setResponder(snapshotResponder(nil))
@@ -122,6 +191,32 @@ func TestFinishSnapshotCommitsAndResumesWal(t *testing.T) {
 
 	if gatePaused(p.gate) {
 		t.Error("WAL gate is paused, want it open after finish")
+	}
+}
+
+func TestFinishSnapshotReportsFailedCommit(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(snapshotResponder(map[string]queryResult{"COMMIT": serverError("25P02", "transaction is aborted")}))
+	p, _, _ := newTestPostgres(t, server)
+
+	if _, err := p.StartSnapshot(context.Background(), []domain.TableIdentifier{usersTable()}); err != nil {
+		t.Fatalf("StartSnapshot() error = %v", err)
+	}
+
+	if err := p.FinishSnapshot(context.Background()); !errors.Is(err, database.ErrSnapshot) {
+		t.Fatalf("FinishSnapshot() error = %v, want ErrSnapshot", err)
+	}
+
+	if gatePaused(p.gate) {
+		t.Error("WAL gate is paused, want it open after a failed commit")
+	}
+
+	if err := p.FinishSnapshot(context.Background()); err != nil {
+		t.Fatalf("second FinishSnapshot() error = %v, want the snapshot released", err)
+	}
+
+	if commits := countStatements(server.recorded(), "COMMIT"); commits != 1 {
+		t.Errorf("commits = %d, want 1", commits)
 	}
 }
 
@@ -299,6 +394,110 @@ func TestReadSnapshotFailsWhenSnapshotIsGone(t *testing.T) {
 	}
 }
 
+func TestReadSnapshotRejectsUnusableConnectionString(t *testing.T) {
+	p := New("mysql://u@127.0.0.1/db", config.Configuration{}, "hump_pub", "hump_slot", newFakeHealth(), newFakeHealth(), promauto.With(nil))
+
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "unable to connect to database") {
+		t.Fatalf("ReadSnapshot() error = %v, want it to mention an unusable connection string", err)
+	}
+}
+
+func TestReadSnapshotFailsWhenExtensionProbeFails(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(snapshotResponder(map[string]queryResult{"pg_extension": serverError("42501", "permission denied")}))
+	p, _, _ := newTestPostgres(t, server)
+
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("ReadSnapshot() error = %v, want the probe failure", err)
+	}
+
+	if layouts := countStatements(server.recorded(), "snapshot: layout"); layouts != 0 {
+		t.Errorf("layout queries = %d, want none", layouts)
+	}
+}
+
+func TestReadSnapshotRejectsUnusableLayout(t *testing.T) {
+	tests := []struct {
+		name    string
+		layout  queryResult
+		wantErr string
+	}{
+		{"missing results", queryResult{}, "expected 5 results, got 1"},
+		{"no columns", scriptedSnapshotLayout([][][]byte{{[]byte("public"), []byte("users"), []byte("1")}}, nil), "has no columns to read"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newFakeServer(t)
+			server.setResponder(snapshotResponder(map[string]queryResult{
+				"pg_extension":     singleValue("f"),
+				"snapshot: layout": tt.layout,
+			}))
+			p, _, _ := newTestPostgres(t, server)
+
+			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+			if !errors.Is(err, database.ErrSnapshot) || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ReadSnapshot() error = %v, want ErrSnapshot mentioning %q", err, tt.wantErr)
+			}
+
+			if reads := countStatements(server.recorded(), "snapshot: read"); reads != 0 {
+				t.Errorf("reads = %d, want none", reads)
+			}
+		})
+	}
+}
+
+func TestReadSnapshotReportsUnterminatedRow(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(failingOn(
+		snapshotReadResponder(false, []snapshotTestLeaf{{name: "users", pages: 1}}),
+		"snapshot: read",
+		queryResult{copyOut: [][]byte{[]byte("1\tusers")}},
+	))
+	p, _, _ := newTestPostgres(t, server)
+
+	calls := 0
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error {
+		calls++
+		return nil
+	})
+
+	if !errors.Is(err, errCopyRow) {
+		t.Fatalf("ReadSnapshot() error = %v, want errCopyRow", err)
+	}
+	if calls != 0 {
+		t.Fatalf("calls = %d, want the unterminated row held back", calls)
+	}
+}
+
+func TestParseSnapshotLayoutRejectsMalformedRows(t *testing.T) {
+	leaf := [][]byte{[]byte("public"), []byte("users"), []byte("1")}
+	column := [][]byte{[]byte("id"), []byte("23")}
+
+	tests := []struct {
+		name    string
+		leaves  [][][]byte
+		columns [][][]byte
+		wantErr string
+	}{
+		{"short leaf row", [][][]byte{leaf[:2]}, [][][]byte{column}, "expected 3 leaf columns, got 2"},
+		{"unparseable pages", [][][]byte{{leaf[0], leaf[1], []byte("many")}}, [][][]byte{column}, "parse pages"},
+		{"short column row", [][][]byte{leaf}, [][][]byte{column[:1]}, "expected 2 column fields, got 1"},
+		{"unparseable column type", [][][]byte{leaf}, [][][]byte{{column[0], []byte("int4")}}, "parse column type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := (&snapshot{}).parseSnapshotLayout(&pgconn.Result{Rows: tt.leaves}, &pgconn.Result{Rows: tt.columns})
+			if !errors.Is(err, database.ErrSnapshot) || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("parseSnapshotLayout() error = %v, want ErrSnapshot mentioning %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestSnapshotRanges(t *testing.T) {
 	tests := []struct {
 		pages uint64
@@ -395,6 +594,18 @@ func snapshotReadResponder(timescale bool, leaves []snapshotTestLeaf) func(strin
 			return queryResult{}
 		}
 	}
+}
+
+// scriptedSnapshotLayout scripts the five results of the layout query around
+// the given leaf and column rows.
+func scriptedSnapshotLayout(leaves, columns [][][]byte) queryResult {
+	return queryResult{statements: []queryResult{
+		{},
+		{},
+		{columns: 3, rows: leaves},
+		{columns: 2, rows: columns},
+		{},
+	}}
 }
 
 // observedRows returns how many rows of operation on table p's processed-rows

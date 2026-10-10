@@ -140,6 +140,43 @@ func TestReplicationLagPollerRunsUntilContextIsCancelled(t *testing.T) {
 	}
 }
 
+func TestReplicationLagPollerKeepsRunningAfterFailedPoll(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(func(string) queryResult { return serverError("42501", "permission denied") })
+
+	p := newTestReplicationLagPoller(t, server)
+	p.interval = 10 * time.Millisecond
+	p.metrics.setReplicationLag(100)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		p.run(ctx)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for len(server.recorded()) < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for a poll after the failed one")
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for run to return")
+	}
+
+	if got := testutil.ToFloat64(p.metrics.replicationLag); got != 100 {
+		t.Errorf("replicationLag = %v, want 100", got)
+	}
+}
+
 // newTestReplicationLagPoller returns a poller for hump_slot on a fresh
 // connection to s, with metrics on a private registry.
 func newTestReplicationLagPoller(t *testing.T, s *fakeServer) *replicationLagPoller {

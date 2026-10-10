@@ -117,6 +117,7 @@ func TestUnescapeCopyText(t *testing.T) {
 		{`\\x00ff`, `\x00ff`},
 		{`\101\0`, "A\x00"},
 		{`\x41\x4`, "A\x04"},
+		{`\x6a\x4A`, "jJ"},
 		{`\q`, "q"},
 		{`\x`, "x"},
 		{`end\`, `end\`},

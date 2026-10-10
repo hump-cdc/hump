@@ -544,6 +544,29 @@ func TestStartStopsWhenStandbyUpdateFails(t *testing.T) {
 	}
 }
 
+func TestStartStopsWhenStandbyTickCannotBeSent(t *testing.T) {
+	server := usersServer(t)
+
+	conn := newTestConnection(t, server, withReplication(true))
+	conn.connectionConfig.DialFunc = brokenWriteDialer(2)
+
+	w, health := newReplicationWal(t, server, conn)
+	w.standbyInterval = testStandbyInterval
+
+	err := awaitStart(t, runStart(context.Background(), w, failingHandler(t)))
+	if err == nil || !strings.Contains(err.Error(), "send status failed") {
+		t.Fatalf("Start() error = %v, want it to mention a failed status update", err)
+	}
+
+	if !errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error does not wrap ErrWal: %v", err)
+	}
+
+	if failures := health.failures(); len(failures) != 1 {
+		t.Errorf("MarkUnhealthy() called %d times, want 1", len(failures))
+	}
+}
+
 func TestFlushReportsUnhealthyWhenStatusCannotBeSent(t *testing.T) {
 	server := usersServer(t)
 	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
@@ -578,6 +601,28 @@ func TestStopClosesConnectionAndReportsUnhealthy(t *testing.T) {
 
 	if session := heldSession(conn); session != nil {
 		t.Error("Stop() left a session cached, want it closed")
+	}
+
+	failures := health.failures()
+	if len(failures) != 1 || !errors.Is(failures[0], database.ErrWalClosed) {
+		t.Errorf("MarkUnhealthy() got %v, want a single ErrWalClosed", failures)
+	}
+}
+
+func TestStopReportsCloseFailure(t *testing.T) {
+	server := usersServer(t)
+
+	conn := newTestConnection(t, server, withReplication(true))
+	conn.connectionConfig.DialFunc = brokenCloseDialer
+
+	w, health := newReplicationWal(t, server, conn)
+
+	if err := w.Stop(context.Background()); !errors.Is(err, errBrokenClose) {
+		t.Fatalf("Stop() error = %v, want the close failure", err)
+	}
+
+	if session := heldSession(conn); session != nil {
+		t.Error("Stop() left a session cached, want it dropped")
 	}
 
 	failures := health.failures()

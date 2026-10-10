@@ -1459,6 +1459,34 @@ func brokenWriteDialer(afterWrites int32) func(context.Context, string, string) 
 	}
 }
 
+// errBrokenClose is the error a brokenCloseConn reports from Close.
+var errBrokenClose = errors.New("close: broken pipe")
+
+// brokenCloseConn is a net.Conn that closes its socket but reports the close as
+// failed.
+type brokenCloseConn struct {
+	net.Conn
+}
+
+// Close closes the socket and returns errBrokenClose.
+func (c *brokenCloseConn) Close() error {
+	_ = c.Conn.Close()
+
+	return errBrokenClose
+}
+
+// brokenCloseDialer is a DialFunc whose sessions fail to close.
+func brokenCloseDialer(ctx context.Context, network, address string) (net.Conn, error) {
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+
+	return &brokenCloseConn{Conn: conn}, nil
+}
+
 // keepalive builds the primary keepalive frame a WAL sender emits to ask the
 // standby where it is.
 func keepalive(serverWalEnd uint64, replyRequested bool) *pgproto3.CopyData {

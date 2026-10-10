@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"hump/internal/domain"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,6 +12,7 @@ import (
 type metrics struct {
 	replicationLag prometheus.Gauge
 	rowDurations   *prometheus.HistogramVec
+	rowObserversMu sync.Mutex // rowObserversMu guards rowObservers: WAL and snapshot reads observe rows concurrently.
 	rowObservers   map[rowObserverKey]prometheus.Observer
 }
 
@@ -61,11 +63,13 @@ func (m *metrics) setReplicationLag(bytes float64) {
 func (m *metrics) observeRow(operation domain.OperationType, table domain.TableIdentifier, duration time.Duration) {
 	key := rowObserverKey{operation: operation, table: table}
 
+	m.rowObserversMu.Lock()
 	observer, ok := m.rowObservers[key]
 	if !ok {
 		observer = m.rowDurations.WithLabelValues(string(operation), string(table.Schema), string(table.Name))
 		m.rowObservers[key] = observer
 	}
+	m.rowObserversMu.Unlock()
 
 	observer.Observe(duration.Seconds())
 }

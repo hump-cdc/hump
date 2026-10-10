@@ -8,9 +8,9 @@ import (
 	"hump/internal/port/database"
 )
 
-// maxConcurrentEstimates caps the tables counted at once; each holds a
+// defaultMaxConcurrentEstimates caps the tables counted at once; each holds a
 // database session of its own while it runs.
-const maxConcurrentEstimates = 6
+const defaultMaxConcurrentEstimates = 6
 
 // Request is one table to count and the filter its rows are counted with.
 type Request struct {
@@ -27,18 +27,39 @@ type Estimate struct {
 }
 
 type UseCase struct {
-	db database.Database // db is nil when only the API is described, never served.
+	db                     database.Database // db is nil when only the API is described, never served.
+	maxConcurrentEstimates int
 }
 
-// NewUseCase returns a use case counting rows of db.
-func NewUseCase(db database.Database) *UseCase {
-	return &UseCase{
-		db: db,
+// Option configures a UseCase.
+type Option func(*UseCase)
+
+// WithMaxConcurrentEstimates sets how many tables are counted at once. A
+// non-positive n leaves the default.
+func WithMaxConcurrentEstimates(n int) Option {
+	return func(uc *UseCase) {
+		if n > 0 {
+			uc.maxConcurrentEstimates = n
+		}
 	}
 }
 
+// NewUseCase returns a use case counting rows of db.
+func NewUseCase(db database.Database, opts ...Option) *UseCase {
+	uc := &UseCase{
+		db:                     db,
+		maxConcurrentEstimates: defaultMaxConcurrentEstimates,
+	}
+
+	for _, opt := range opts {
+		opt(uc)
+	}
+
+	return uc
+}
+
 // Estimate counts every requested table in a goroutine of its own, at most
-// maxConcurrentEstimates at a time, and streams their estimates on a channel
+// uc.maxConcurrentEstimates at a time, and streams their estimates on a channel
 // that closes once all of them are done. A cancelled ctx stops them early.
 func (uc *UseCase) Estimate(ctx context.Context, requests []Request) <-chan Estimate {
 	estimates := make(chan Estimate)
@@ -48,7 +69,7 @@ func (uc *UseCase) Estimate(ctx context.Context, requests []Request) <-chan Esti
 		return estimates
 	}
 
-	slots := make(chan struct{}, maxConcurrentEstimates)
+	slots := make(chan struct{}, uc.maxConcurrentEstimates)
 
 	var wg sync.WaitGroup
 	for _, request := range requests {

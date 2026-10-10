@@ -47,7 +47,7 @@ func TestNewWalFailsWhenSessionCannotBeAcquired(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 
-	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, newFakeHealth(), newTestMetrics())
+	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, nil, newFakeHealth(), newTestMetrics())
 	if err == nil || !errors.Is(err, database.ErrWal) {
 		t.Fatalf("newWal() error = %v, want it to wrap ErrWal", err)
 	}
@@ -1319,7 +1319,7 @@ func TestDecodeRowRejectsColumnCountMismatch(t *testing.T) {
 	}
 }
 
-func TestDecodeRowText(t *testing.T) {
+func TestDecodeText(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     string
@@ -1335,23 +1335,21 @@ func TestDecodeRowText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w, _ := newTestWal(t, usersServer(t))
-
-			got, err := w.decodeRowText([]byte(tt.data), tt.dataType)
+			got, err := decodeText(pgtype.NewMap(), tt.dataType, []byte(tt.data))
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("decodeRowText() = %#v, want an error", got)
+					t.Fatalf("decodeText() = %#v, want an error", got)
 				}
 
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("decodeRowText() error = %v", err)
+				t.Fatalf("decodeText() error = %v", err)
 			}
 
 			if got != tt.want {
-				t.Errorf("decodeRowText() = %#v, want %#v", got, tt.want)
+				t.Errorf("decodeText() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
@@ -1547,7 +1545,7 @@ func newReplicationWal(t testing.TB, s *fakeServer, conn *connection, tables ...
 
 	health := newFakeHealth()
 
-	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), health, newTestMetrics())
+	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), nil, health, newTestMetrics())
 	if err != nil {
 		t.Fatalf("newWal() error = %v", err)
 	}

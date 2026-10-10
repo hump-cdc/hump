@@ -3,10 +3,14 @@ package getsnapshotestimates
 import (
 	"context"
 	"errors"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"hump/internal/port/database"
+
+	"github.com/danielgtaylor/huma/v2/sse"
 )
 
 func TestHandlerStreamsEventsThenDone(t *testing.T) {
@@ -59,8 +63,8 @@ func TestHandlerStopsOnceTheClientIsGone(t *testing.T) {
 	db := newFakeDatabase()
 	db.delay = 10 * time.Millisecond
 
-	tables := make([]EstimateTable, 0, 3*maxConcurrentEstimates)
-	for _, r := range scriptTables(db, 3*maxConcurrentEstimates, database.RowCount{Num: 1, Rough: true}, database.RowCount{Num: 1}) {
+	tables := make([]EstimateTable, 0, 3*defaultMaxConcurrentEstimates)
+	for _, r := range scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true}, database.RowCount{Num: 1}) {
 		tables = append(tables, table(string(r.Table.Schema), string(r.Table.Name), r.Where))
 	}
 
@@ -125,4 +129,59 @@ func TestEventsNamesEveryPayload(t *testing.T) {
 	if len(events) != len(want) {
 		t.Errorf("Events() has %d entries, want %d", len(events), len(want))
 	}
+}
+
+// fakeSender records every payload sent, failing every send past failAfter
+// when that is set.
+type fakeSender struct {
+	mu        sync.Mutex
+	sent      []any
+	failAfter int
+}
+
+// send is the sse.Sender the handler writes to.
+func (s *fakeSender) send(message sse.Message) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.sent = append(s.sent, message.Data)
+	if s.failAfter > 0 && len(s.sent) > s.failAfter {
+		return errors.New("client gone")
+	}
+
+	return nil
+}
+
+// events returns a copy of the payloads sent so far.
+func (s *fakeSender) events() []any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return slices.Clone(s.sent)
+}
+
+// serve runs the handler over tables to completion, failing the test if it
+// takes longer than five seconds.
+func serve(t *testing.T, c *Controller, sender *fakeSender, tables ...EstimateTable) {
+	t.Helper()
+
+	input := &EstimatesRequest{}
+	input.Body.Tables = tables
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.Handler()(context.Background(), input, sender.send)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler did not return")
+	}
+}
+
+// table builds one requested table as the client sends it.
+func table(schema, name, where string) EstimateTable {
+	return EstimateTable{Schema: schema, Table: name, Where: where}
 }

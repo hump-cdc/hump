@@ -362,6 +362,12 @@ type queryResult struct {
 	err *pgproto3.ErrorResponse
 	// empty replies with EmptyQueryResponse, so the caller sees no result.
 	empty bool
+	// copyOut, when set, answers with a COPY TO STDOUT stream of these CopyData
+	// payloads instead of rows.
+	copyOut [][]byte
+	// statements, when set, answers a multi-statement query with one result
+	// per entry, in order, instead of this one.
+	statements []queryResult
 }
 
 // fakeServer is an in-process PostgreSQL server that answers every statement
@@ -558,10 +564,19 @@ func (s *fakeServer) serve(conn net.Conn) {
 			}
 
 			result := s.record(m.String)
-			if result.columns > 0 {
-				backend.Send(rowDescription(result.columns))
+			parts := result.statements
+			if parts == nil {
+				parts = []queryResult{result}
 			}
-			sendRows(backend, result)
+			for _, part := range parts {
+				if part.columns > 0 {
+					backend.Send(rowDescription(part.columns))
+				}
+				sendRows(backend, part)
+				if part.err != nil {
+					break
+				}
+			}
 			backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 		case *pgproto3.Parse:
 			pending = s.record(m.Query)
@@ -711,6 +726,13 @@ func sendRows(backend *pgproto3.Backend, result queryResult) {
 		backend.Send(result.err)
 	case result.empty:
 		backend.Send(&pgproto3.EmptyQueryResponse{})
+	case result.copyOut != nil:
+		backend.Send(&pgproto3.CopyOutResponse{})
+		for _, data := range result.copyOut {
+			backend.Send(&pgproto3.CopyData{Data: data})
+		}
+		backend.Send(&pgproto3.CopyDone{})
+		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("COPY " + fmt.Sprint(len(result.copyOut)))})
 	default:
 		for _, row := range result.rows {
 			backend.Send(&pgproto3.DataRow{Values: row})

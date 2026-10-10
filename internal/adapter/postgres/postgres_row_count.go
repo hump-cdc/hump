@@ -36,7 +36,7 @@ var errEmptyRowCount = errors.New("row count statement returned no value")
 // estimate is sent as an error and ends the stream; a failed or timed out exact
 // count is dropped. Each call runs on its own session, so calls may overlap.
 func (p *Postgres) GetRowCount(ctx context.Context, table domain.TableIdentifier, where string) (<-chan database.RowCount, error) {
-	condition, err := parseWhere(where)
+	condition, err := newSnapshotWhereParser().Parse(where)
 	if err != nil {
 		return nil, fmt.Errorf("parse where: %w", errors.Join(err, database.ErrInvalidWhere))
 	}
@@ -52,7 +52,7 @@ func (p *Postgres) GetRowCount(ctx context.Context, table domain.TableIdentifier
 
 	qualified := qualifiedTableName(table)
 
-	exists, err := rowCountTableExists(ctx, conn, qualified)
+	exists, err := p.rowCountTableExists(ctx, conn, qualified)
 	if err != nil {
 		closeDetached(conn.Close)
 		return nil, fmt.Errorf("check table %s: %w", qualified, err)
@@ -70,14 +70,14 @@ func (p *Postgres) GetRowCount(ctx context.Context, table domain.TableIdentifier
 		defer close(counts)
 		defer closeDetached(conn.Close)
 
-		estimate, err := rowCountEstimate(ctx, conn, qualified, condition)
+		estimate, err := p.rowCountEstimate(ctx, conn, qualified, condition)
 		if err != nil {
 			counts <- database.RowCount{Error: err}
 			return
 		}
 		counts <- database.RowCount{Num: estimate, Rough: true}
 
-		if exact, err := rowCountExact(ctx, conn, qualified, condition); err == nil {
+		if exact, err := p.rowCountExact(ctx, conn, qualified, condition); err == nil {
 			counts <- database.RowCount{Num: exact}
 		}
 	}()
@@ -86,7 +86,7 @@ func (p *Postgres) GetRowCount(ctx context.Context, table domain.TableIdentifier
 }
 
 // rowCountTableExists reports whether qualified resolves to a relation.
-func rowCountTableExists(ctx context.Context, conn *connection, qualified string) (bool, error) {
+func (p *Postgres) rowCountTableExists(ctx context.Context, conn *connection, qualified string) (bool, error) {
 	result, err := conn.ExecParams(ctx, rowCountTableExistsSql, []param{textParam(qualified)}, nil)
 	if err != nil {
 		return false, err
@@ -102,8 +102,8 @@ func rowCountTableExists(ctx context.Context, conn *connection, qualified string
 
 // rowCountEstimate returns the planner's row estimate for the filtered table,
 // read from the top plan node, which already sums partitions and chunks.
-func rowCountEstimate(ctx context.Context, conn *connection, qualified, condition string) (uint64, error) {
-	value, err := rowCountQuery(ctx, conn, rowCountEstimateSql, qualified, condition)
+func (p *Postgres) rowCountEstimate(ctx context.Context, conn *connection, qualified, condition string) (uint64, error) {
+	value, err := p.rowCountQuery(ctx, conn, rowCountEstimateSql, qualified, condition)
 	if err != nil {
 		return 0, err
 	}
@@ -125,8 +125,8 @@ func rowCountEstimate(ctx context.Context, conn *connection, qualified, conditio
 }
 
 // rowCountExact returns the exact number of rows matching the filter.
-func rowCountExact(ctx context.Context, conn *connection, qualified, condition string) (uint64, error) {
-	value, err := rowCountQuery(ctx, conn, rowCountExactSql, qualified, condition)
+func (p *Postgres) rowCountExact(ctx context.Context, conn *connection, qualified, condition string) (uint64, error) {
+	value, err := p.rowCountQuery(ctx, conn, rowCountExactSql, qualified, condition)
 	if err != nil {
 		return 0, err
 	}
@@ -137,7 +137,7 @@ func rowCountExact(ctx context.Context, conn *connection, qualified, condition s
 // rowCountQuery runs a row count template as one simple-protocol message, so a
 // reconnect cannot replay the statement outside its read-only transaction and
 // timeout, and returns the value it selected.
-func rowCountQuery(ctx context.Context, conn *connection, template, qualified, condition string) ([]byte, error) {
+func (p *Postgres) rowCountQuery(ctx context.Context, conn *connection, template, qualified, condition string) ([]byte, error) {
 	results, err := conn.Exec(ctx, fmt.Sprintf(template, rowCountTimeout.Milliseconds(), qualified, condition))
 	if err != nil {
 		return nil, err

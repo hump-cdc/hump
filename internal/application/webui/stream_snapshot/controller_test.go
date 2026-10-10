@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"hump/internal/domain"
 	"hump/internal/port/snapshot"
 
 	"github.com/danielgtaylor/huma/v2/sse"
@@ -26,7 +27,7 @@ func TestHandlerSendsTheCurrentStateThenEveryChange(t *testing.T) {
 		Status:    snapshot.StatusProcessing,
 		StartedAt: started,
 		Tables: []snapshot.Table{
-			{Schema: "public", Name: "users", Status: snapshot.TableProcessing, Rows: 10, EstimatedRows: 100, Sinks: sinks},
+			{Table: domain.TableIdentifier{Schema: "public", Name: "users"}, Status: snapshot.TableProcessing, CompletedRows: 10, EstimatedRows: 100, Sinks: sinks},
 		},
 	}
 	runner.updates <- snapshot.State{
@@ -34,7 +35,7 @@ func TestHandlerSendsTheCurrentStateThenEveryChange(t *testing.T) {
 		StartedAt:  started,
 		FinishedAt: finished,
 		Tables: []snapshot.Table{
-			{Schema: "public", Name: "users", Status: snapshot.TableError, Error: "stopped", Rows: 10, Sinks: sinks},
+			{Table: domain.TableIdentifier{Schema: "public", Name: "users"}, Status: snapshot.TableError, Error: "stopped", CompletedRows: 10, Sinks: sinks},
 		},
 	}
 	close(runner.updates)
@@ -46,10 +47,10 @@ func TestHandlerSendsTheCurrentStateThenEveryChange(t *testing.T) {
 	want := []any{
 		SnapshotIdleEvent{State: "idle"},
 		SnapshotProcessingEvent{State: "processing", StartedAt: started, Tables: []SnapshotProcessingTable{
-			{Schema: "public", Name: "users", Status: "processing", Rows: 10, EstimatedRows: 100, Sinks: runSinks},
+			{Schema: "public", Name: "users", Status: "processing", CompletedRows: 10, EstimatedRows: 100, Sinks: runSinks},
 		}},
 		SnapshotDoneEvent{State: "done", StartedAt: started, FinishedAt: finished, Tables: []SnapshotDoneTable{
-			{Schema: "public", Name: "users", Status: "error", Error: "stopped", Rows: 10, Sinks: runSinks},
+			{Schema: "public", Name: "users", Status: "error", Error: "stopped", CompletedRows: 10, Sinks: runSinks},
 		}},
 	}
 	if got := sender.events(); !reflect.DeepEqual(got, want) {

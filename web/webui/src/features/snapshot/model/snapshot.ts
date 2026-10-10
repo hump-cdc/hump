@@ -61,7 +61,7 @@ const snapshotQuery = queryOptions({
                             name: `${table.schema}.${table.name}`,
                             where: table.where ?? '',
                             status: table.status,
-                            rowsRead: Number(table.rows),
+                            rowsRead: Number(table.completedRows),
                             totalRows: Number(table.estimatedRows),
                             sinks: (table.sinks ?? []).map(
                                 ({ type, host, target, count }): Sink => ({
@@ -88,7 +88,7 @@ const snapshotQuery = queryOptions({
                             where: '',
                             status: table.status,
                             error: table.error || undefined,
-                            rowsRead: Number(table.rows),
+                            rowsRead: Number(table.completedRows),
                             totalRows: 0,
                             sinks: (table.sinks ?? []).map(
                                 ({ type, host, target, count }): Sink => ({

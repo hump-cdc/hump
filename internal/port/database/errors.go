@@ -22,4 +22,6 @@ var (
 	ErrInvalidWhere = errors.New("invalid where expression")
 	// ErrTableNotFound indicates that a requested table does not exist.
 	ErrTableNotFound = errors.New("table not found")
+	// ErrSnapshot wraps every failure to export, import or read a snapshot.
+	ErrSnapshot = errors.New("snapshot error")
 )

@@ -40,6 +40,10 @@ var (
 	ErrAlreadyRunning = errors.New("snapshot is already running")
 	// ErrNotRunning is returned by Stop when the runner is idle.
 	ErrNotRunning = errors.New("snapshot is not running")
+	// ErrInvalidWhere is returned by Start when a table's filter is rejected.
+	ErrInvalidWhere = errors.New("invalid where expression")
+	// ErrClosed is returned by Start once the runner has shut down.
+	ErrClosed = errors.New("snapshot runner is closed")
 )
 
 // Sink is one sink a table is delivered to, with the rows it received so far.
@@ -52,12 +56,11 @@ type Sink struct {
 
 // Table is the progress of one table of a run.
 type Table struct {
-	Schema        string
-	Name          string
+	Table         domain.TableIdentifier
 	Where         string // Where is the filter the rows are read with; empty reads every row.
 	Status        TableStatus
 	Error         string // Error is set on a finished table that failed.
-	Rows          uint64
+	CompletedRows uint64
 	EstimatedRows uint64 // EstimatedRows is the row count the run expects to read; set while processing.
 	Sinks         []Sink
 }
@@ -86,7 +89,9 @@ type Runner interface {
 	// Unsubscribe removes the subscriber with id and closes its channel. It is
 	// safe to call more than once.
 	Unsubscribe(id uint64)
-	// Start begins a snapshot of tables, or returns ErrAlreadyRunning.
+	// Start begins a snapshot of tables, or returns ErrAlreadyRunning, ErrClosed
+	// after shutdown, or ErrInvalidWhere when any filter is rejected, before
+	// anything starts.
 	Start(tables []Request) error
 	// Stop ends the snapshot in progress, failing the tables it did not
 	// finish, clears a finished one back to idle, or returns ErrNotRunning.

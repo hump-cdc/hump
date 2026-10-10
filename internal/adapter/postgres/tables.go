@@ -18,8 +18,8 @@ var tablesColumnsTimescaleSql string
 // tablesColumnsWidth is how many values each row of the columns query carries.
 const tablesColumnsWidth = 10
 
-// tablesColumn is one column of a described table, with the traits suggestWhere
-// ranks it by.
+// tablesColumn is one column of a described table, with the traits
+// snapshotWhereSuggester ranks it by.
 type tablesColumn struct {
 	database.TableColumn
 	TimeKey    bool // TimeKey marks the time dimension of a hypertable or the range partitioning key.
@@ -117,7 +117,7 @@ func describeTables(tables []domain.TableIdentifier, rows [][][]byte) ([]databas
 			Table:   table,
 			Type:    d.kind,
 			Columns: columns,
-			Where:   suggestWhere(d.columns),
+			Where:   newSnapshotWhereSuggester(d.columns).Suggest(),
 		})
 	}
 

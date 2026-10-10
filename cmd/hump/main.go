@@ -15,7 +15,7 @@ import (
 	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
-	snapshotMockAdapter "hump/internal/adapter/snapshot_mock"
+	snapshotAdapter "hump/internal/adapter/snapshot"
 	processOperationFeature "hump/internal/application/processing/process_operation"
 	getConfigFeature "hump/internal/application/webui/get_config"
 	getMetricsFeature "hump/internal/application/webui/get_metrics"
@@ -100,11 +100,16 @@ func main() {
 		operations, live = streamer, streamer
 	}
 
-	// The snapshot runner is a mock for now: it plays a fake run so the web UI
-	// has a backend to drive.
+	// One processing use case serves both WAL and snapshot runs: the snapshot
+	// pauses WAL delivery, so the two never call it at once.
+	var processOperation *processOperationFeature.Controller
 	var snapshot snapshotPort.Runner
-	if opts.WebPort != nil {
-		snapshot = snapshotMockAdapter.New()
+	if !opts.Cleanup {
+		processOperation = processOperationFeature.NewController(processOperationFeature.NewUseCase(&configuration, db.GetDbName(), sink, metrics, collector, operations))
+
+		if opts.WebPort != nil {
+			snapshot = snapshotAdapter.New(db, configuration, processOperation.Process, metrics)
+		}
 	}
 
 	// Application
@@ -153,8 +158,7 @@ func main() {
 		// WAL
 		r.Run(
 			func(ctx context.Context) error {
-				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics, collector, operations)
-				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
+				controller := controller.NewProcessController(db, processOperation)
 
 				return controller.Listen(ctx)
 			},

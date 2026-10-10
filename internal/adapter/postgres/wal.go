@@ -49,6 +49,9 @@ type wal struct {
 
 	introspector *introspector
 
+	// gate pauses delivery to the handler while a snapshot runs; nil never pauses.
+	gate *walGate
+
 	// standbyInterval is the wait between standby status updates. It is
 	// standbyTimeout outside tests, which shorten it; a zero value would panic
 	// the keepAlive ticker and spin the receive loop.
@@ -76,13 +79,14 @@ const standbyTimeout = time.Second * 10
 // newWal opens the replication session on conn for the given publication and
 // slot and returns a wal ready to be started. conn must have been created with
 // withReplication(true); wal takes ownership of it and closes it in Stop. m is
-// owned by the caller and shared across sessions.
+// owned by the caller and shared across sessions; a nil gate never pauses.
 func newWal(
 	ctx context.Context,
 	conn *connection,
 	publicationName string,
 	slotName string,
 	introspector *introspector,
+	gate *walGate,
 	health Health,
 	m *metrics,
 ) (*wal, error) {
@@ -102,6 +106,7 @@ func newWal(
 		pluginArguments: []string{"proto_version '2'", fmt.Sprintf("publication_names '%s'", publicationName), "messages 'true'"},
 		messageContext:  &postgresMessageContext{messages: map[string]string{}},
 		introspector:    introspector,
+		gate:            gate,
 		standbyInterval: standbyTimeout,
 		health:          health,
 		metrics:         m,
@@ -117,6 +122,10 @@ func newWal(
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 	workCtx := context.WithoutCancel(ctx)
+
+	if w.gate != nil {
+		handler = w.gate.wrap(ctx, handler)
+	}
 
 	err := pglogrepl.StartReplication(ctx, w.session, w.slotName, walPosition, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments})
 	if err != nil {
@@ -580,7 +589,7 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 			case 'u': // unchanged toast: the old value is not in the stream
 				prev[columnName] = domain.Unavailable
 			case 't': // text
-				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)
+				val, err := decodeText(w.typeMap, relation.Columns[index].DataType, column.Data)
 				if err != nil {
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
@@ -612,7 +621,7 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 					next[columnName] = domain.Unavailable
 				}
 			case 't': // text
-				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)
+				val, err := decodeText(w.typeMap, relation.Columns[index].DataType, column.Data)
 				if err != nil {
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
@@ -626,21 +635,21 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 	return prev, next, nil
 }
 
-// decodeRowText decodes a text-format column value using the pgtype codec
-// registered for dataType, falling back to the raw string when the OID is
-// unknown to the type map.
-func (w *wal) decodeRowText(data []byte, dataType uint32) (any, error) {
-	dt, ok := w.typeMap.TypeForOID(dataType)
+// decodeText decodes a text-format column value using the pgtype codec
+// registered in m for oid, falling back to the raw string when the OID is
+// unknown to m.
+func decodeText(m *pgtype.Map, oid uint32, data []byte) (any, error) {
+	dt, ok := m.TypeForOID(oid)
 	if !ok {
 		return string(data), nil
 	}
 
-	val, err := dt.Codec.DecodeValue(w.typeMap, dataType, pgtype.TextFormatCode, data)
+	val, err := dt.Codec.DecodeValue(m, oid, pgtype.TextFormatCode, data)
 	if err != nil {
 		return nil, err
 	}
 
-	if b, ok := val.([16]byte); ok && dataType == pgtype.UUIDOID {
+	if b, ok := val.([16]byte); ok && oid == pgtype.UUIDOID {
 		return uuidString(b), nil
 	}
 

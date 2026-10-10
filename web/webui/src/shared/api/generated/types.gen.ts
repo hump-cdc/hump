@@ -626,6 +626,10 @@ export type SnapshotDoneEventModel = {
 
 export type SnapshotDoneTableModel = {
     /**
+     * Rows read
+     */
+    completedRows: number;
+    /**
      * Why the table was not read completely
      */
     error?: string;
@@ -633,10 +637,6 @@ export type SnapshotDoneTableModel = {
      * Name of the table
      */
     name: string;
-    /**
-     * Rows read
-     */
-    rows: number;
     /**
      * Schema of the table
      */
@@ -675,6 +675,10 @@ export type SnapshotProcessingEventModel = {
 
 export type SnapshotProcessingTableModel = {
     /**
+     * Rows read so far
+     */
+    completedRows: number;
+    /**
      * Rows the snapshot expects to read
      */
     estimatedRows: number;
@@ -682,10 +686,6 @@ export type SnapshotProcessingTableModel = {
      * Name of the table
      */
     name: string;
-    /**
-     * Rows read so far
-     */
-    rows: number;
     /**
      * Schema of the table
      */

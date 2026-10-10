@@ -510,14 +510,14 @@ export const SnapshotRunSinkSchema = z.object({
 export type SnapshotRunSink = z.infer<typeof SnapshotRunSinkSchema>;
 
 export const SnapshotDoneTableSchema = z.object({
+    completedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows read'
+    }),
     error: z.string().register(z.globalRegistry, {
         description: 'Why the table was not read completely'
     }).optional(),
     name: z.string().register(z.globalRegistry, {
         description: 'Name of the table'
-    }),
-    rows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Rows read'
     }),
     schema: z.string().register(z.globalRegistry, {
         description: 'Schema of the table'
@@ -546,14 +546,14 @@ export const SnapshotDoneEventSchema = z.object({
 export type SnapshotDoneEvent = z.infer<typeof SnapshotDoneEventSchema>;
 
 export const SnapshotProcessingTableSchema = z.object({
+    completedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows read so far'
+    }),
     estimatedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
         description: 'Rows the snapshot expects to read'
     }),
     name: z.string().register(z.globalRegistry, {
         description: 'Name of the table'
-    }),
-    rows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
-        description: 'Rows read so far'
     }),
     schema: z.string().register(z.globalRegistry, {
         description: 'Schema of the table'

@@ -42,19 +42,22 @@ type UseCase struct {
 	wp       *workerpool.WorkerPool[*sink.SinkContext]
 }
 
-// NewUseCase builds the sink bindings of every configured table.
-func NewUseCase(cfg Configuration, sinksPort sink.Sink, metricsFactory promauto.Factory, observer Observer, opLog OperationLog) *UseCase {
+// NewUseCase builds the sink bindings of every configured table, labelling its
+// sink metrics with the source database dbName.
+func NewUseCase(cfg Configuration, dbName string, sinksPort sink.Sink, metricsFactory promauto.Factory, observer Observer, opLog OperationLog) *UseCase {
 	workerCount := 0
 
 	// Metrics
 	sinkMessagesCounter := metricsFactory.NewCounterVec(prometheus.CounterOpts{
-		Name: "sink_messages_total",
-		Help: "Total number of messages delivered to a sink, labeled by outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/URL).",
+		Name:        "sink_messages_total",
+		Help:        "Total number of messages delivered to a sink, labeled by source database, outcome (success or failure), sink type (e.g. kafka, http), connection host, and rendered target (topic/subject/exchange/stream/URL).",
+		ConstLabels: prometheus.Labels{"db": dbName},
 	}, []string{"status", "type", "host", "target"})
 
 	sinkDurationHistogram := metricsFactory.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "sink_duration_seconds",
-		Help: "Time spent dispatching a single message to a sink, in seconds, labeled by sink type, connection host, and rendered target (topic/subject/exchange/stream/URL). Measures end-to-end write latency including any retries within a single attempt.",
+		Name:        "sink_duration_seconds",
+		Help:        "Time spent dispatching a single message to a sink, in seconds, labeled by source database, sink type, connection host, and rendered target (topic/subject/exchange/stream/URL). Measures end-to-end write latency including any retries within a single attempt.",
+		ConstLabels: prometheus.Labels{"db": dbName},
 	}, []string{"type", "host", "target"})
 
 	// Build binding mappings per (schema, table) pair

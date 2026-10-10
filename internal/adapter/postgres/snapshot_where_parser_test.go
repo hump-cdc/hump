@@ -58,19 +58,19 @@ func TestParseWhereRendersAcceptedExpressions(t *testing.T) {
 		{name: "type name as a column", where: "date = 1", want: `("date" = 1)`},
 		{name: "keyword column", where: `"select" = 1`, want: `("select" = 1)`},
 		{name: "bare value", where: "active", want: `"active"`},
-		{name: "nesting at the limit", where: strings.Repeat("(", whereMaxDepth-1) + "a" + strings.Repeat(")", whereMaxDepth-1),
-			want: strings.Repeat("(", whereMaxDepth-1) + `"a"` + strings.Repeat(")", whereMaxDepth-1)},
+		{name: "nesting at the limit", where: strings.Repeat("(", snapshotWhereMaxDepth-1) + "a" + strings.Repeat(")", snapshotWhereMaxDepth-1),
+			want: strings.Repeat("(", snapshotWhereMaxDepth-1) + `"a"` + strings.Repeat(")", snapshotWhereMaxDepth-1)},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseWhere(tt.where)
+			got, err := newSnapshotWhereParser().Parse(tt.where)
 			if err != nil {
-				t.Fatalf("parseWhere(%q) error = %v", tt.where, err)
+				t.Fatalf("Parse(%q) error = %v", tt.where, err)
 			}
 
 			if got != tt.want {
-				t.Errorf("parseWhere(%q)\n got = %s\nwant = %s", tt.where, got, tt.want)
+				t.Errorf("Parse(%q)\n got = %s\nwant = %s", tt.where, got, tt.want)
 			}
 		})
 	}
@@ -144,22 +144,22 @@ func TestParseWhereRejectsInvalidExpressions(t *testing.T) {
 		{name: "function with dangling argument", where: "lower(a,", want: "unexpected end of expression"},
 		{name: "qualified column without name", where: "t. = 1", want: `unexpected "="`},
 		{name: "invalid cast after value", where: "a:: = 1", want: "type at offset 4 is not allowed"},
-		{name: "nesting past the limit", where: strings.Repeat("(", whereMaxDepth) + "a" + strings.Repeat(")", whereMaxDepth),
+		{name: "nesting past the limit", where: strings.Repeat("(", snapshotWhereMaxDepth) + "a" + strings.Repeat(")", snapshotWhereMaxDepth),
 			want: "expression is nested too deeply"},
-		{name: "not chain past the limit", where: strings.Repeat("not ", whereMaxDepth) + "a", want: "expression is nested too deeply"},
-		{name: "sign chain past the limit", where: strings.Repeat("-", 2*whereMaxDepth+1) + "1", want: "comment at offset 0"},
-		{name: "spaced sign chain past the limit", where: strings.Repeat("- ", whereMaxDepth) + "1", want: "expression is nested too deeply"},
+		{name: "not chain past the limit", where: strings.Repeat("not ", snapshotWhereMaxDepth) + "a", want: "expression is nested too deeply"},
+		{name: "sign chain past the limit", where: strings.Repeat("-", 2*snapshotWhereMaxDepth+1) + "1", want: "comment at offset 0"},
+		{name: "spaced sign chain past the limit", where: strings.Repeat("- ", snapshotWhereMaxDepth) + "1", want: "expression is nested too deeply"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseWhere(tt.where)
+			got, err := newSnapshotWhereParser().Parse(tt.where)
 			if err == nil {
-				t.Fatalf("parseWhere(%q) = %s, want error containing %q", tt.where, got, tt.want)
+				t.Fatalf("Parse(%q) = %s, want error containing %q", tt.where, got, tt.want)
 			}
 
 			if !strings.Contains(err.Error(), tt.want) {
-				t.Errorf("parseWhere(%q) error = %q, want it to contain %q", tt.where, err, tt.want)
+				t.Errorf("Parse(%q) error = %q, want it to contain %q", tt.where, err, tt.want)
 			}
 		})
 	}

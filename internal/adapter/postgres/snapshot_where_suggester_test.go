@@ -6,7 +6,7 @@ import (
 	"hump/internal/port/database"
 )
 
-func TestSuggestWhere(t *testing.T) {
+func TestSnapshotWhereSuggesterSuggest(t *testing.T) {
 	tests := []struct {
 		name    string
 		columns []tablesColumn
@@ -85,17 +85,17 @@ func TestSuggestWhere(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := suggestWhere(tt.columns)
+			got := newSnapshotWhereSuggester(tt.columns).Suggest()
 			if got != tt.want {
-				t.Fatalf("suggestWhere() = %q, want %q", got, tt.want)
+				t.Fatalf("Suggest() = %q, want %q", got, tt.want)
 			}
 
 			if got == "" {
 				return
 			}
 
-			if _, err := parseWhere(got); err != nil {
-				t.Errorf("parseWhere(%q) error = %v, want the suggestion to be an accepted filter", got, err)
+			if _, err := newSnapshotWhereParser().Parse(got); err != nil {
+				t.Errorf("Parse(%q) error = %v, want the suggestion to be an accepted filter", got, err)
 			}
 		})
 	}

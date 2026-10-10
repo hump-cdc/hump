@@ -66,11 +66,11 @@ func event(state snapshot.State) any {
 		tables := make([]SnapshotProcessingTable, 0, len(state.Tables))
 		for _, table := range state.Tables {
 			tables = append(tables, SnapshotProcessingTable{
-				Schema:        table.Schema,
-				Name:          table.Name,
+				Schema:        string(table.Table.Schema),
+				Name:          string(table.Table.Name),
 				Where:         table.Where,
 				Status:        string(table.Status),
-				Rows:          table.Rows,
+				CompletedRows: table.CompletedRows,
 				EstimatedRows: table.EstimatedRows,
 				Sinks:         sinks(table.Sinks),
 			})
@@ -82,12 +82,12 @@ func event(state snapshot.State) any {
 		tables := make([]SnapshotDoneTable, 0, len(state.Tables))
 		for _, table := range state.Tables {
 			tables = append(tables, SnapshotDoneTable{
-				Schema: table.Schema,
-				Name:   table.Name,
-				Status: string(table.Status),
-				Error:  table.Error,
-				Rows:   table.Rows,
-				Sinks:  sinks(table.Sinks),
+				Schema:        string(table.Table.Schema),
+				Name:          string(table.Table.Name),
+				Status:        string(table.Status),
+				Error:         table.Error,
+				CompletedRows: table.CompletedRows,
+				Sinks:         sinks(table.Sinks),
 			})
 		}
 

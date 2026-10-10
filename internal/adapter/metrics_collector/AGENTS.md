@@ -57,8 +57,8 @@ Four families, named in `scrape.go`:
 
 | Family | Used for |
 |---|---|
-| `hump_sink_messages_total{status,type,host,target}` | `Points.Delivered`/`Failed`, `Sinks`, `Targets` |
-| `hump_sink_duration_seconds{type,host,target}` | the `p95` of points, `Sinks` and `Targets` |
+| `hump_sink_messages_total{db,status,type,host,target}` | `Points.Delivered`/`Failed`, `Sinks`, `Targets` |
+| `hump_sink_duration_seconds{db,type,host,target}` | the `p95` of points, `Sinks` and `Targets` |
 | `hump_processed_rows_duration_seconds{db,operation,schema,table}` | `Tables`: counts via `SampleCount`, `p95` via the buckets |
 | `hump_replication_lag_bytes`, `go_memstats_alloc_bytes` | the gauge readings on a point |
 

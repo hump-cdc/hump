@@ -28,6 +28,8 @@ func (c *Controller) Handler() func(ctx context.Context, input *SnapshotStartReq
 		switch {
 		case errors.Is(err, snapshot.ErrAlreadyRunning):
 			return nil, huma.Error409Conflict(err.Error())
+		case errors.Is(err, snapshot.ErrInvalidWhere):
+			return nil, huma.Error422UnprocessableEntity(err.Error())
 		case errors.Is(err, ErrUnavailable):
 			return nil, huma.Error503ServiceUnavailable(err.Error())
 		case err != nil:

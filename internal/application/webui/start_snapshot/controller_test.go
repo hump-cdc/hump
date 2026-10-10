@@ -39,6 +39,7 @@ func TestHandlerMapsErrors(t *testing.T) {
 		status int
 	}{
 		{"already running", &fakeRunner{err: snapshot.ErrAlreadyRunning}, http.StatusConflict},
+		{"invalid where", &fakeRunner{err: snapshot.ErrInvalidWhere}, http.StatusUnprocessableEntity},
 		{"no runner", nil, http.StatusServiceUnavailable},
 	}
 

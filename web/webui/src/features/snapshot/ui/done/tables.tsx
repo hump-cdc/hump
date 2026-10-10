@@ -31,7 +31,7 @@ export const DoneTables: FC = () => {
                     key={table.id}
                     row={{ table }}
                     columns={RESULT_COLUMNS}
-                    mobileZoneClasses={{ meta: 'pl-6', badges: 'pl-6' }}
+                    mobileZoneClasses={{ meta: 'pl-6', badges: 'gap-x-4 pl-6' }}
                 />
             ))}
         </Table>

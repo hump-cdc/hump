@@ -4,7 +4,7 @@ import { CircleCheck, CircleX } from 'lucide-react'
 
 import { Sink } from '@/shared/ui/sink'
 import type { TableRowColumn } from '@/shared/ui/table'
-import { formatNumber, formatNumberCompact } from '@/shared/utils'
+import { cn, formatNumber, formatNumberCompact } from '@/shared/utils'
 
 import type { Sink as RunSink, Table as RunTable } from '../../model/types'
 
@@ -17,9 +17,22 @@ const StatusIcon: FC<{ table: RunTable }> = ({ table }) =>
         <CircleCheck className="size-4 shrink-0 text-success" />
     )
 
+const SinkLabel: FC<{ sink: RunSink; className?: string; targetClassName?: string }> = ({
+    sink,
+    className,
+    targetClassName,
+}) => (
+    <div className={cn('flex min-w-0 flex-col', className)} title={sink.host}>
+        <Sink type={sink.type} className="whitespace-nowrap" />
+        <span className={cn('max-w-full truncate font-mono text-ink-muted/50 text-xs leading-none', targetClassName)}>
+            {sink.target}
+        </span>
+    </div>
+)
+
 const SinkCount: FC<{ sink: RunSink }> = ({ sink }) => (
     <div className="flex items-center gap-2">
-        <Sink type={sink.type} host={sink.host} className="min-w-0" />
+        <SinkLabel sink={sink} className="items-end" />
         <span className="rounded-full border border-hairline bg-surface-2 px-2 py-0.5 font-medium font-mono text-ink text-xs tabular-nums">
             {formatNumberCompact(sink.count)}
         </span>
@@ -66,7 +79,7 @@ export const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
         header: 'Events',
         className: 'w-30 text-right',
         cell: (d) => (
-            <span className="font-mono text-ink-muted text-sm">
+                        <span className="font-mono text-ink-muted text-sm">
                 {formatNumber(d.table.sinks.reduce((sum, sink) => sum + sink.count, 0))}
             </span>
         ),
@@ -91,7 +104,7 @@ export const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
             render: (d) => (
                 <>
                     {d.table.sinks.map((sink) => (
-                        <Sink key={`${sink.type} ${sink.host} ${sink.target}`} type={sink.type} host={sink.host} />
+                        <SinkLabel key={`${sink.type} ${sink.host} ${sink.target}`} sink={sink} targetClassName="pl-6" />
                     ))}
                 </>
             ),

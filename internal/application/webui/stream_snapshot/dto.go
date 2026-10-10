@@ -16,19 +16,19 @@ type SnapshotProcessingTable struct {
 	Name          string            `json:"name"            doc:"Name of the table"`
 	Where         string            `json:"where,omitempty" doc:"Boolean expression the rows are filtered with, as it would follow WHERE; empty reads every row"`
 	Status        string            `json:"status"          enum:"wait,processing,done" doc:"Phase of the table: waiting for its turn, being read, or read"`
-	Rows          uint64            `json:"rows"            doc:"Rows read so far"`
+	CompletedRows uint64            `json:"completedRows"   doc:"Rows read so far"`
 	EstimatedRows uint64            `json:"estimatedRows"   doc:"Rows the snapshot expects to read"`
 	Sinks         []SnapshotRunSink `json:"sinks"           doc:"Sinks the table is delivered to"`
 }
 
 // SnapshotDoneTable is the outcome of one table of a finished snapshot.
 type SnapshotDoneTable struct {
-	Schema string            `json:"schema"          doc:"Schema of the table"`
-	Name   string            `json:"name"            doc:"Name of the table"`
-	Status string            `json:"status"          enum:"success,error" doc:"Whether the table was read completely"`
-	Error  string            `json:"error,omitempty" doc:"Why the table was not read completely"`
-	Rows   uint64            `json:"rows"            doc:"Rows read"`
-	Sinks  []SnapshotRunSink `json:"sinks"           doc:"Sinks the table was delivered to"`
+	Schema        string            `json:"schema"          doc:"Schema of the table"`
+	Name          string            `json:"name"            doc:"Name of the table"`
+	Status        string            `json:"status"          enum:"success,error" doc:"Whether the table was read completely"`
+	Error         string            `json:"error,omitempty" doc:"Why the table was not read completely"`
+	CompletedRows uint64            `json:"completedRows"   doc:"Rows read"`
+	Sinks         []SnapshotRunSink `json:"sinks"           doc:"Sinks the table was delivered to"`
 }
 
 // SnapshotIdleEvent is the state of a server that has not run a snapshot yet.

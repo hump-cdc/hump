@@ -16,7 +16,6 @@ everything else is module-private. The only consumer is `app/routes/_sidebar/rou
 | `nav-item.tsx` | one menu entry: router `Link`, active state, closes the mobile drawer on click |
 | `app-sidebar-theme.tsx` | the light/dark switch |
 | `connection-info.tsx` | four badges describing the source database |
-| `app-layout.stories.tsx` | the whole shell on an in-memory router |
 
 ```
 AppLayout
@@ -45,22 +44,20 @@ up, in `app/routes/__root.tsx` → `@/app` `Providers`: `QueryClientProvider`, `
 - `@/shared/ui/sidebar`, `@/shared/ui/header`, `@/shared/ui/badge`, `@/shared/ui/tooltip`
 - `@/shared/theme` — `useTheme`, `Theme`
 - `@/shared/utils` — `useStaticData`
-- `@/shared/ui/button`, `@/shared/api` (`getApiConfigQueryKey`, the config type) — story only
 
 Nothing from `features` or `pages`.
 
-## Adding a page touches three places, plus the story
+## Adding a page touches three places
 
 1. the page in `src/pages/<name>`;
 2. a route file `app/routes/_sidebar/<name>.tsx` with `staticData: { title }`;
-3. a `NavItem` in `app-sidebar-menu.tsx` (`to`, `label`, lucide `icon`);
-4. `childRouteConfig` in `app-layout.stories.tsx`, which repeats the menu by hand.
+3. a `NavItem` in `app-sidebar-menu.tsx` (`to`, `label`, lucide `icon`).
 
 The header title does **not** come from the nav label. `AppHeader` reads it through `useStaticData`,
 which returns the `staticData` of the deepest matched route that has a `title`. A route without
 one renders an empty title; a label and a title that disagree are two separate strings to fix.
-`headerAside` travels the same way and is rendered left of `LiveControls`; no real route sets it
-today, only the story does.
+`headerAside` travels the same way and is rendered left of `LiveControls`; no route sets it
+today.
 
 ## Active item
 
@@ -112,15 +109,3 @@ All of it comes from `useSidebar()` (`shared/ui/sidebar`): `isMobile` is `useIsM
   `tooltip` instead, which is why every menu button here passes one.
 
 The collapsed preference and the Cmd/Ctrl+B shortcut belong to `SidebarProvider`.
-
-## The story
-
-`app-layout.stories.tsx` builds its own route tree (`createRootRoute` rendering `AppLayout`, an
-index route with a `headerAside` button, placeholder children) on `createMemoryHistory`, and
-renders a `RouterProvider` inside its own `QueryClientProvider`. The client is seeded with a
-config through `setQueryData(getApiConfigQueryKey(), …)` — the same generated key `useConfig`
-reads — so `ConnectionInfo` renders its badges and no request is made. There is no `LiveUpdates`:
-nothing holds the live connection, so the live badge reads offline and the snapshot badge is
-absent. `VERSION` comes from `rsbuild.config.ts`, which the Storybook build picks up.
-
-`.storybook/main.ts` collects `src/widgets/**/*.stories.*` next to the UI kit's.

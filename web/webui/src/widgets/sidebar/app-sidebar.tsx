@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 import type { FC } from 'react'
 
 import { SiGithub as Github } from '@icons-pack/react-simple-icons'
@@ -14,6 +16,7 @@ import {
     SidebarMenuItem,
     SidebarSeparator,
     SidebarTrigger,
+    useSidebar,
 } from '@/shared/ui/sidebar'
 
 import { AppSidebarMenu } from './app-sidebar-menu'
@@ -21,16 +24,26 @@ import { AppSidebarTheme } from './app-sidebar-theme'
 import { ConnectionInfo } from './connection-info'
 
 export const AppSidebar: FC = () => {
+    const { isMobile, setOpenMobile } = useSidebar()
+
     return (
         <Sidebar>
             <SidebarHeader>
                 <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-on-primary">
-                            <img src="/logo_sm.svg" alt="hump" className="size-5" />
-                        </div>
-                        <div className="flex items-center gap-1.5 font-semibold text-ink group-data-[collapsible=icon]:hidden">
-                            hump
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <Link
+                            to="/"
+                            className="flex min-w-0 items-center gap-2"
+                            onClick={() => {
+                                if (isMobile) setOpenMobile(false)
+                            }}
+                        >
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-on-primary">
+                                <img src="/logo_sm.svg" alt="hump" className="size-5" />
+                            </div>
+                            <span className="font-semibold text-ink group-data-[collapsible=icon]:hidden">hump</span>
+                        </Link>
+                        <div className="flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
                             <Badge>{VERSION}</Badge>
                             <a href="https://hump.dev" target="_blank" rel="noreferrer">
                                 <ExternalLink className="size-3.5 text-ink-tertiary" />

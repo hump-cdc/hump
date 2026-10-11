@@ -13,7 +13,7 @@ type StoryArgs = Pick<ComponentProps<typeof TextInput>, 'placeholder' | 'invalid
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Text Input',
+    title: 'Inputs/Text Input',
     argTypes: {
         placeholder: { name: 'Placeholder', control: 'text', table: { category: 'Content' } },
         withIcon: { name: 'Leading icon', control: 'boolean', table: { category: 'Content' } },

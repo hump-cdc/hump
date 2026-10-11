@@ -10,7 +10,7 @@ type StoryArgs = Pick<ComponentProps<typeof ProgressChart>, 'value' | 'showError
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Charts/Progress Chart',
+    title: 'Charts/Progress Chart',
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         value: { name: 'Value', control: { type: 'range', min: 0, max: 100, step: 1 }, table: { category: 'Content' } },

@@ -15,7 +15,7 @@ type StoryArgs = Pick<ComponentProps<typeof SheetContent>, 'side'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Sheet',
+    title: 'Overlays/Sheet',
     parameters: { disableSideBySide: true },
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },

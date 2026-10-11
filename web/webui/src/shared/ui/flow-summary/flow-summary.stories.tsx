@@ -42,7 +42,7 @@ type StoryArgs = Pick<ComponentProps<typeof FlowSummary>, 'edges'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Flow Summary',
+    title: 'Flows/Flow Summary',
     parameters: { disableSideBySide: true, disablePadding: true },
     argTypes: {
         edges: { table: { disable: true } },

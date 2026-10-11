@@ -22,7 +22,7 @@ type StoryArgs = Pick<ComponentProps<typeof Button>, 'variant' | 'disabled' | 'n
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Button',
+    title: 'Actions/Button',
     argTypes: {
         label: {
             name: 'Content',

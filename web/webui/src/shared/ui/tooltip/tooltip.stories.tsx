@@ -11,7 +11,7 @@ type StoryArgs = Pick<ComponentProps<typeof TooltipContent>, 'variant' | 'side'>
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Tooltip',
+    title: 'Overlays/Tooltip',
     parameters: { disableSideBySide: true },
     argTypes: {
         text: { name: 'Tooltip', control: 'text', table: { category: 'Content' } },

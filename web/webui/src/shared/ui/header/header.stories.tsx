@@ -16,7 +16,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Page/Header',
+    title: 'Layout/Header',
     parameters: { layout: 'fullscreen' },
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },

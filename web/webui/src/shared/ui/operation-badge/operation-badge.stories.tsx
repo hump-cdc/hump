@@ -7,7 +7,7 @@ import { OperationBadge } from './operation-badge'
 type StoryArgs = Pick<ComponentProps<typeof OperationBadge>, 'op'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Operation Badge',
+    title: 'Content/Operation Badge',
     argTypes: {
         op: {
             name: 'Operation',

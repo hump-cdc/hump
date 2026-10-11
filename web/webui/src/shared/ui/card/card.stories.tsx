@@ -35,7 +35,7 @@ const rows = [
 ]
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Card',
+    title: 'Content/Card',
     argTypes: {
         title: {
             name: 'Title',

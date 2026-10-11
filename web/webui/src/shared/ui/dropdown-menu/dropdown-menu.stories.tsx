@@ -29,7 +29,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/DropdownMenu',
+    title: 'Overlays/Dropdown Menu',
     argTypes: {
         label: {
             name: 'Trigger label',

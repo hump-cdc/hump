@@ -31,7 +31,7 @@ type StoryArgs = Pick<ComponentProps<typeof MultiComboBox>, 'placeholder' | 'hin
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Multi Combo Box',
+    title: 'Inputs/Multi Combo Box',
     argTypes: {
         placeholder: { name: 'Placeholder', control: 'text', table: { category: 'Content' } },
         withIcon: { name: 'Leading icon', control: 'boolean', table: { category: 'Content' } },

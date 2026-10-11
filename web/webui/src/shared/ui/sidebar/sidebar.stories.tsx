@@ -42,7 +42,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Page/Sidebar',
+    title: 'Layout/Sidebar',
     parameters: { layout: 'fullscreen', disableSideBySide: true, disablePadding: true },
     argTypes: {
         active: {

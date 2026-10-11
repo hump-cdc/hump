@@ -9,7 +9,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Mark',
+    title: 'Content/Mark',
     argTypes: {
         before: { name: 'Text before', control: 'text', table: { category: 'Content' } },
         label: { name: 'Content', control: 'text', table: { category: 'Content' } },

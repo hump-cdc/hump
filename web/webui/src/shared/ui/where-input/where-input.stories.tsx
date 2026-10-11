@@ -13,7 +13,7 @@ type StoryArgs = Pick<
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Where Input',
+    title: 'Inputs/Where Input',
     argTypes: {
         placeholder: { name: 'Placeholder', control: 'text', table: { category: 'Content' } },
         suggestion: { name: 'Suggestion', control: 'text', table: { category: 'Content' } },

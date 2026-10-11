@@ -13,7 +13,7 @@ type StoryArgs = Pick<ComponentProps<typeof Tabs>, 'defaultValue'> &
     }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Tabs',
+    title: 'Layout/Tabs',
     argTypes: {
         defaultValue: {
             name: 'Default tab',

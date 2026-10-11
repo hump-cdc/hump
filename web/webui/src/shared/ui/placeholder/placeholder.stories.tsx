@@ -18,7 +18,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Placeholder',
+    title: 'Placeholders/Placeholder',
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         description: { name: 'Description', control: 'text', table: { category: 'Content' } },

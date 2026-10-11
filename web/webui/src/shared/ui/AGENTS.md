@@ -29,6 +29,10 @@ shared/ui/
 - Folder/file: **kebab-case** (`filter-dropdown/filter-dropdown.tsx`).
 - Exported component: **PascalCase** (`FilterDropdown`).
 - Keep `cva` variants, the props `type`, and the component in the single `.tsx` file.
+- Every component folder carries its own `AGENTS.md` (plus a `CLAUDE.md` holding only
+  `@AGENTS.md`) with four parts: what the component is for and its Storybook path, **Usage**,
+  **Props**, **Semantic styles** (variants and the design tokens behind them). Keep it in
+  sync when props or variants change.
 
 ## Component rules
 
@@ -89,10 +93,29 @@ Infer the story shape from `button/button.stories.tsx`:
 
 - `StoryArgs` reuses the component's props via `Pick<ComponentProps<typeof X>, …>` for
   real props, plus story-only fields (e.g. `label`, `icon`) when needed.
-- `meta.title` = `'UI Kit/<Component>'`; drive everything through `argTypes` + `args`
-  and a single `render`.
+- `meta.title` = `'<Group>/<Component>'` (see [Groups](#groups)); drive everything through
+  `argTypes` + `args` and a single `render`.
 - Export one story `Default` with `name: '<Component>'` (so a single-story component
   shows no extra nesting under its title).
+
+### Groups
+
+Stories are grouped by what the component is for; there is no common root. Pick the group
+that fits, and add a new one only when none does — then also add it to `storySort.order`
+in `.storybook/preview.tsx`, which fixes the sidebar order of the groups.
+
+| Group | Holds |
+|---|---|
+| `Actions` | Things the user clicks to do something: buttons |
+| `Inputs` | Form controls that take a value |
+| `Content` | Presentation of data: badges, code, tables, cards (`Content/Card/<Kind>`), sink and operation badges |
+| `Charts` | Charts |
+| `Placeholders` | What stands in for content that is absent, failed or still loading: placeholders, errors, progress |
+| `Overlays` | Layers above the page: sheets, tooltips, menus, toasts |
+| `Layout` | Page structure and navigation within it: header, sidebar, tabs, toolbar |
+| `Flows` | The flow diagrams |
+
+`Colors` (`colors.mdx`) sits at the top level, outside any group.
 
 ### Naming & grouping controls
 
@@ -126,7 +149,7 @@ type StoryArgs = Pick<ComponentProps<typeof Button>, 'variant' | 'disabled'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Button',
+    title: 'Actions/Button',
     argTypes: {
         label: { name: 'Content', control: 'text', table: { category: 'Content' } },
         variant: {

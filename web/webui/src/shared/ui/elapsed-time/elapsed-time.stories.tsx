@@ -8,7 +8,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Elapsed Time',
+    title: 'Content/Elapsed Time',
     argTypes: {
         seconds: { name: 'Elapsed seconds', control: 'number', table: { category: 'Content' } },
         running: { name: 'Running', control: 'boolean', table: { category: 'State' } },

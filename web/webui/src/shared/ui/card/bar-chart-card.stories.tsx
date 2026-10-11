@@ -45,7 +45,7 @@ type StoryArgs = Pick<
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Card/Bar',
+    title: 'Content/Card/Bar',
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         subtitle: { name: 'Subtitle', control: 'text', table: { category: 'Content' } },

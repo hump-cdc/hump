@@ -43,7 +43,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Combobox',
+    title: 'Inputs/Combobox',
     argTypes: {
         placeholder: { name: 'Placeholder', control: 'text', table: { category: 'Content' } },
         emptyText: { name: 'Empty text', control: 'text', table: { category: 'Content' } },

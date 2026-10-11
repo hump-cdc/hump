@@ -23,7 +23,7 @@ type StoryArgs = Pick<ComponentProps<typeof Toaster>, 'position'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Toast',
+    title: 'Overlays/Toast',
     parameters: { disableSideBySide: true },
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },

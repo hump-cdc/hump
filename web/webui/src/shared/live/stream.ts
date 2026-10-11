@@ -6,6 +6,8 @@ import type {
     LiveOperationsListener,
     LiveReconnectListener,
     LiveRelease,
+    LiveSnapshot,
+    LiveSnapshotListener,
     LiveStatus,
     LiveStatusListener,
     Unsubscribe,
@@ -34,6 +36,9 @@ export type LiveStream = {
     subscribeStatus: (listener: LiveStatusListener) => Unsubscribe
     subscribeReconnect: (listener: LiveReconnectListener) => Unsubscribe
     getStatus: () => LiveStatus
+    subscribeSnapshot: (listener: LiveSnapshotListener) => Unsubscribe
+    /** Latest snapshot state of the current connection; `undefined` until the server reports one. */
+    getSnapshot: () => LiveSnapshot | undefined
 }
 
 /**
@@ -49,8 +54,10 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
     const operationsListeners = new Set<LiveOperationsListener>()
     const statusListeners = new Set<LiveStatusListener>()
     const reconnectListeners = new Set<LiveReconnectListener>()
+    const snapshotListeners = new Set<LiveSnapshotListener>()
 
     let status: LiveStatus = 'idle'
+    let snapshot: LiveSnapshot | undefined
     let controller: AbortController | undefined
     let holds = 0
     let stopTimer: ReturnType<typeof setTimeout> | undefined
@@ -62,6 +69,15 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
 
         status = next
         notify(statusListeners, (listener) => listener())
+    }
+
+    const setSnapshot = (next: LiveSnapshot | undefined): void => {
+        if (next?.state === snapshot?.state && next?.progress === snapshot?.progress) {
+            return
+        }
+
+        snapshot = next
+        notify(snapshotListeners, (listener) => listener())
     }
 
     const run = async (signal: AbortSignal): Promise<void> => {
@@ -81,6 +97,11 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
                 for await (const event of await open(signal)) {
                     // Any event, the welcome one included, proves the connection is up.
                     setStatus('live')
+
+                    if (isSnapshot(event)) {
+                        setSnapshot(event)
+                        continue
+                    }
 
                     const operations = 'operations' in event ? (event.operations ?? []) : []
                     if (operations.length === 0) {
@@ -105,6 +126,9 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
                 backoff.reset()
             }
 
+            // The server reports the snapshot again on every connect, so a value from a dead
+            // connection is dropped rather than shown next to an offline badge.
+            setSnapshot(undefined)
             setStatus('reconnecting')
             await wait(backoff.next(), signal)
         }
@@ -132,6 +156,7 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
         holds = 0
         controller?.abort()
         controller = undefined
+        setSnapshot(undefined)
         setStatus('idle')
     }
 
@@ -168,6 +193,8 @@ export const createLiveStream = (deps: LiveStreamDeps = {}): LiveStream => {
         subscribeStatus: (listener) => subscribeTo(statusListeners, listener),
         subscribeReconnect: (listener) => subscribeTo(reconnectListeners, listener),
         getStatus: () => status,
+        subscribeSnapshot: (listener) => subscribeTo(snapshotListeners, listener),
+        getSnapshot: () => snapshot,
     }
 }
 
@@ -191,6 +218,9 @@ const openLiveStream: LiveStreamOpen = async (signal) => {
 
     return stream
 }
+
+/** Tells the snapshot event apart by its `state`, the one field no other event carries. */
+const isSnapshot = (event: GetApiLiveResponse): event is LiveSnapshot => 'state' in event
 
 /** Adds `listener` to `listeners` and returns the matching removal. */
 const subscribeTo = <T>(listeners: Set<T>, listener: T): Unsubscribe => {

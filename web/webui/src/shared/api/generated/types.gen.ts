@@ -651,6 +651,17 @@ export type SnapshotDoneTableModel = {
     status: 'success' | 'error';
 };
 
+export type SnapshotEventModel = {
+    /**
+     * Rows read across all tables as a whole percent of the estimate; 0 while the estimate is unknown or no snapshot is processing
+     */
+    progress: number;
+    /**
+     * Snapshot state
+     */
+    state: 'idle' | 'processing' | 'done';
+};
+
 export type SnapshotIdleEventModel = {
     /**
      * Snapshot state
@@ -843,7 +854,7 @@ export type GetApiLiveResponses = {
     /**
      * OK
      */
-    200: OperationsEventModel | WelcomeEventModel;
+    200: OperationsEventModel | SnapshotEventModel | WelcomeEventModel;
 };
 
 export type GetApiLiveResponse = GetApiLiveResponses[keyof GetApiLiveResponses];

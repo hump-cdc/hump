@@ -9,9 +9,12 @@ export type {
     LiveOperationsListener,
     LiveReconnectListener,
     LiveRelease,
+    LiveSnapshot,
+    LiveSnapshotListener,
     LiveStatus,
     LiveStatusListener,
     Unsubscribe,
 } from './types'
 export { useLiveOperations } from './use-live-operations'
+export { useLiveSnapshot } from './use-live-snapshot'
 export { useLiveStatus } from './use-live-status'

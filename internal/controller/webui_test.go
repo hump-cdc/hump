@@ -187,7 +187,7 @@ func newTestRouter(collector operationscollectorport.Collector) chi.Router {
 		getconfig.NewController(getconfig.NewUseCase(options.Options{}, config.Configuration{}, nil)),
 		getmetrics.NewController(getmetrics.NewUseCase(nil)),
 		getoperations.NewController(getoperations.NewUseCase(collector)),
-		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil)),
+		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil, nil)),
 		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
 		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
 		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),

@@ -36,7 +36,7 @@ func main() {
 		getconfig.NewController(getconfig.NewUseCase(options.Options{}, config.Configuration{}, nil)),
 		getmetrics.NewController(getmetrics.NewUseCase(nil)),
 		getoperations.NewController(getoperations.NewUseCase(nil)),
-		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil)),
+		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil, nil)),
 		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
 		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
 		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
@@ -49,6 +49,7 @@ func main() {
 		http.MethodGet,
 		"/api/live",
 		"#/components/schemas/OperationsEvent",
+		"#/components/schemas/SnapshotEvent",
 		"#/components/schemas/WelcomeEvent",
 	); err != nil {
 		log.Fatalf("flatten sse schema: %v", err)

@@ -2,8 +2,9 @@
 
 `GET /api/snapshot` (`snapshot.stream`, registered in `internal/controller/webui.go`), an SSE
 stream of the snapshot runner's state: the current state on connect, then the state again on every
-change. It is the only place the dashboard learns about a run — `start_snapshot` and
-`stop_snapshot` answer with empty bodies.
+change. It is the only place the dashboard learns the details of a run — `start_snapshot` and
+`stop_snapshot` answer with empty bodies, and `/api/live` (`stream_updates`) carries just the
+state and the overall percent.
 
 ## Layout
 

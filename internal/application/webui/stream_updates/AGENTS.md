@@ -1,17 +1,18 @@
 # application/webui/stream_updates — how this package hangs together
 
 `GET /api/live` (`live.stream`, registered in `internal/controller/webui.go`), the dashboard's SSE
-feed: a `welcome` on connect, then one `operations` event per batching window listing the
-deliveries the pipeline made in it. It does a second job that is easy to miss — **a connected
+feed: a `welcome` and a `snapshot` on connect, then one `operations` event per batching window
+listing the deliveries the pipeline made in it, and a `snapshot` whenever the snapshot run changes
+state or moves a whole percent. It does a second job that is easy to miss — **a connected
 client is what turns the collectors on.**
 
 ## Layout
 
 | File | Role |
 |---|---|
-| `usecase.go` | `Subscribe`: connects both collectors, subscribes to the feed, returns the release func |
-| `controller.go` | the SSE handler, `Events()`, batch → event rendering |
-| `dto.go` | `WelcomeEvent`, `OperationsEvent`, `OperationEvent` — the wire contract |
+| `usecase.go` | `Subscribe`: connects both collectors, subscribes to the feed and the snapshot runner, returns the `Feed` and the release func; `progress` |
+| `controller.go` | the SSE handler, `Events()`, batch → event and state → event rendering |
+| `dto.go` | `WelcomeEvent`, `OperationsEvent`, `OperationEvent`, `SnapshotEvent` — the wire contract |
 
 ## This route is the on-switch
 
@@ -26,8 +27,8 @@ open `/api/live` they answer zeros and an empty page. See "Idle by default" in
 reverse order:
 
 ```
-metrics connect → operations connect → subscribe
-unsubscribe → operations disconnect → metrics disconnect
+metrics connect → operations connect → subscribe → snapshot subscribe
+snapshot unsubscribe → unsubscribe → operations disconnect → metrics disconnect
 ```
 
 `TestSubscribeAttachesAndReleasesTheClient` pins that sequence. The collectors are refcounted, so a
@@ -51,13 +52,30 @@ them (`adapter/live_streamer/AGENTS.md`). Nothing here may buffer or retry to co
 
 `welcome` is sent before the loop so a client learns it is connected without waiting for traffic.
 
+## The snapshot event
+
+`/api/metrics` knows nothing about snapshots, so this stream is how every page learns one is
+running. The handler sends the state `Subscribe` returned right after `welcome`, so a client that
+connects mid-run needs no other request; `runner.Subscribe` hands out the state and the channel
+together, so nothing is lost in between.
+
+`SnapshotEvent` is `state` plus `progress`: rows read across all tables as a whole percent of the
+estimate, rounded down (`progress` in `usecase.go`). It is 0 outside `processing` and while the
+estimate is unknown — the runner estimates before it reads, and zeroes the estimates when it
+finishes. 100 can show briefly, between the last row and the run turning `done`.
+
+The runner publishes up to five times a second; the handler forwards a state only when its
+rendered event differs from the last one sent, which is the whole dedupe. Do not move the
+comparison to the raw `State` — that changes on every row.
+
 ## Changing an event touches two places
 
 `Events()` maps names to payload types for huma, but `cmd/openapi/main.go` separately lists the
 schema names for this route in `flattenSSESchema`, which rewrites the documented response into a
 `oneOf` of payloads for the generated TypeScript client. A new or renamed event must be added there
 too. The flattened spec **drops event names**, so payloads have to stay distinguishable by shape —
-today an empty object versus one with a required `operations`.
+today an empty object, one with a required `operations`, and one with a required `state`. The
+client reads `state` to recognise the snapshot event, so no other payload may carry that field.
 
 ## Leaving
 
@@ -65,15 +83,22 @@ The loop ends on `ctx.Done()` (the client left), on a closed channel (the stream
 it closes subscriber channels at `StageWorkers`, before the web server stops, so parked handlers
 return), or on a failed `send`. All three run `release`.
 
-Every dependency may be nil, each guarded on its own. A nil stream yields a **nil channel**, which
-blocks forever, so the handler sends `welcome` and then waits on the context alone. As wired
-today, `cmd/hump/main.go` builds all three whenever the web port is set, so a served route sees
-none of them nil — the field comments tying nil to "telemetry disabled" do not describe the current
-wiring. The nil paths are real for `cmd/openapi`, which constructs the use case with three nils to
-register the route, and for tests.
+A closed **snapshot** channel is not one of them: the runner shuts down at the same stage, and the
+handler just sets its channel to nil and leaves ending the stream to the feed.
+
+Every dependency may be nil, each guarded on its own. A nil stream or runner yields a **nil
+channel**, which blocks forever, so the handler sends `welcome` and an `idle` snapshot and then
+waits on the context alone. As wired today, `cmd/hump/main.go` builds the first three whenever the
+web port is set, so a served route sees none of them nil — the field comments tying nil to
+"telemetry disabled" do not describe the current wiring — and the runner whenever the process is
+not in cleanup mode. The nil paths are real for `cmd/openapi`, which constructs the use case with
+four nils to register the route, and for tests.
 
 ## Tests
 
-`usecase_test.go` only; the handler loop has none here. `fakeMetrics`, `fakeOperations` and
-`fakeStreamer` embed their ports and append to one shared log, which is how the call order is
-asserted. Helpers live below the last test function — see the `go` skill.
+`usecase_test.go` covers `Subscribe` and `progress`: `fakeMetrics`, `fakeOperations`,
+`fakeStreamer` and `fakeRunner` append to one shared log, which is how the call order is asserted.
+`controller_test.go` covers the handler: `fakeSender` can fail every send or run a hook on send,
+and `serve` fails a test that runs past five seconds. The dedupe test feeds states through an
+unbuffered channel, so each is consumed before the next is offered. Helpers live below the last
+test function — see the `go` skill.

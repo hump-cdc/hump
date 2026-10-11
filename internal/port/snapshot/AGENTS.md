@@ -10,9 +10,9 @@ of `port/database` (`StartSnapshot` / `ReadSnapshot`), which the adapter drives.
 
 ## Who calls what
 
-`start_snapshot` → `Start`, `stop_snapshot` → `Stop`, `stream_snapshot` → `Subscribe` /
-`Unsubscribe`. **Nil is a valid `Runner`**: it is wired only when the web UI is enabled and the
-process is not in cleanup mode, and all three use cases nil-check it.
+`start_snapshot` → `Start`, `stop_snapshot` → `Stop`, `stream_snapshot` and `stream_updates` →
+`Subscribe` / `Unsubscribe`. **Nil is a valid `Runner`**: it is wired only when the web UI is
+enabled and the process is not in cleanup mode, and all four use cases nil-check it.
 
 ## `State` is sent whole, and lossily
 
@@ -27,7 +27,8 @@ closed channel.
 `stream_snapshot/dto.go` repeats them as `enum` tags, which nothing derives from the constants:
 `idle`, `processing`, `done` for `Status` (one response type each), and two disjoint sets for
 `TableStatus` — `wait,processing,done` while the run is processing, `success,error` once it is
-done. Adding or renaming a constant means editing those tags.
+done. `stream_updates/dto.go` repeats the `Status` set once more, on `SnapshotEvent`. Adding or
+renaming a constant means editing those tags.
 
 That split is the thing to keep straight: `TableDone` during a run means "read to the end or
 failed" — there is no error status while processing, so `Table.Error` is what tells the two

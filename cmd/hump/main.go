@@ -144,7 +144,7 @@ func main() {
 						getConfigFeature.NewController(getConfigFeature.NewUseCase(opts, configuration, db)),
 						getMetricsFeature.NewController(getMetricsFeature.NewUseCase(collector)),
 						getOperationsFeature.NewController(getOperationsFeature.NewUseCase(operations)),
-						streamUpdatesFeature.NewController(streamUpdatesFeature.NewUseCase(collector, operations, live)),
+						streamUpdatesFeature.NewController(streamUpdatesFeature.NewUseCase(collector, operations, live, snapshot)),
 						getSnapshotEstimatesFeature.NewController(getSnapshotEstimatesFeature.NewUseCase(db)),
 						getSnapshotTablesFeature.NewController(getSnapshotTablesFeature.NewUseCase(configuration, db)),
 						streamSnapshotFeature.NewController(streamSnapshotFeature.NewUseCase(snapshot)),

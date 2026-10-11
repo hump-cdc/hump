@@ -484,6 +484,21 @@ export const SnapshotColumnSchema = z.object({
 
 export type SnapshotColumn = z.infer<typeof SnapshotColumnSchema>;
 
+export const SnapshotEventSchema = z.object({
+    progress: z.int().gte(0).lte(100).register(z.globalRegistry, {
+        description: 'Rows read across all tables as a whole percent of the estimate; 0 while the estimate is unknown or no snapshot is processing'
+    }),
+    state: z.enum([
+        'idle',
+        'processing',
+        'done'
+    ]).register(z.globalRegistry, {
+        description: 'Snapshot state'
+    })
+});
+
+export type SnapshotEvent = z.infer<typeof SnapshotEventSchema>;
+
 export const SnapshotIdleEventSchema = z.object({
     state: z.enum(['idle']).register(z.globalRegistry, {
         description: 'Snapshot state'
@@ -662,6 +677,7 @@ export const zGetApiConfigResponse = ConfigResponseBodySchema;
  */
 export const zGetApiLiveResponse = z.union([
     OperationsEventSchema,
+    SnapshotEventSchema,
     WelcomeEventSchema
 ]);
 

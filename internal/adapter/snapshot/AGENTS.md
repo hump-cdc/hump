@@ -35,6 +35,8 @@ with `Error` set (the processing DTO has no error status); `finish` turns `done`
 - Every state change from the run goes through `update`, which re-checks the run's context under
   `mu`, so a run that raced `Stop`/`close` never overwrites their state.
 - Publishing is throttled to `publishInterval` for per-row progress; status changes always publish.
+  Every `/api/live` client is a subscriber too (`stream_updates`), not only an open Snapshot page,
+  and each publish clones the state per subscriber under `mu`.
 - `New` registers at `StageWorkers`; `close` cancels the run, closes subscriber channels and waits
   for the run goroutine, snapshot release included. A `Start` after that returns `ErrClosed`.
 

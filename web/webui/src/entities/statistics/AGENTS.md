@@ -25,7 +25,7 @@ There are no tests and no stories in this module.
 |---|---|---|
 | `delivered` | `points[].delivered` | `MetricCard`, `success`; headline = **sum over the window** |
 | `failed` | `points[].failed` | `MetricCard`, `danger`; headline = sum over the window |
-| `throughput` | `points[].throughput` | `AreaChartCard`, `rows/sec`, no headline |
+| `throughput` | `points[].throughput` | `AreaChartCard`, `events/sec`, no headline |
 | `replication-lag` | `points[].replicationLagBytes` | `MetricCard`, bytes; headline = **last point** |
 | `heap-in-use` | `points[].memoryAllocBytes` | `AreaChartCard` titled "Memory", MB; headline = last point |
 | `sink-delivery` | `sinks`, `points[].sinkDelivery` | `BarChartCard`, one stacked series per sink type |
@@ -53,19 +53,20 @@ const { data } = useMetrics(chartStep)         // entities/metrics/@x/statistics
   Refresh is owned by `entities/metrics` (repoll at `hh:mm:01`) and `shared/state` (the metrics
   prefix is in `LIVE_EVENT_QUERIES`); nothing here schedules anything.
 - `chartStep` is the **bucket width** (`1m` / `5m` / `10m`), not a look-back range. The step list
-  in `entities/config/state` is hand-written, while `MetricsDuration` is generated from the
-  request enum; passing one to `useMetrics` is what makes the compiler keep them in line.
+  in `entities/config/state` is hand-written and checked with `satisfies` against the generated
+  request enum that `MetricsDuration` comes from.
 - Sibling entities are reachable only through their `@x/statistics.ts` files. Each of those
   exposes the minimum: `useMetrics` and `MetricsPoint` from `entities/metrics`,
   `useLiveControlsChartStep` from `entities/config/state`, `useConfig` from
   `entities/config/config`. Need more — widen the `@x` file, do not import the entity's
-  `index.ts`.
+  barrel or its files.
 
 What the fields mean is decided by the backend, not here. Read
 `internal/application/webui/get_metrics/AGENTS.md` (the wire contract, `dto.go`) and
 `internal/adapter/metrics_collector/AGENTS.md` ("Two clocks in one response", "What it reads, and
-what it cannot") before changing a card's wording. `shared/prometheus` is not used in this module
-and no Prometheus metric name appears in it — slices see only `MetricsPoint` fields.
+what it cannot") before changing a card's wording — `throughput`, for one, is successfully
+delivered events per second, not rows read. No Prometheus metric name appears in this module —
+slices see only `MetricsPoint` fields.
 
 ## Things that are easy to get wrong
 
@@ -88,7 +89,7 @@ and no Prometheus metric name appears in it — slices see only `MetricsPoint` f
   position stable. `VARIANTS` and `Series` are duplicated in the two hooks — no slice here
   imports a neighbour. A sink missing from a bucket is written as `0`, never left out.
 - **`MetricCard` wants `{ date, value }`**; the area and bar cards take an `xAxisKey` and
-  `series[].dataKey`, so those hooks name their keys (`time`, `rowsPerSec`, `heapInUse`, the sink
+  `series[].dataKey`, so those hooks name their keys (`time`, `eventsPerSec`, `heapInUse`, the sink
   type). X labels come from `formatTimeCompact` (local `HH:MM`) in every metric slice.
 - `tables` and `sinks` rely on `ConfigProvider` having resolved the config before the page mounts;
   that is why they have no loading state, only the "No … configured" empty one.

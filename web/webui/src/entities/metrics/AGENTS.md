@@ -10,25 +10,21 @@ is `internal/application/webui/get_metrics/AGENTS.md`; what the numbers mean is 
 
 | File | Role |
 |---|---|
-| `index.ts` | the public API: `useMetrics` and the ten `Metrics*` types |
 | `model/types.ts` | the normalized shape — plain numbers, epoch milliseconds, full field names |
 | `model/use-metrics.ts` | the query, its refresh schedule and `normalizeMetrics` with its converters |
 | `model/use-metrics.test.ts` | `refetchInterval` and `normalizeMetrics`; the hook itself is not tested |
-| `@x/<consumer>.ts` | cross-import API for other entities, one file per consumer |
+| `@x/<consumer>.ts` | the public API: one file per consuming entity |
 
 Imports from `shared` are `@/shared/api` (the generated `Metrics.get` client and the `*Model`
-types) and `@/shared/state` (`keys.queries.metrics`). Nothing from `shared/prometheus` or
-`shared/live`.
+types) and `@/shared/state` (`keys.queries.metrics`). Nothing from `shared/live`.
 
 ## Public API and who uses it
 
-`index.ts` exports `useMetrics` plus `Metrics`, `MetricsPoint`, `MetricsTopology`, `MetricsTable`,
-`MetricsTableOp`, `MetricsSink`, `MetricsSinkTarget`, `MetricsDelivery`, `MetricsConnection` and
-`MetricsDuration`. `normalizeMetrics`, `refetchInterval` and `METRICS_POINTS_MAX` are exported
-from `use-metrics.ts` for the test only and are in neither `index.ts` nor `@x`.
-
-Today nothing imports `index.ts`: every consumer is another entity, and entities may not import
-each other's `index.ts`, so all of them come through `@x`.
+There is **no `index.ts`**. Every consumer is another entity, and entities reach each other only
+through `@x`, so the `@x` files are the whole public API. `normalizeMetrics`, `refetchInterval`
+and `METRICS_POINTS_MAX` are exported from `use-metrics.ts` for the test only and are in no `@x`
+file. The types in `model/types.ts` that no `@x` file re-exports (`Metrics`, `MetricsTableOp`,
+`MetricsSinkTarget`, `MetricsDuration`) are internal.
 
 | File | Consumer | Exposes |
 |---|---|---|
@@ -41,7 +37,8 @@ The files are named after the consumer, and not consistently by group or by slic
 and `operations` are group folders, `flows` and `inspector` are two slices of the `flows` group.
 A new consuming entity gets **its own** `@x/<consumer>.ts` re-exporting from `../model/*` only
 what it needs; do not point it at an existing file, and do not widen a file for a different
-consumer. Layers above `entities` import `@/entities/metrics` instead.
+consumer. A consumer from a layer above `entities` would need an `index.ts` added first — the
+`biome.json` overrides let those layers import a slice through its barrel only.
 
 Every consumer calls `useMetrics` with the chart step from the live controls
 (`useLiveControlsChartStep`, `entities/config/state`), so they share one cache entry and one
@@ -70,7 +67,8 @@ directly through `keys.queries.metrics(duration)` gives a `MetricsResponseBodyMo
 
 `MetricsDuration` is not declared here — it is the `duration` field of the generated request
 type, so a bucket width added on the backend arrives with the regenerated client. `CHART_STEPS`
-in `entities/config/state` is a separate hand-written list of the same values.
+in `entities/config/state` is a separate hand-written list, checked against this type with
+`satisfies`.
 
 ## The fixed timeline
 

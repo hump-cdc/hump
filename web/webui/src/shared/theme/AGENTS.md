@@ -44,17 +44,20 @@ Two writers set that class, at different times:
 trusts the script to have applied the same value. Remove the script and a stored `dark` renders
 light until the user switches.
 
-## The script duplicates the constants — keep them in sync
+## The script is built from the constants
 
-`theme-script.ts` is a string evaluated in the page, so it cannot import anything. It repeats
-four literals from `constants.ts`: `'theme'` (`THEME_STORAGE_KEY`), `'dark'` as the fallback
-(`DEFAULT_THEME`), `'dark'` as the class (`DARK_CLASS`), and `'(prefers-color-scheme: dark)'`
-(`DARK_MEDIA_QUERY`). The validation of the stored value (`light`/`dark`/`system`, anything else
-→ default) is duplicated too, in `readStoredTheme`. Changing any of these means editing both
-files; nothing checks it.
+`themeInitScript` is a string evaluated in the page, so the script itself cannot import anything.
+The string is assembled at build time instead: `theme-script.ts` imports `THEME_STORAGE_KEY`,
+`DEFAULT_THEME`, `DARK_CLASS` and `DARK_MEDIA_QUERY` from `constants.ts` and inlines each with
+`JSON.stringify`, so changing a constant changes the script too.
+
+Two things are still written twice: the list of valid stored values (`light`/`dark`/`system`,
+anything else → default) is repeated in `readStoredTheme`, and the `theme === 'dark'` comparison
+in the script assumes the dark theme is named `dark`.
 
 The file is also imported by `rsbuild.config.ts`, i.e. it is loaded by the build tool, outside the
-app bundle. Keep it free of imports.
+app bundle. Its only import is `constants.ts`, which imports nothing but a type; keep both free of
+anything the build tool cannot load (React, `@/` aliases, browser globals at module level).
 
 ## Behaviour worth knowing
 

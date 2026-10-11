@@ -21,6 +21,7 @@ invalidation helpers (`@/shared/state`).
 | `use-live-status.ts` | `useLiveStatus()` — `LiveStatus` through `useSyncExternalStore` |
 | `use-live-snapshot.ts` | `useLiveSnapshot()` — `LiveSnapshot \| undefined` through `useSyncExternalStore` |
 | `index.ts` | the public contract: everything above, including the constants, the factory and its types |
+| `stream.fake.ts` | test-only: `fakeLiveStream` and the happy-dom helpers; not exported from `index.ts` |
 
 ## Who holds the connection
 
@@ -141,9 +142,17 @@ whole percent, enough for the badge every page shows.
 
 ## Tests
 
-`bun test` in `web/webui` (the `test` script; `bun:test`, no DOM). The hooks and `LiveUpdates`
-have no tests.
+`bun test` in `web/webui` (the `test` script; `bun:test`).
 
+- `use-live-status.test.tsx`, `use-live-snapshot.test.tsx`, `use-live-operations.test.tsx`,
+  `live-updates.test.tsx` — the hooks and `LiveUpdates` rendered with `@testing-library/react`
+  against `fakeLiveStream` from `stream.fake.ts`: a hand-driven `LiveStream` (`emit`, `setStatus`,
+  `setSnapshot`, `reconnect`) that also counts holds and listeners. Importing `stream.fake.ts`
+  swaps the `liveStream` singleton through `mock.module('./stream', …)` and leaves the rest of the
+  module real. The mock is process-wide, hence one shared fake that each test `reset()`s.
+- Those four files call `registerDom` / `unregisterDom` (happy-dom) in `beforeAll` / `afterAll`.
+  There is deliberately no preload: happy-dom replaces `fetch`, and the integration test below
+  needs the runtime's own.
 - `backoff.test.ts` — doubling, the cap, the default constants, `reset`.
 - `stream.test.ts` — `createLiveStream` through `LiveStreamDeps`: `open` returns a test-driven
   `Channel` per attempt (`push` / `end` / `fail`), `sleep` records the delay and advances a fake

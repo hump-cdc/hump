@@ -24,7 +24,7 @@ Run in `web/webui`. The `task` targets in the root `taskfile.yaml` wrap some of 
 | `bun run dev` | dev server on port 3000; `task web:dev` adds `API_URL=http://localhost:3200` |
 | `bun run build` | production build into `internal/controller/webui`; `task web:build` |
 | `bun run check` / `lint` / `format` | `biome check` / `biome lint` / `biome format` |
-| `bun test` | every `*.test.ts`, colocated with the code under test, written on `bun:test` |
+| `bun test` | every `*.test.ts(x)`, colocated with the code under test, written on `bun:test` |
 | `bun run storybook` | Storybook on port 6006; `task web:storybook` |
 | `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev`, `build` |
 | `bun run generate-routes` | `tsr generate` → `app/routeTree.gen.ts` |
@@ -41,7 +41,7 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `app/` | the entry: `main.tsx`, `router.tsx`, `routes/` (route files), `styles.css` |
 | `src/app` | the FSD app layer: `Providers` (query client, live updates, theme, tooltips, config) |
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
-| `.storybook/` | Storybook config; picks up stories and `.mdx` under `src/shared/ui` only |
+| `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`) and `src/widgets` stories |
 | `public/` | fonts, logos, favicon |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.
@@ -75,7 +75,11 @@ Principles — each one is a `noRestrictedImports` override in `biome.json`, per
 `bun run lint` passes on the current tree, so none of these is violated anywhere.
 
 A slice is `index.ts` plus `model/` (hooks, stores, pure logic, tests) and `ui/` (components).
-`widgets/sidebar` keeps its files flat, `entities/metrics` is not grouped and has no `ui/`.
+`widgets/sidebar` keeps its files flat. `entities/metrics` is not grouped, has no `ui/` and no
+`index.ts`: only entities consume it, so its public API is its `@x` files.
+
+Tests that render (`*.test.tsx`) register happy-dom per file and use `@testing-library/react`;
+there is no preload, so the other tests run without a DOM (`src/shared/live/AGENTS.md`, "Tests").
 
 ## Data flow
 
@@ -87,8 +91,7 @@ A slice is `index.ts` plus `model/` (hooks, stores, pure logic, tests) and `ui/`
   on every batch, and metrics plus operations after a reconnect (`shared/state/invalidate.ts`).
   Slices subscribe themselves with `useLiveOperations`, `useLiveStatus`, `useLiveSnapshot`.
 - **Client state** lives in zustand stores inside the owning slice's `model/`.
-- **Metrics** arrive already aggregated from `POST /api/metrics`. `shared/prometheus` (a
-  Prometheus text parser and counter/histogram maths) is imported by nothing outside itself.
+- **Metrics** arrive already aggregated from `POST /api/metrics`; the UI parses no Prometheus text.
 
 ## Generated — never edit by hand
 
@@ -108,8 +111,6 @@ All four are committed. Biome skips the first three, and `app/styles.css`.
   relative paths. Biome also wants Tailwind classes sorted, inside `cn`, `cva` and `clsx` too.
 - Files and folders are kebab-case; parts of one component share a dotted prefix
   (`operation-details.tabs.tsx`). Components are named exports typed as `FC`.
-- `bun run check` currently fails on one formatting diff in
-  `src/features/snapshot/ui/done/tables.columns.tsx`.
 
 ## Adding a page
 
@@ -134,4 +135,4 @@ All four are committed. Biome skips the first three, and `app/styles.css`.
 Each module carries its own `AGENTS.md` with the details: `src/app`,
 `src/entities/{config,flows,metrics,operations,statistics}`, `src/features/snapshot`,
 `src/pages/{configuration,flows,not-found,operations,snapshot,statistics}`,
-`src/shared/{api,live,prometheus,state,theme,ui,utils}`, `src/widgets/sidebar`.
+`src/shared/{api,live,state,theme,ui,utils}`, `src/widgets/sidebar`.

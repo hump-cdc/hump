@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
     createMemoryHistory,
     createRootRoute,
@@ -10,9 +11,21 @@ import {
 import type { Meta, StoryObj } from '@storybook/react'
 import { RefreshCw } from 'lucide-react'
 
+import { type ConfigResponseBodyModel, getApiConfigQueryKey } from '@/shared/api'
 import { Button } from '@/shared/ui/button'
 
 import { AppLayout } from './app-layout'
+
+/** Configuration the header's connection badges render; the story makes no request. */
+const config: ConfigResponseBodyModel = {
+    app: { version: '0.0.0' },
+    database: { host: 'localhost', port: 5432, name: 'hump', slot: 'hump_slot', publication: 'hump_pub' },
+    sinks: [],
+    tables: [],
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+queryClient.setQueryData(getApiConfigQueryKey(), config)
 
 const childRouteConfig = [
     { to: '/configuration', label: 'Configuration' },
@@ -70,7 +83,11 @@ const router = createRouter({
 const meta: Meta = {
     title: 'Widgets/Sidebar',
     parameters: { layout: 'fullscreen', disableSideBySide: true, disablePadding: true },
-    render: () => <RouterProvider router={router} />,
+    render: () => (
+        <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+        </QueryClientProvider>
+    ),
 }
 
 export default meta

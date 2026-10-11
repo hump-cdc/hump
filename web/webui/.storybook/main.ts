@@ -1,7 +1,11 @@
 import type { StorybookConfig } from 'storybook-react-rsbuild';
 
 const config: StorybookConfig = {
-    stories: ['../src/shared/ui/**/*.mdx', '../src/shared/ui/**/*.stories.@(ts|tsx)'],
+    stories: [
+        '../src/shared/ui/**/*.mdx',
+        '../src/shared/ui/**/*.stories.@(ts|tsx)',
+        '../src/widgets/**/*.stories.@(ts|tsx)',
+    ],
     addons: ['@storybook/addon-docs'],
     framework: {
         name: 'storybook-react-rsbuild',

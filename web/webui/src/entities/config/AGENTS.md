@@ -6,7 +6,8 @@ controls. Everything here is read-only towards the backend — there is no mutat
 
 There is **no `entities/config/index.ts`**: each slice has its own barrel and is imported by its
 full path — `@/entities/config/config`, `@/entities/config/state`,
-`@/entities/config/source-viewer`. The module has no tests and no stories.
+`@/entities/config/source-viewer`. The only test is `state/model/store.test.ts`; there are no
+stories.
 
 ## Layout
 
@@ -17,8 +18,7 @@ full path — `@/entities/config/config`, `@/entities/config/state`,
 | `config/ui/config-loading.tsx`, `config-error.tsx` | the gate's two other screens; not exported |
 | `config/@x/*.ts` | `useConfig` for same-layer consumers |
 | `source-viewer/ui/source-viewer.tsx` | `SourceViewer`: raw config text with its path and a copy button |
-| `source-viewer/model/mock.ts` | `MOCK_CONFIG_YAML`, `CONFIG_FILENAME` — imported by nothing |
-| `state/model/store.ts` | `useLiveControlsStore`, `CHART_STEPS`, `ChartStep`, `useLiveControlsChartStep` |
+| `state/model/store.ts` | `useLiveControlsStore`, `CHART_STEPS`, `ChartStep`, `useLiveControlsChartStep`, `migrateLiveControls` |
 | `state/ui/live-controls.tsx` | `LiveControls`: snapshot badge + live badge with the chart-step dropdown |
 | `state/ui/live-status.tsx`, `snapshot-status.tsx` | the two badges; not exported |
 | `state/@x/*.ts` | `useLiveControlsChartStep` for same-layer consumers |
@@ -29,7 +29,7 @@ full path — `@/entities/config/config`, `@/entities/config/state`,
 |---|---|---|
 | `config` | `useConfig`, `ConfigProvider` | `app/providers.tsx`, `widgets/sidebar/connection-info.tsx` |
 | `source-viewer` | `SourceViewer` | `pages/configuration` |
-| `state` | `LiveControls`, `useLiveControlsStore`, `CHART_STEPS`, `ChartStep` | `widgets/sidebar/app-header.tsx` (`LiveControls` only) |
+| `state` | `LiveControls`, type `ChartStep` | `widgets/sidebar/app-header.tsx` (`LiveControls`) |
 
 Other entities may not use the barrels; they go through `@x`, one file per consumer, each
 re-exporting the single thing that consumer needs:
@@ -45,7 +45,8 @@ re-exporting the single thing that consumer needs:
 | `state/@x/inspector.ts` | `useLiveControlsChartStep` | `flows/inspector` |
 | `state/@x/operations.ts` | `useLiveControlsChartStep` | `operations/filter` |
 
-`useLiveControlsChartStep` is exported **only** through `@x`, not through `state/index.ts`. A new
+`useLiveControlsChartStep` is exported **only** through `@x`, not through `state/index.ts`; the
+store itself and `CHART_STEPS` stay inside the slice. A new
 same-layer consumer gets its own `@x/<consumer>.ts`; the `src/entities/**` override of
 `noRestrictedImports` in `biome.json` rejects every other `@/entities/**` import from an entity.
 
@@ -87,8 +88,6 @@ not a re-marshalled one. Both `rawConfig` and `configPath` are optional in the r
 falls back to an empty string and the path is simply not rendered. The copy button copies the
 same string that is shown.
 
-`model/mock.ts` has no importers; the viewer shows the real config only.
-
 ## `state`: the chart step
 
 `useLiveControlsStore` is a zustand store persisted to `localStorage` under `hump.live-controls`;
@@ -100,10 +99,13 @@ body and the last element of `keys.queries.metrics(duration)`. So:
 
 - all charts, the flows canvas, the inspector and the operations filter read **one** metrics query
   as long as they use the same step; switching the step switches all of them to another entry;
-- `CHART_STEPS` has to stay equal to the generated `MetricsRequestBodyModel['duration']`
-  (`'1m' | '5m' | '10m'`). Nothing links the two declarations, but a value outside the union fails
-  to compile at the `useMetrics` call sites;
-- the persisted value is restored as is — the store has no `version` or `migrate`.
+- `CHART_STEPS` is declared with `satisfies readonly MetricsRequestBodyModel['duration'][]`, so a
+  step the API does not accept fails to compile right there. The check is one-way: a width added
+  on the backend does not appear in the dropdown until it is added to the list;
+- the store is at `version: 1`, and `migrateLiveControls` keeps a stored step only if it is still
+  in `CHART_STEPS`, falling back to `1m`. zustand discards stored state on a version mismatch when
+  there is no `migrate`, so a version bump means extending that function. `migrate` runs on a
+  mismatch only — a value written at the current version is restored as is.
 
 ## `state`: the two badges
 

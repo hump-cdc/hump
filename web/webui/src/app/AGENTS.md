@@ -124,5 +124,6 @@ Both requests go through `shared/api/client.ts`, whose `baseUrl` is the `API_URL
 
 `.storybook/preview.tsx` wraps each story panel in its own `ThemeProvider` + `TooltipProvider`
 and nothing else: no query client, no live connection, no config gate, no `Toaster`. Stories are
-collected from `src/shared/ui/**` only (`.storybook/main.ts`), so a new provider added here does
-not reach them — add it to the preview too if a UI-kit component starts to need it.
+collected from `src/shared/ui/**` and `src/widgets/**` (`.storybook/main.ts`), so a new provider
+added here does not reach them — add it to the preview too if a UI-kit component starts to need
+it. The one widget story, `widgets/sidebar`, brings its own query client.

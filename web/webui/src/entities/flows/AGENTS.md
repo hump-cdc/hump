@@ -27,7 +27,8 @@ own path. The only consumer is `src/pages/flows/ui` (`flows.tsx`, `use-insets.ts
 | `inspector/ui/recent-operations.tsx` | the recent deliveries list |
 | `toolbar/ui/flows-toolbar.tsx` | `FlowsToolbar`: the Tables and Sinks multi-selects |
 
-Tests (`bun:test`) sit next to `topology`, `resolve`, `recent-filter` and `operations-search`.
+Tests (`bun:test`) sit next to `topology`, `filter`, `mode`, `resolve`, `recent-filter` and
+`operations-search`.
 There are no stories here; the canvas stories belong to the kit.
 
 ## Public contract and imports
@@ -70,7 +71,6 @@ in `shared/state`.
   `LiveUpdates` (`shared/live`) invalidates `keys.prefixes.metrics()` on every live batch.
 - The module's own live subscriptions do two things only: flash edges, and refetch the recent
   operations — debounced 300 ms with a 1 s max wait, so a steady stream cannot defer it forever.
-- `shared/prometheus` is not used here.
 
 ## Kit and entity
 
@@ -121,6 +121,10 @@ the figures from the latest metrics on every render, so an open inspector stays 
 ## Gotchas
 
 - Persisted to localStorage: `hump.flows-filter`, `hump.flows-mode`. The selection is not persisted.
+- Both stores are at `version: 1` with a `migrate` (`migrateFlowsFilter`, `migrateTopologyMode`)
+  that keeps a stored value only if it is still valid and falls back to the default otherwise.
+  zustand discards stored state on a version mismatch when there is no `migrate`, so bumping a
+  version means extending that function, not removing it.
 - A filter value is `'all'` or a list of ids. The toolbar stores `'all'` once every option is
   picked, so tables and sinks that appear later stay visible; a stored list hides them.
 - `filterFlowsTopology` must narrow both `sinks` / `edges` and `detailedSinks` / `detailedEdges`.

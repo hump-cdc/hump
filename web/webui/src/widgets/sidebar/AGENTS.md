@@ -45,7 +45,7 @@ up, in `app/routes/__root.tsx` → `@/app` `Providers`: `QueryClientProvider`, `
 - `@/shared/ui/sidebar`, `@/shared/ui/header`, `@/shared/ui/badge`, `@/shared/ui/tooltip`
 - `@/shared/theme` — `useTheme`, `Theme`
 - `@/shared/utils` — `useStaticData`
-- `@/shared/ui/button` — story only
+- `@/shared/ui/button`, `@/shared/api` (`getApiConfigQueryKey`, the config type) — story only
 
 Nothing from `features` or `pages`.
 
@@ -117,7 +117,10 @@ The collapsed preference and the Cmd/Ctrl+B shortcut belong to `SidebarProvider`
 
 `app-layout.stories.tsx` builds its own route tree (`createRootRoute` rendering `AppLayout`, an
 index route with a `headerAside` button, placeholder children) on `createMemoryHistory`, and
-renders a `RouterProvider`. That is the only dependency it replaces: it supplies no
-`QueryClientProvider`, no config data and no live stream, although `ConnectionInfo` calls
-`useConfig()`. `.storybook/main.ts` globs only `src/shared/ui/**`, so this story is not loaded by
-Storybook as configured.
+renders a `RouterProvider` inside its own `QueryClientProvider`. The client is seeded with a
+config through `setQueryData(getApiConfigQueryKey(), …)` — the same generated key `useConfig`
+reads — so `ConnectionInfo` renders its badges and no request is made. There is no `LiveUpdates`:
+nothing holds the live connection, so the live badge reads offline and the snapshot badge is
+absent. `VERSION` comes from `rsbuild.config.ts`, which the Storybook build picks up.
+
+`.storybook/main.ts` collects `src/widgets/**/*.stories.*` next to the UI kit's.

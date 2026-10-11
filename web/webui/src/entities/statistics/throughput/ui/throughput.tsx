@@ -10,10 +10,10 @@ export const Throughput: FC = () => {
     return (
         <AreaChartCard
             title="Throughput"
-            subtitle="rows/sec"
-            hint="Row changes processed per second."
+            subtitle="events/sec"
+            hint="Change events successfully delivered per second."
             data={values}
-            series={[{ dataKey: 'rowsPerSec', label: 'rows/sec', variant: 'primary' }]}
+            series={[{ dataKey: 'eventsPerSec', label: 'events/sec', variant: 'primary' }]}
             xAxisKey="time"
             tooltipValue={{ kind: 'compact' }}
         />

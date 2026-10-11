@@ -16,7 +16,7 @@ public.
 - `use-<name>.ts(x)` — one React hook per file.
 - A bare name (`cn.ts`, `debounce.ts`, `sleep.ts`) — everything else. `debounce.ts` holds both
   the plain function and its hook, `useDebounce`.
-- Tests sit next to the file as `<name>.test.ts` on `bun:test`. Only `debounce` has one.
+- Tests sit next to the file as `<name>.test.ts` on `bun:test`. `debounce` and `sleep` have one.
 
 ## Formatters
 
@@ -36,7 +36,7 @@ are grouped with a **non-breaking space** (U+00A0), not a comma: `1 284 300`.
 | `formatDateTime(d)` | `Date` | `DD Mon YYYY, HH:mm:ss`, local time |
 | `formatDateTimeRange(a, b)` | two `Date`s | `… → HH:mm:ss`; the end repeats the date only when it is another local day |
 | `formatTimeCompact(ts)` | epoch ms | zero-padded local `HH:MM`, for chart axes |
-| `formatTime(d)` | `Date` | `HH:mm:ss.SSS`, 24-hour |
+| `formatTime(d)` | `Date` | `HH:mm:ss.SSS`, 24-hour, local time |
 
 - `formatNumber*`, `formatNumberCompact` and `formatBytes` are generic over `number | undefined`:
   `undefined` in gives `undefined` out, and the return type follows the argument, so a call with a
@@ -45,8 +45,7 @@ are grouped with a **non-breaking space** (U+00A0), not a comma: `1 284 300`.
   value and its unit apart. They must stay consistent with `formatBytes`/`formatLatency`; the
   thresholds are written twice in each file.
 - The millisecond boundary rounds before it compares units: `formatLatency(999.6)` is `1000ms`.
-- `formatTime`'s JSDoc says UTC, but the formatter sets no `timeZone`, so it prints local time
-  like the rest.
+- No formatter sets a `timeZone`: every date and time is printed in the browser's local time.
 
 ## Hooks and the rest
 
@@ -55,7 +54,7 @@ are grouped with a **non-breaking space** (U+00A0), not a comma: `1 284 300`.
 | `cn(...inputs)` | `clsx` then `tailwind-merge`; the merge is extended to know `shadow-glow` (the custom `--shadow-glow` in `app/styles.css`) as a shadow class |
 | `debounce(fn, ms, { maxWait })` | trailing edge only, called with the last arguments; with `maxWait`, runs at least that often counted from the first call of a burst; `.cancel()` drops the pending call |
 | `useDebounce(fn, ms, options)` | a `debounce` with a stable identity that always calls the latest `fn` and cancels on unmount; `ms` and `options` are read on the first render only |
-| `sleep(ms, signal?)` | resolves after `ms` or as soon as `signal` aborts — it **never rejects**, so the caller checks `signal.aborted` itself |
+| `sleep(ms, signal?)` | resolves after `ms`, as soon as `signal` aborts, or at once when it is already aborted — it **never rejects**, so the caller checks `signal.aborted` itself |
 | `useClipboard(resetDelay = 1500)` | `copy(text)` writes to the clipboard; `copied` is true for `resetDelay` ms after a success; a failed write is swallowed |
 | `useElementSize()` | `[callbackRef, { width, height }]` from `offsetWidth`/`offsetHeight`, kept current by a `ResizeObserver`; zero while no element is attached |
 | `useIsMobile(breakpoint = MOBILE_BREAKPOINT)` | true below 1024 px (`max-width: breakpoint - 1`), tracked through `matchMedia` |
@@ -74,8 +73,6 @@ Things that are easy to get wrong:
   mid-animation replaces the leaving value. The consumer provides `SwitchViewValueContext` per
   view, so a leaving view can keep rendering the last value it had (`features/snapshot`).
 - `useDebounce` creates its timer once; changing `ms` between renders has no effect.
-- `sleep` listens for the `abort` event, so a signal that is **already** aborted when it is
-  called does not cut the wait short.
 
 ## What belongs here
 

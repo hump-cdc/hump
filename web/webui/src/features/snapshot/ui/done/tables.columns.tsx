@@ -79,7 +79,7 @@ export const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
         header: 'Events',
         className: 'w-30 text-right',
         cell: (d) => (
-                        <span className="font-mono text-ink-muted text-sm">
+            <span className="font-mono text-ink-muted text-sm">
                 {formatNumber(d.table.sinks.reduce((sum, sink) => sum + sink.count, 0))}
             </span>
         ),
@@ -104,7 +104,11 @@ export const RESULT_COLUMNS: TableRowColumn<ResultRowData>[] = [
             render: (d) => (
                 <>
                     {d.table.sinks.map((sink) => (
-                        <SinkLabel key={`${sink.type} ${sink.host} ${sink.target}`} sink={sink} targetClassName="pl-6" />
+                        <SinkLabel
+                            key={`${sink.type} ${sink.host} ${sink.target}`}
+                            sink={sink}
+                            targetClassName="pl-6"
+                        />
                     ))}
                 </>
             ),

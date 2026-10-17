@@ -27,7 +27,8 @@ tests dump an idle collector on purpose.
 
 The gate runs `activate` and `stop` **under its own lock**, so they take `c.mu` themselves and
 must never call back into the gate. `activate` spawns the scrape loop while both locks are held;
-the new goroutine gathers outside any lock, then waits on `c.mu` until `activate` returns.
+the new goroutine's first `tick` locks `c.mu` to take `waiting`, so it blocks until `activate`
+returns, then gathers outside any lock.
 
 `close` cannot be folded into `stop`: the gate calls `stop` only when the collector is active,
 while `recorded` has to be cleared even on a collector that never connected — which is what

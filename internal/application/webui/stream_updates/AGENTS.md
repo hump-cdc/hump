@@ -91,8 +91,8 @@ channel**, which blocks forever, so the handler sends `welcome` and an `idle` sn
 waits on the context alone. As wired today, `cmd/hump/main.go` builds the first three whenever the
 web port is set, so a served route sees none of them nil — the field comments tying nil to
 "telemetry disabled" do not describe the current wiring — and the runner whenever the process is
-not in cleanup mode. The nil paths are real for `cmd/openapi`, which constructs the use case with
-four nils to register the route, and for tests.
+not in cleanup mode and the web port is set. The nil paths are real for `cmd/openapi`, which
+constructs the use case with four nils to register the route, and for tests.
 
 ## Tests
 

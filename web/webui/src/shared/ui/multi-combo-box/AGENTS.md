@@ -82,5 +82,5 @@ No cva variants. The field box, chips, popup and option rows take their styles f
 | `+N` badge | `bg-primary-soft`, `text-primary` — same colours as a chip |
 | chevron (`ChevronsUpDown`) | `text-ink-subtle` |
 | option checkbox | `border-hairline-strong`; selected `bg-primary` with the `Check` in `text-on-primary` |
-| option label / `aside` | `text-ink` / `text-ink-tertiary`, `font-mono`, `tabular-nums` |
+| option label / `aside` | `text-ink` / `text-ink-tertiary`; `aside` also `font-mono`, `tabular-nums` |
 | footer | `border-hairline` top border; "Select all" `text-primary`, hover `text-primary-hover`, disabled `opacity-50` once everything is selected; counter `text-ink-tertiary` |

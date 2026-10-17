@@ -48,9 +48,9 @@ after them.
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `status` | `ReactNode` | — | last terminal line, rendered as `status: <status>` before the cursor |
-| `title` | `ReactNode` | — | the `h1` under the terminal |
-| `description` | `ReactNode` | — | the paragraph under the title |
+| `status` | `ReactNode` | required | last terminal line, rendered as `status: <status>` before the cursor |
+| `title` | `ReactNode` | required | the `h1` under the terminal |
+| `description` | `ReactNode` | required | the paragraph under the title |
 | `action` | `ReactNode` | — | slot under the description, usually a `Button` |
 | `terminalTitle` | `ReactNode` | `'bash — hump — 80×24'` | text in the window title bar |
 | `children` | `ReactNode` | — | the session: `ErrorPrompt` and `ErrorLine` rows |

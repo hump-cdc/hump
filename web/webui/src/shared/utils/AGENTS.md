@@ -13,7 +13,8 @@ public.
 
 - `format.<what>.ts` — pure formatters, `number`/`Date` in, `string` out, plus the `scale*`
   variants below. Formatter instances (`Intl.*`) are created once at module level.
-- `use-<name>.ts(x)` — one React hook per file.
+- `use-<name>.ts(x)` — one React hook per file. `use-switch-animation.ts` also exports
+  `useSwitchViewValue` and `SwitchViewValueContext`, which go with `useSwitchAnimation`.
 - A bare name (`cn.ts`, `debounce.ts`, `sleep.ts`) — everything else. `debounce.ts` holds both
   the plain function and its hook, `useDebounce`.
 - Tests sit next to the file as `<name>.test.ts` on `bun:test`. `debounce` and `sleep` have one.
@@ -21,7 +22,8 @@ public.
 ## Formatters
 
 All output is fixed to English locales (`en-US`, `en-GB`), independent of the browser's. Thousands
-are grouped with a **non-breaking space** (U+00A0), not a comma: `1 284 300`.
+are grouped with a space, not a comma: `formatNumber*` and `formatNumberCompact` use a
+**non-breaking space** (U+00A0), `formatBytes` a plain space (U+0020): `1 284 300`.
 
 | Helper | Input | Output and guarantees |
 |---|---|---|

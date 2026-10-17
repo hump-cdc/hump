@@ -16,7 +16,7 @@ import { Code } from '@/shared/ui/code'
 ```
 
 The folder exports `Code` only. `code.grammar.ts` (`detectGrammar`, `formatCode`, the
-`CodeGrammar` type) is internal and not re-exported from `index.ts`.
+`CodeGrammar` and `CodeSource` types) is internal and not re-exported from `index.ts`.
 
 ## Props
 

@@ -51,7 +51,7 @@ same-layer consumer gets its own `@x/<consumer>.ts`; the `src/entities/**` overr
 `noRestrictedImports` in `biome.json` rejects every other `@/entities/**` import from an entity.
 
 The module itself imports no other entity. From `shared` it uses `shared/api`
-(`getApiConfigOptions`, `ErrorModelModel`), `shared/live` (`useLiveStatus`, `useLiveSnapshot`),
+(`getApiConfigOptions`, `ErrorModelModel`, `MetricsRequestBodyModel`), `shared/live` (`useLiveStatus`, `useLiveSnapshot`),
 `shared/utils` (`cn`, `useClipboard`) and these `shared/ui` components: `badge`, `button`, `code`,
 `dropdown-menu`, `error`, `number-flow`, `tabs`. It does not import `shared/state`.
 

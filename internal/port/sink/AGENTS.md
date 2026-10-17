@@ -41,7 +41,8 @@ belongs in the other.
 
 `Metadata(SinkContext) (host, target)` produces the Prometheus labels and the topology keys.
 Outside a delivery it is called with only `Schema` and `Table` set — by `process_operation`
-`newBinding`, `cmd/hump/main.go` `topology`, `get_config` and `get_snapshot_tables` — and
+`newBinding`, `cmd/hump/main.go` `topology`, `get_config`, `get_snapshot_tables` and
+`adapter/snapshot` — and
 `get_config` even passes the zero value to get a host. An implementation therefore must not
 assume `Prev`, `Next`, `Headers` or `Operation` are populated, and must render the same strings
 for the same `(Schema, Table)` everywhere: see `adapter/metrics_collector/AGENTS.md` for what
@@ -59,8 +60,8 @@ be configured.
 
 Nil unless a client is watching the operations log. Its buffers belong to the caller and are
 reused across deliveries, so an adapter writes through `Set` and `SetPayload` and never assigns
-`Payload` or `Metadata`. The rest — when to fill it, the `header.` prefix — is on the type's doc
-comment and in `adapter/sink/AGENTS.md`.
+`Payload` or `Metadata`. When to fill it is on the type's doc comment; the
+`header.` prefix for headers is in `adapter/sink/AGENTS.md`.
 
 ## `ErrSinkPermanent` has no reader
 

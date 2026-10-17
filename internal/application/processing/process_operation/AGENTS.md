@@ -190,4 +190,4 @@ is not allocation free by design.
 `errBoom`. `fakeOperationLog` copies what it is handed, because the real collector swaps the
 buffers away, and with `recycle` hands buffers back like a ring with populated slots;
 `benchOperationLog` swaps and keeps nothing. Helpers live below the last test function — see the
-`go` skill.
+`go` skill — except `fakeObserver`, which sits in `binding_test.go` right after the test that uses it.

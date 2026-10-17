@@ -115,8 +115,9 @@ Both requests go through `shared/api/client.ts`, whose `baseUrl` is the `API_URL
   answers 200 or **404** for the SPA shell from that list — see `internal/controller/AGENTS.md`.
 - **Theme constants.** `shared/theme/theme-script.ts` is injected into `<head>` through
   `html.tags` and sets `.dark` on `<html>` before the bundle runs; `ThemeProvider` toggles the
-  same class later. Its literals repeat `shared/theme/constants.ts` by hand, and `styles.css`
-  keys on the same names (`@custom-variant dark`, `.dark`, `.theme-transition`).
+  same class later. It imports the class, media query, default theme and storage key from
+  `shared/theme/constants.ts` and inlines them into the script string; only the list of theme
+  names is repeated by hand. `styles.css` keys on the same names (`@custom-variant dark`, `.dark`, `.theme-transition`).
 - **The mount id.** `main.tsx` looks up `#app` and throws without it; the id comes from
   `html.mountId` in `rsbuild.config.ts` via `index.html`, and `styles.css` sizes `#app`.
 
@@ -124,6 +125,7 @@ Both requests go through `shared/api/client.ts`, whose `baseUrl` is the `API_URL
 
 `.storybook/preview.tsx` wraps each story panel in its own `ThemeProvider` + `TooltipProvider`
 and nothing else: no query client, no live connection, no config gate, no `Toaster`. Stories are
-collected from `src/shared/ui/**` and `src/widgets/**` (`.storybook/main.ts`), so a new provider
+collected from `src/shared/ui/**`; `.storybook/main.ts` also globs `src/widgets/**`, which has no
+stories yet. A new provider
 added here does not reach them — add it to the preview too if a UI-kit component starts to need
 it.

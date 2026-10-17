@@ -24,6 +24,7 @@ application layer keyed by the *configured* table.
 | `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the catalog query for tables with their partitions |
 | `metrics.go` | the `replication_lag_bytes` gauge and the `processed_rows_duration_seconds` histogram, with its cached per-table observers |
 | `errors.go` | `ErrTableIgnored` and the package-internal sentinels |
+| `logger.go` | `log.Scope("postgres")` |
 | `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
 | `tables.go` | `GetTables`: one catalog query per call, on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
 | `snapshot_where_suggester.go` | `snapshotWhereSuggester`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
@@ -40,8 +41,9 @@ application layer keyed by the *configured* table.
   shape most catalog queries filter on, `tableScalarParams` / `textParam` for scalars.
   Statements built by string formatting must quote through `quoteIdentifier` / `quoteLiteral`.
 - **Catalog queries come in two flavours**, TimescaleDB and not, picked by a probe that is
-  cached per session (`tableMetadataLoader.hasTimescaleDB`) — the extension cannot appear or vanish
-  mid-session.
+  cached per `tableMetadataLoader` (`hasTimescaleDB`), not per session: the bootstrapper, the
+  introspector, `GetTables` and `snapshot` each build a loader and probe once — the extension
+  cannot appear or vanish mid-session.
 - **Tests talk to a real socket** against `fakeServer` (`postgres_test.go`), whose responders
   dispatch on substrings of the SQL. A new query therefore needs a distinctive marker in its
   text — the leading `--` comment is the intended hook — and a case in the shared responders.

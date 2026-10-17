@@ -94,7 +94,9 @@ in `web/webui/rsbuild.config.ts` from the TanStack route tree.
 
 `webui_test.go` drives `Api` on a bare `chi.Mux` — no middleware, no static handler — with only
 the operations endpoint backed by a real `operations_collector`; every other use case gets nil
-dependencies, so only its request validation is reachable. The tests decode responses into a
+dependencies, so only its request validation is reachable. The exception is `snapshot.estimate`:
+its nil database answers a closed channel, so `TestSnapshotEstimateRouteStreamsEvents` gets a 200
+event stream ending in `event: done`. The tests decode responses into a
 client-shaped struct on purpose: they catch a field that marshals into something the generated
 client cannot parse (payload as text rather than base64, duration as whole milliseconds, metadata
 as `{}` rather than `null`), plus the window semantics and huma's 422s. `Serve`, the static handler

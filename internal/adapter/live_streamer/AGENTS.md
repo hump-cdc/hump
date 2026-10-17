@@ -108,7 +108,8 @@ The wait is what shapes `flush`:
   debounce.
 
 `Scraper` is declared here rather than imported so this package depends on the one method it uses.
-It is nil when telemetry is disabled.
+It is nil only when the caller passes none (tests); `cmd/hump/main.go` builds the metrics collector
+and the streamer under the same `opts.WebPort != nil` condition, so a running streamer always has one.
 
 ## Shutdown
 

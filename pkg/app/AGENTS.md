@@ -56,7 +56,7 @@ One process-global registry, three stages, run in this order:
 |---|---|
 | `StageWorkers` | `process_operation` (the worker pool), `wal_position`, `snapshot`, the three dashboard collectors |
 | `StageSinks` | every cached sink client — Kafka, NATS, RabbitMQ, RabbitMQ Streams |
-| `StageServers` | the web UI and telemetry HTTP servers |
+| `StageServers` | the web UI and observability HTTP servers |
 
 Every hook of a stage finishes before the next stage starts, and **within a stage hooks run in
 reverse registration order**. That reverse order is load-bearing — `adapter/live_streamer/AGENTS.md`

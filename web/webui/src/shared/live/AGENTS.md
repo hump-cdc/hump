@@ -111,8 +111,8 @@ decided in `shared/state`, not here.
 
 Server side: `internal/application/webui/stream_updates/AGENTS.md` (the route, the event order,
 the snapshot dedupe), `internal/adapter/live_streamer/AGENTS.md` (the batching window, lossy
-fan-out), `internal/port/live_stream/AGENTS.md` (why an operation is only table, sink, host,
-target).
+fan-out), `internal/port/live_stream/AGENTS.md` (why an operation is only schema, table,
+sink, host, target).
 
 The server names its events `welcome`, `operations`, `snapshot`, but **the client never sees the
 names**: `flattenSSESchema` in `cmd/openapi/main.go` reduces the documented response to a `oneOf`

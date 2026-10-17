@@ -19,8 +19,8 @@ decorator as well, or the wiring stops compiling.
 - **`process_operation`** needs `Connected` and `Record` only, and declares its own
   `OperationLog` interface for them rather than taking the `Collector`.
 - **`get_operations`** calls `Search`; **`stream_updates`** calls `Connect` / `Disconnect`,
-  which are a refcount and must be paired. `Dump` has no caller in the application layer — it
-  is `Search` with the zero `Query`.
+  which are a refcount and must be paired. `Dump` has no caller in the application layer —
+  `Dump(start, end)` is `Search(Query{Start: start, End: end})`, a window with no filters.
 - **Nil is a valid `Collector`.** It is wired only when the web UI is enabled; every consumer
   nil-checks it.
 

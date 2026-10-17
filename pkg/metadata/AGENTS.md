@@ -1,8 +1,10 @@
 # pkg/metadata — how this package hangs together
 
 One function. `ParseHost` reduces a rendered sink connection string to the endpoint that identifies
-it, and every `config/sink/config_*.go` calls it from `Definition.Metadata` to produce the `host`
-half of the `(host, target)` pair.
+it, and every per-sink-type file (`config/sink/config_http.go`, `config_kafka.go`,
+`config_nats_core.go`, `config_nats_jetstream.go`, `config_rabbitmq_classic.go`,
+`config_rabbitmq_stream.go`) calls it from `Definition.Metadata` to produce the `host` half of the
+`(host, target)` pair.
 
 ## Why it matters more than its size
 

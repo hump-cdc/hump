@@ -70,6 +70,7 @@ runner — `cmd/hump/main.go` builds one whenever the web port is set; the path 
 
 `controller_test.go` covers the use case through the handler; there is no `usecase_test.go`.
 `fakeRunner` embeds the port, hands out a fixed state and channel, and records the unsubscribe —
-both "stops" tests assert on it. `fakeSender` can fail every send or run a hook on send, which is
+`TestHandlerSendsTheCurrentStateThenEveryChange` and `TestHandlerStopsWhenTheClientIsGone` assert
+on it. `fakeSender` can fail every send or run a hook on send, which is
 how `TestHandlerSendsIdleWithoutRunner` cancels the context after the first event. `serve` fails a
 test that runs past five seconds. Helpers live below the last test function — see the `go` skill.

@@ -2,7 +2,8 @@
 
 The table configuration: YAML text in, a validated `Configuration` with every default filled in
 out. `Parse` is the only entry point and runs once, in `cmd/hump/main.go`, on the string
-`pkg/app/options` resolved from `--config` / `--config-file` / stdin. Nothing is re-read or
+`pkg/app/options` resolved from `--config` / `--config-file`, then the `CONFIG` / `CONFIG_FILE`
+environment variables, then stdin. Nothing is re-read or
 reloaded afterwards. The user-facing schema is documented in `README.md` and `docs/template.md`;
 this file is about what the code does around it.
 
@@ -18,6 +19,8 @@ this file is about what the code does around it.
 | `resilience/` | `Failure`, `Retry`, `Backoff` — the per-sink policies |
 | `sink/config.go` | `Config`: one sink entry = a definition plus its policies and `operations` |
 | `sink/config_sinks.go` | `unmarshalSink` (the discriminator switch) and the `crossValidators` list |
+| `sink/config_cross_validate.go` | `CrossValidator` and `CrossValidate`, which runs every entry of `crossValidators` |
+| `sink/config_utils.go` | `getSinkType` and `nodeWithoutSinkTypes`: find the sink type key and strip it before decoding |
 | `sink/config_<type>.go` | one sink type: struct, defaults, `Definition` methods, `CrossValidate` |
 | `sink/config_nats.go`, `sink/config_rabbitmq.go` | `NatsCommon` / `RabbitMQCommon`, inlined into the two variants of each |
 | `sink/templ/*.tmpl` | embedded default templates |
@@ -79,7 +82,8 @@ Two properties of the merge that are easy to get wrong:
 drops the entry, and a root that is not a mapping is returned unchanged. The typed pass is what
 rejects malformed input — except a document with no mapping at all (empty, comments only), which
 unmarshals into a zero `Configuration` with **no error**, because `validate:"min=1"` on `Tables`
-never runs. `options` rejects only the empty string.
+never runs. `options` returns `ErrConfigMissing` only when no source sets either `Config` or
+`ConfigPath`; an empty `--config-file` gets through.
 
 ## Decoding: one pattern, repeated in every type
 
@@ -130,8 +134,9 @@ subpackage. There is no mapping layer: a field added here is immediately what th
 and a field renamed here is an adapter change. `Type`, `DisplayName` and `Metadata` are called on
 typed-nil receivers in tests (`TestSinkMetadataNilReceiver`) and must keep their nil guards.
 
-`Metadata(ctx)` returns `(host, target)` and discards render errors. Three callers must produce
-identical strings from it — `topology()` in `main.go`, `process_operation` and `get_config`; see
+`Metadata(ctx)` returns `(host, target)` and discards render errors. Five callers must produce
+identical strings from it — `topology()` in `main.go`, `process_operation`, `get_config`,
+`get_snapshot_tables` and `adapter/snapshot`; see
 `internal/application/webui/get_config/AGENTS.md`.
 
 ### Adding a sink type

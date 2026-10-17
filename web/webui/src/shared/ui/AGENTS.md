@@ -21,23 +21,43 @@ One folder per component, kebab-case name; the file matches the folder. No
 ```
 shared/ui/
   <component-name>/
-    <component-name>.tsx          // variants + props type + component (single file)
+    <component-name>.tsx          // variants + props type + component
     <component-name>.stories.tsx
     index.ts                      // export * from './<component-name>'
 ```
 
 - Folder/file: **kebab-case** (`filter-dropdown/filter-dropdown.tsx`).
+- Exceptions to the layout above: `charts/` is a group folder with no `index.ts` of its own;
+  each chart lives in a subfolder (`area-chart`, `bar-chart`, `chart`, `progress-chart`) and is
+  imported as `@/shared/ui/charts/<name>`. `charts/chart/` has no `chart.tsx`, only `chart-*`
+  files. `error/` has no `error.tsx`: its main file is `error-terminal.tsx`.
 - Exported component: **PascalCase** (`FilterDropdown`).
-- Keep `cva` variants, the props `type`, and the component in the single `.tsx` file.
+- Keep `cva` variants, the props `type`, and the component in one `.tsx` file. A larger
+  component splits into several files, and each file holds the variants, props and component
+  of its own part:
+  - compound parts: `<component>-<part>.tsx` (`sheet/sheet-content.tsx`,
+    `tabs/tabs-trigger.tsx`; also `dropdown-menu`, `sidebar`, `table`, `tooltip`, `header`);
+  - internal pieces and non-component code: `<component>.<part>.ts(x)`
+    (`data-table/data-table.row.tsx`, `combobox/combobox.item.tsx`, `flow/flow.helpers.ts`,
+    `*.types.ts`, `*.consts.ts`);
+  - a few files use other names (`card/metric-card.tsx`, `flow/node.table.tsx`,
+    `sidebar/constants.ts`).
+
+  Only `data-table` keeps its component props type outside the `.tsx`: `DataTableProps<T>` is in
+  `data-table.types.ts`.
 - Every component folder carries its own `AGENTS.md` (plus a `CLAUDE.md` holding only
-  `@AGENTS.md`) with four parts: what the component is for and its Storybook path, **Usage**,
+  `@AGENTS.md`; the `charts/` group folder has neither, its subfolders do) with four parts: what the component is for and its Storybook path, **Usage**,
   **Props**, **Semantic styles** (variants and the design tokens behind them). Keep it in
   sync when props or variants change.
 
 ## Component rules
 
-- Component is a **`React.FC`** with a `type` props alias.
+- Component is a **`React.FC`** with a `type` props alias. Generic components cannot be an
+  `FC`: `DataTable` is a generic arrow function returning `ReactElement`, `TableRow` a generic
+  `function` returning `ReactNode`.
 - **Do not export** the `cva` variants object or the props type — keep them module-private.
+  Exceptions: `DataTableProps<T>` (`data-table/data-table.types.ts`, re-exported from
+  `index.ts`) and `SelectableProps` (`table/table-row.tsx`) are exported.
 - Props `type` = element attributes `& VariantProps<typeof xVariants>` (+ extras like
   `asChild`, `ref`).
 - Use Radix **`Slot`** for an `asChild` escape hatch when the component renders an element.
@@ -86,7 +106,8 @@ export * from './button'
 
 ## Storybook
 
-Every component ships a story. Keep **one story per component** whenever possible — if
+Every component ships a story, except `flow/` and `charts/chart/`: neither renders on its own
+(see their `AGENTS.md`). Keep **one story per component** whenever possible — if
 you think a component needs more than one, **ask first**.
 
 Infer the story shape from `button/button.stories.tsx`:
@@ -115,7 +136,8 @@ in `.storybook/preview.tsx`, which fixes the sidebar order of the groups.
 | `Layout` | Page structure and navigation within it: header, sidebar, tabs, toolbar |
 | `Flows` | The flow diagrams |
 
-`Colors` (`colors.mdx`) sits at the top level, outside any group.
+`Colors` (`colors.mdx`) sits at the top level, outside any group. `storySort.order` also lists
+`Widgets` after `Flows`; no story uses it yet.
 
 ### Naming & grouping controls
 

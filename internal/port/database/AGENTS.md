@@ -17,8 +17,9 @@ the only implementation; its mechanics are in `adapter/postgres/AGENTS.md`. This
 ## One wide interface, on purpose
 
 `Database` is not split per consumer. `cmd/hump/main.go` builds one value and hands the whole
-interface to `controller/process.go`, `cleanup_database`, `get_config`, `get_snapshot_tables`,
-`get_snapshot_estimates` and `adapter/snapshot`; each uses the few methods it needs. Nothing
+interface to `controller/process.go`, `get_config`, `get_snapshot_tables`,
+`get_snapshot_estimates` and `adapter/snapshot`, and calls `db.Cleanup` itself in cleanup mode;
+each uses the few methods it needs. Nothing
 asserts `var _ Database = (*T)(nil)` — the typed `var db databasePort.Database = …` in `main.go`
 is the only compile-time proof. The test fakes (`fakeDatabase` in `adapter/snapshot` and the
 `webui` use case packages) **embed** `database.Database` and override only what the test reads,
@@ -50,8 +51,9 @@ the snapshot runner is its only caller.
 
 ## `GetRowCount` streams, and errors travel inside it
 
-The returned error covers what is known before any query: an invalid filter
-(`ErrInvalidWhere`) or a missing table (`ErrTableNotFound`). After that the channel carries a
+The returned error covers what is known before the counting starts: an invalid filter
+(`ErrInvalidWhere`), a failed connection, a failed table-existence check, or a missing table
+(`ErrTableNotFound`). After that the channel carries a
 rough planner estimate, then the exact count, and closes. A failed estimate arrives as a
 `RowCount` with `Error` set, not as a second return value, and ends the stream; a failed exact
 count is **dropped silently**, so the rough element may be the only one. A consumer has to read

@@ -85,8 +85,8 @@ newest first — see `internal/application/webui/get_operations/AGENTS.md`.
   total, and block 0 keeps it known. It alone uses `keepPreviousData`, so a filter change keeps the
   old rows on screen until the new ones arrive.
 - The other blocks are clamped by block 0's total (`clampBlocks`), so nothing past the end is
-  requested. `rowCount` is the total of the most recently fetched page (`pickTotal`, by
-  `receivedAt`), not block 0's.
+  requested. `rowCount` is the total of the most recently fetched page (`pickTotal`, by the
+  page's `updatedAt`, which `toPage` copies from the response's `receivedAt`), not block 0's.
 - The backend answers with the **clamped** window; `rowAt` ignores a page whose `from` is not its
   block's start rather than show rows at the wrong index.
 - The request filter **is** the query key, hence `toOperationsFilter` sorts every list and leaves

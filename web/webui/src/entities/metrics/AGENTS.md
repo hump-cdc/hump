@@ -52,9 +52,10 @@ directly through `keys.queries.metrics(duration)` gives a `MetricsResponseBodyMo
 
 - **Counters are `bigint` at runtime.** The generated client parses responses with zod, which
   coerces `int64` fields to `bigint`, while the generated types say `number`. `toNumber` /
-  `toNumbers` exist for that: `bucketSeconds`, `delivered`, `failed`, `sinkDelivery`, every `n`,
-  `operations`, and a connection's `success` / `failure` go through them. Floats (`throughput`,
-  the gauges, every `p95`, the `success` share) pass straight through. A new integer field needs
+  `toNumbers` exist for that: `bucketSeconds`, `delivered`, `failed`, `sinkDelivery`,
+  `sinkLatencyP95`, every `n`, `operations`, and a connection's `success` / `failure` go through
+  them. Floats (`throughput`, the gauges, the other `p95` fields, the `success` share) pass
+  straight through. A new integer field needs
   the conversion even though TypeScript will not ask for it.
 - **The wire abbreviations stop here.** `i` / `u` / `d` / `t` become `insert` / `update` /
   `delete` / `truncate`, `n` becomes `count`, and the `tables` map becomes an array with the key

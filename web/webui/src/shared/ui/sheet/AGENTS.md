@@ -43,8 +43,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 Controlled, without a trigger: `<Sheet open={open} onOpenChange={setOpen}>`
 (`toolbar/toolbar.tsx`, `sidebar/sidebar.tsx`).
 
-Docked, non-modal panel that leaves the page usable — the operation details and the flow
-inspector:
+Docked, non-modal panel that leaves the page usable — the flow inspector
+(`entities/flows/inspector`):
 
 ```tsx
 <Sheet modal={false} open={Boolean(selected)} onOpenChange={(open) => !open && clear()}>
@@ -69,6 +69,9 @@ inspector:
 
 - `portal={false}` renders the panel inline; `SheetContent` is `fixed`, so the caller overrides
   the position (`absolute`) to dock it inside a positioned ancestor.
+- The operation details (`entities/operations/details`) are non-modal the same way but docked on
+  desktop only: `portal={isMobile}`, and `absolute z-10` only on desktop, so the mobile bottom
+  sheet portals to the viewport and spans it edge to edge.
 - Without `SheetDescription` the callers pass `aria-describedby={undefined}`. A sheet with no
   visible heading keeps `SheetTitle` inside an `sr-only` `SheetHeader` (`sidebar/sidebar.tsx`).
 

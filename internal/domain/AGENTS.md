@@ -38,7 +38,8 @@ edges and never translated. So the literal is the contract, in several places at
 Renaming a value is a breaking change to config files, dashboards and templates, not a
 refactor. The allowed sets are also repeated as struct tags, which nothing derives from the
 constants: `oneof=insert update delete truncate` in `config/sink/config.go`,
-`enum:"insert,update,delete,truncate"` in `webui/get_config/dto.go`, and
+`enum:"insert,update,delete,truncate"` in `webui/get_config/dto.go` and
+`webui/get_operations/dto.go`, and
 `oneof=full unmanaged` in `config/config.go`. Adding a constant means editing those too.
 
 `OperationTypes` is both the default (a sink with no `operations:` gets a clone of it) and the

@@ -37,10 +37,12 @@ Principles:
 - **No sideways imports.** A use case does not import another use case, a port does not
   import another port, an adapter does not import another adapter. The one exception is a
   registry over its own subpackages (`adapter/sink` → `adapter/sink/kafka` etc.).
-- **Nothing imports `controller`** except `cmd/hump`.
+- **Nothing imports `controller`** except `cmd/hump` and `cmd/openapi` (which builds it only to
+  write the OpenAPI spec). Tests in `controller` also import `adapter`, `config` and `domain`.
 - **A use case package is self-contained**: `usecase.go` holds the logic and its own result
-  types, `controller.go` the handler that calls it, `dto.go` the wire types (where the use
-  case has any). Transport types stay out of `usecase.go`.
+  types, `controller.go` the handler that calls it, `dto.go` the wire types (the last two where
+  the use case has a transport; `processing/cleanup_database` has neither). Transport types stay
+  out of `usecase.go`.
 - **A new external system** means a port in `internal/port` first, then its adapter, then the
   wiring in `cmd/hump`.
 

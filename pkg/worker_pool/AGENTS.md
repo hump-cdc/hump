@@ -81,7 +81,8 @@ when touching that function.
 
 - workers must be positive;
 - the queue must be at least as large as the worker count;
-- the error buffer must be non-negative.
+- the error buffer must be non-negative;
+- the backpressure policy must be `BackpressureBlock` or `BackpressureDrop`.
 
 The defaults are 10 workers and a queue of 10, so `WithWorkers(n)` with `n > 10` panics unless
 `WithQueueSize` is raised with it. `process_operation` sets both to the largest number of sinks any
@@ -101,4 +102,5 @@ after changing the locking.
 `worker_pool_bench_test.go` benchmarks the pool, and `worker_pool_baseline_bench_test.go` runs the
 same workload on a bare `WaitGroup`, an `errgroup` and a semaphore for comparison.
 
-Helpers live below the last test function — see the `go` skill.
+Helpers live below the last test function — see the `go` skill. The exception is `benchPayload` in
+`worker_pool_bench_test.go`, a type declared above `BenchmarkWorkerPool`.

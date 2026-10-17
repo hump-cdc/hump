@@ -13,7 +13,7 @@ Every slice has the same three files:
 
 | File | Role |
 |---|---|
-| `<slice>/model/use-<slice>.ts` | the hook: reads a query, returns chart-ready `values` (plus `value` or `series`) |
+| `<slice>/model/use-<slice>.ts` | the hook: reads a query, returns chart-ready `values` (plus `value` or `series`); `useTables` and `useSinks` return a plain `Item[]` of rows |
 | `<slice>/ui/<slice>.tsx` | the card: calls the hook, hands the result to a `shared/ui/card` component |
 | `<slice>/index.ts` | `export { <Component> } from './ui/<slice>'` |
 

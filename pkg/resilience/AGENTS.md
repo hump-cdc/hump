@@ -22,8 +22,11 @@ per binding, at construction time.
 From the inside out, as `newBinding` builds it:
 
 ```
-WithFailureMode( WithStatus( WithRetry( WithTimeout( deliver ) ) ) )
+WithFailureMode( WithStatus( withOperation( WithRetry( withAttempt( WithTimeout( deliver ) ) ) ) ) )
 ```
+
+`withOperation` and `withAttempt` belong to `process_operation`, and `withAttempt` is only in the
+logged branch; see `process_operation/AGENTS.md` for the full chain.
 
 Each position is deliberate, and the hooks mean what they mean only in this order:
 
@@ -93,7 +96,10 @@ both declarations together.
 ## Tests
 
 `countingHooks` (retry), `recordingStatusHooks` and `recordingSkipHooks` count or record hook calls.
-`BenchmarkResilience` measures the composed chain with and without retries; its allocations are
-expected to scale with the attempt count because of `WithTimeout`, not the retry loop.
+`BenchmarkResilience` measures `WithStatus(WithRetry(fn))` with and without retries; the
+`WithTimeout` line is commented out and `WithFailureMode` is not in the chain, so the per-attempt
+context allocation its doc comment mentions is not measured.
 
-Helpers live below the last test function — see the `go` skill.
+Helpers here sit above the tests that use them (`countingHooks` in `retry_test.go`,
+`recordingStatusHooks` in `status_test.go`, `noopHooks` in `bench_test.go`); only
+`recordingSkipHooks` is below the tests in `failure_test.go`.

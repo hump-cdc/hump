@@ -10,7 +10,8 @@ The surface container of the UI kit and four ready-made cards built for one job 
 | `MetricCard` | `Content/Card/Metric` | one headline number, optionally with a sparkline and a trend arrow |
 | `InfoCard` | `Content/Card/Info` | one small labelled fact in a details panel |
 
-`AreaChartCard`, `BarChartCard` and `MetricCard` compose `Card` + `CardHeader` + `CardContent`.
+`AreaChartCard` and `BarChartCard` compose `Card` + `CardHeader` + `CardContent`; `MetricCard`
+does so only when `separated`, otherwise its header is a plain `div` inside `Card`.
 `InfoCard` is a standalone `div` and does not use `Card`. `card-context.ts` is internal.
 
 ## Usage

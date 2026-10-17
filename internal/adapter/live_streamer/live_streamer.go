@@ -26,7 +26,7 @@ const (
 
 // Scraper refreshes the dashboard metrics out of schedule, closing the returned
 // channel once they are. It is the part of the metrics collector this package
-// needs, and is nil when telemetry is off.
+// needs.
 type Scraper interface {
 	Scrape() <-chan struct{}
 }
@@ -36,7 +36,7 @@ type Scraper interface {
 // delivery to the open window when a client is watching the feed.
 type Streamer struct {
 	inner    operationscollector.Collector
-	scraper  Scraper // scraper is nil when telemetry is disabled.
+	scraper  Scraper // scraper is nil when the caller passes none, leaving windows unscraped.
 	interval time.Duration
 
 	watched atomic.Bool // watched mirrors len(subs) > 0, so Record costs one load when nobody is watching.

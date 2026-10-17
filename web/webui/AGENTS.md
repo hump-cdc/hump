@@ -41,7 +41,7 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `app/` | the entry: `main.tsx`, `router.tsx`, `routes/` (route files), `styles.css` |
 | `src/app` | the FSD app layer: `Providers` (query client, live updates, theme, tooltips, config) |
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
-| `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`) and `src/widgets` stories |
+| `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`); the `src/widgets` stories glob is configured, but there are no widget stories yet |
 | `public/` | fonts, logos, favicon |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.

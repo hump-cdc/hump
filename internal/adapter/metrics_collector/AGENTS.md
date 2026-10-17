@@ -99,7 +99,7 @@ Four caveats that are properties of the source metrics, not of this package:
 `WithTopology` takes the configured `table → sink → target` edges, resolved at wiring in
 `cmd/hump/main.go`. The adapter must not import `hump/config`; it takes plain `port.Connection`
 values. The resolver there renders host and target with
-`Metadata(SinkContext{Schema, Table})` — **the same call `newBinding` makes** — because the
+`Metadata(sink.Context{Schema, Table})` — **the same call `newBinding` makes** — because the
 strings have to match the metric labels byte for byte. Change one side and the snapshot goes
 silently empty.
 

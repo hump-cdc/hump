@@ -1,7 +1,7 @@
 # application/processing/process_operation — how this package hangs together
 
 The middle of the pipeline. One row change comes in as a flat argument list, becomes one
-`port/sink.SinkContext`, and is delivered to every sink configured for its table, in parallel,
+`port/sink.Context`, and is delivered to every sink configured for its table, in parallel,
 with retries, a per-attempt timeout, a failure policy, metrics and — when somebody is watching —
 one operations log entry per sink. `Process` returns only after every sink has finished, which is
 what lets the caller advance its position on a nil.
@@ -25,16 +25,14 @@ what lets the caller advance its position on a nil.
 - **Snapshot** — `adapter/snapshot` receives it as a func value and calls it once per row with
   `insert`, `prev` nil and empty headers, on the run's own cancellable context.
 
-`pkg/worker_pool`'s batch API is single-goroutine only, and this package does nothing to enforce
-that: `Process` **discards the error of `BeginBatch`**. A second concurrent caller therefore does
-not fail with `ErrAlreadyInFlight` — it submits into the other caller's batch, and whichever
-`FlushBatch` loses the race returns `ErrNotInFlight` without having waited. The invariant is held
-entirely outside: the snapshot pauses WAL delivery (`walGate`), and serializes its own table
-readers with `processMu`. Any new caller has to take part in that, or the batch has to learn to
-fail.
+`pkg/worker_pool`'s batch API is single-goroutine only. `Process` returns the error of
+`BeginBatch` wrapped as `begin batch: …`, so a second concurrent caller fails with
+`ErrAlreadyInFlight` and delivers nothing; it is not queued behind the first. Keeping callers from
+overlapping is still the job of the code outside: the snapshot pauses WAL delivery (`walGate`), and
+serializes its own table readers with `processMu`. Any new caller has to take part in that.
 
-The same ignored error is what a call after shutdown looks like: `BeginBatch` returns
-`ErrWorkerPoolClosed`, every `Submit` returns `ErrNotInFlight`, and that is what `Process` reports.
+A call after shutdown fails the same way: `BeginBatch` returns `ErrWorkerPoolClosed`, and `Process`
+returns it wrapped without submitting anything.
 
 ## Bindings and the pool
 

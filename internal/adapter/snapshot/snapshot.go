@@ -239,7 +239,7 @@ func (r *Runner) run(ctx context.Context, requests []port.Request) {
 	}
 
 	defer func() {
-		finishCtx, cancel := context.WithTimeout(context.Background(), finishTimeout)
+		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finishTimeout)
 		defer cancel()
 
 		if err := r.db.FinishSnapshot(finishCtx); err != nil {
@@ -412,7 +412,7 @@ func (r *Runner) getSinks(cfg config.Configuration) map[domain.TableIdentifier][
 				continue
 			}
 
-			host, target := sc.Sink.Metadata(sink.SinkContext{Schema: table.Schema, Table: table.Name})
+			host, target := sc.Sink.Metadata(sink.Context{Schema: table.Schema, Table: table.Name})
 			entry := port.Sink{Type: string(sc.Sink.Type()), Host: host, Target: target}
 
 			if !slices.Contains(result[id], entry) {

@@ -9,6 +9,7 @@ import (
 // BackoffType selects the backoff curve between retry attempts.
 type BackoffType string
 
+// The supported backoff curves.
 const (
 	BackoffTypeLinear      BackoffType = "linear"
 	BackoffTypeExponential BackoffType = "exponential"
@@ -17,6 +18,7 @@ const (
 // JitterMode selects the randomization applied on top of the backoff delay.
 type JitterMode string
 
+// The supported jitter modes: full draws the delay from [0, delay).
 const (
 	JitterModeFull JitterMode = "full"
 	JitterModeNone JitterMode = "none"
@@ -76,11 +78,16 @@ func (b Backoff) DelayFunc() func(attempt uint) time.Duration {
 			}
 
 			steps := uint64(attempt - 1)
-			if steps > uint64((ceiling-initial)/increment) {
+			if steps > math.MaxInt64 {
 				return ceiling
 			}
 
-			return initial + increment*time.Duration(steps)
+			n := int64(steps)
+			if n > int64((ceiling-initial)/increment) {
+				return ceiling
+			}
+
+			return initial + increment*time.Duration(n)
 		}
 	}
 
@@ -93,7 +100,7 @@ func (b Backoff) DelayFunc() func(attempt uint) time.Duration {
 
 		if b.Jitter == JitterModeFull && delay > 0 {
 			// [0, delay) jitter
-			delay = time.Duration(rand.Int64N(int64(delay)))
+			delay = time.Duration(rand.Int64N(int64(delay))) //nolint:gosec // retry jitter, not security-sensitive
 		}
 
 		return delay

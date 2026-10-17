@@ -17,12 +17,12 @@ elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Co
 
 ## Three controllers, two runner lanes
 
-- `ProcessController.Listen` goes through `runner.Run`: a **worker**. On shutdown its context is
+- `ProcessController.Listen` goes through `Runner.Run`: a **worker**. On shutdown its context is
   cancelled first and it is drained (up to 30s) before any shutdown hook runs — cancel means "take
   no new work", not "abort".
-- Both `Serve`s go through `runner.Serve`: **servers**. They outlive the workers and stop only when
+- Both `Serve`s go through `Runner.Serve`: **servers**. They outlive the workers and stop only when
   their own `shutdown.StageServers` hook calls `server.Shutdown`. The hook is registered *inside*
-  `Serve`, so a server that never got that far has no hook — `runner.Wait` joins servers with a
+  `Serve`, so a server that never got that far has no hook — `Runner.Wait` joins servers with a
   timeout for exactly that case. `http.ErrServerClosed` is the clean exit and is swallowed.
 
 `WebUIController.Serve` passes the runner's context as the server's `BaseContext`, so every request

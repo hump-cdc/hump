@@ -1,9 +1,12 @@
+// Package getconfig serves the config of the web UI: the build, the startup
+// options, the source database and every configured table with its sinks.
 package getconfig
 
 import (
 	"context"
 )
 
+// Controller serves GET /api/config.
 type Controller struct {
 	useCase *UseCase
 }
@@ -15,6 +18,7 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler rendering the server description.
 func (c *Controller) Handler() func(ctx context.Context, _ *struct{}) (*ConfigResponse, error) {
 	return func(_ context.Context, _ *struct{}) (*ConfigResponse, error) {
 		cfg := c.useCase.Config()
@@ -50,7 +54,7 @@ func (c *Controller) Handler() func(ctx context.Context, _ *struct{}) (*ConfigRe
 func configSinks(source []Sink) []ConfigSink {
 	result := make([]ConfigSink, 0, len(source))
 	for _, s := range source {
-		result = append(result, ConfigSink{Type: s.Type, Host: s.Host})
+		result = append(result, ConfigSink(s))
 	}
 
 	return result
@@ -60,7 +64,7 @@ func configSinks(source []Sink) []ConfigSink {
 func configTargets(source []Target) []ConfigTarget {
 	result := make([]ConfigTarget, 0, len(source))
 	for _, t := range source {
-		result = append(result, ConfigTarget{Type: t.Type, Host: t.Host, Target: t.Target, Operations: t.Operations})
+		result = append(result, ConfigTarget(t))
 	}
 
 	return result

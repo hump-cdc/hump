@@ -26,6 +26,7 @@ type Estimate struct {
 	Error error
 }
 
+// UseCase counts the rows a snapshot of the requested tables would read.
 type UseCase struct {
 	db                     database.Database // db is nil when only the API is described, never served.
 	maxConcurrentEstimates int

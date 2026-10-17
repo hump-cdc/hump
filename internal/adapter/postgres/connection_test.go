@@ -19,7 +19,7 @@ func TestNewConnectionRejectsInvalidConnectionString(t *testing.T) {
 		t.Fatal("expected an error, got nil")
 	}
 
-	if _, err := newConnection("mysql://user@localhost/db", withReplication(true)); err == nil {
+	if _, err := newConnection("mysql://user@localhost/db", withReplication()); err == nil {
 		t.Fatal("expected an error with withReplication, got nil")
 	}
 }
@@ -72,7 +72,7 @@ func TestNewConnectionAppliesReplicationParam(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			conn, err := newConnection(tt.connectionString, withReplication(true))
+			conn, err := newConnection(tt.connectionString, withReplication())
 			if err != nil {
 				t.Fatalf("newConnection(%q) error = %v", tt.connectionString, err)
 			}

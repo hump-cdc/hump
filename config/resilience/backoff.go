@@ -1,3 +1,5 @@
+// Package resilience holds the per-sink delivery policies of the configuration:
+// what to do on exhausted retries, how to retry, and how to back off.
 package resilience
 
 import (
@@ -27,6 +29,7 @@ func (b Backoff) Policy() resilience.Backoff {
 	return resilience.Backoff(b)
 }
 
+// UnmarshalYAML decodes a backoff policy strictly and fills in its defaults.
 func (b *Backoff) UnmarshalYAML(node ast.Node) error {
 	type backoff Backoff
 	if err := decoder.Decode(node, (*backoff)(b)); err != nil {

@@ -13,8 +13,6 @@ func TestCryptoTemplates(t *testing.T) {
 		in   any
 		want string
 	}{
-		{"sha1", `{{ .Value | sha1 }}`, "abc", "a9993e364706816aba3e25717850c26c9cd0d89d"},
-		{"sha1 empty", `{{ .Value | sha1 }}`, "", "da39a3ee5e6b4b0d3255bfef95601890afd80709"},
 		{"sha256", `{{ .Value | sha256 }}`, "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
 		{"adler32", `{{ .Value | adler32 }}`, "abc", "38600999"},
 		{"adler32 empty", `{{ .Value | adler32 }}`, "", "1"},

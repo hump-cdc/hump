@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/sse"
 )
 
+// Controller serves GET /api/snapshot.
 type Controller struct {
 	useCase *UseCase
 }
@@ -30,6 +31,7 @@ func (c *Controller) Events() map[string]any {
 	}
 }
 
+// Handler returns the SSE handler streaming the snapshot state until the client leaves.
 func (c *Controller) Handler() func(ctx context.Context, _ *struct{}, send sse.Sender) {
 	return func(ctx context.Context, _ *struct{}, send sse.Sender) {
 		state, updates, release := c.useCase.Subscribe()

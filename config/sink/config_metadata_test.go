@@ -17,7 +17,7 @@ func mustTemplate(t *testing.T, source string) *template.Template {
 }
 
 func TestSinkMetadata(t *testing.T) {
-	context := sinkport.SinkContext{Schema: "public", Table: "users"}
+	context := sinkport.Context{Schema: "public", Table: "users"}
 
 	tests := []struct {
 		name       string

@@ -7,7 +7,12 @@ import (
 	"hump/pkg/app/shutdown"
 	"hump/pkg/observability/log"
 	"net/http"
+	"time"
 )
+
+// readHeaderTimeout caps how long the HTTP servers wait for request headers, so a
+// client that never finishes them cannot hold a connection open.
+const readHeaderTimeout = 10 * time.Second
 
 // ObservabilityController is the HTTP-facing surface that serves the process
 // health probes (/health/startup, /health/ready, /health/live) and the
@@ -41,8 +46,9 @@ func (c *ObservabilityController) Serve(port uint) error {
 	mux.Handle("/metrics", c.metricsHandler)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           mux,
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	shutdown.OnShutdown(shutdown.StageServers, "observability", func(ctx context.Context) error {

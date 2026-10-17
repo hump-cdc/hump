@@ -1,3 +1,5 @@
+// Package getmetrics serves the metrics of the web UI: bucketed series,
+// lifetime counts per table and per sink, and the table-to-target edges.
 package getmetrics
 
 import (
@@ -10,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+// Controller serves POST /api/metrics.
 type Controller struct {
 	useCase *UseCase
 }
@@ -21,6 +24,7 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler rendering the metrics for the requested width.
 func (c *Controller) Handler() func(ctx context.Context, input *MetricsRequest) (*MetricsResponse, error) {
 	return func(_ context.Context, input *MetricsRequest) (*MetricsResponse, error) {
 		metrics, err := c.useCase.Metrics(input.Body.Duration)

@@ -100,19 +100,19 @@ func identifier(schema, name string) domain.TableIdentifier {
 // fakeSink is a sink definition rendering a fixed host, and a target that is
 // the table name when target is "{{table}}" and target itself otherwise.
 type fakeSink struct {
-	typ    sink.SinkType
+	typ    sink.Type
 	host   string
 	target string
 }
 
 // Type returns the scripted sink type.
-func (s fakeSink) Type() sink.SinkType { return s.typ }
+func (s fakeSink) Type() sink.Type { return s.typ }
 
 // DisplayName returns the sink type.
 func (s fakeSink) DisplayName() string { return string(s.typ) }
 
 // Metadata returns the scripted host and the target rendered for ctx.
-func (s fakeSink) Metadata(ctx sink.SinkContext) (string, string) {
+func (s fakeSink) Metadata(ctx sink.Context) (string, string) {
 	if s.target == "{{table}}" {
 		return s.host, string(ctx.Table)
 	}

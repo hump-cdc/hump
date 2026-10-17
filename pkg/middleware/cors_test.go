@@ -61,7 +61,7 @@ func TestCorsAllowsConfiguredOrigin(t *testing.T) {
 func TestCorsHandlesPreflight(t *testing.T) {
 	t.Setenv("CORS", "https://example.com")
 
-	handler := Cors()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := Cors()(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("preflight request must not reach the next handler")
 	}))
 

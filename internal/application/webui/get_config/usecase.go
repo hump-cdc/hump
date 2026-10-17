@@ -54,6 +54,7 @@ type Table struct {
 	Targets []Target
 }
 
+// UseCase describes the running server from what it was started with.
 type UseCase struct {
 	opts options.Options
 	cfg  config.Configuration
@@ -103,7 +104,7 @@ func (uc *UseCase) Config() Config {
 			// templates, but in practice they resolve from the environment
 			// rather than the row being processed. One that does depend on the
 			// row renders an empty host here.
-			host, _ := sc.Sink.Metadata(sink.SinkContext{})
+			host, _ := sc.Sink.Metadata(sink.Context{})
 			entry := Sink{Type: string(sc.Sink.Type()), Host: host}
 
 			if _, ok := seenAllSinks[entry]; !ok {
@@ -143,7 +144,7 @@ func tableTargets(table config.Table) []Target {
 			continue
 		}
 
-		host, target := sc.Sink.Metadata(sink.SinkContext{Schema: table.Schema, Table: table.Name})
+		host, target := sc.Sink.Metadata(sink.Context{Schema: table.Schema, Table: table.Name})
 		k := key{string(sc.Sink.Type()), host, target}
 
 		i, ok := idx[k]

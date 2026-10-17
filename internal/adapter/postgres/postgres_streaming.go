@@ -39,7 +39,7 @@ func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHa
 	defer lagDone.Wait()
 	defer stopLag()
 
-	replicationConnection, err := newConnection(p.databaseUrl, withReplication(true))
+	replicationConnection, err := newConnection(p.databaseUrl, withReplication())
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}

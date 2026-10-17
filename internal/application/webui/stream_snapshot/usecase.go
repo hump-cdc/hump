@@ -4,6 +4,7 @@ import (
 	"hump/internal/port/snapshot"
 )
 
+// UseCase watches the state of snapshot runs.
 type UseCase struct {
 	runner snapshot.Runner // runner is nil when only the API is described, never served.
 }

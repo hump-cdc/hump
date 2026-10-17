@@ -669,19 +669,19 @@ func (p *fakeProcess) peakCalls() int {
 
 // fakeSink is a sink definition rendering a fixed host and target.
 type fakeSink struct {
-	typ    sink.SinkType
+	typ    sink.Type
 	host   string
 	target string
 }
 
 // Type returns the scripted sink type.
-func (s fakeSink) Type() sink.SinkType { return s.typ }
+func (s fakeSink) Type() sink.Type { return s.typ }
 
 // DisplayName returns the sink type.
 func (s fakeSink) DisplayName() string { return string(s.typ) }
 
 // Metadata returns the scripted host and target.
-func (s fakeSink) Metadata(sink.SinkContext) (string, string) { return s.host, s.target }
+func (s fakeSink) Metadata(sink.Context) (string, string) { return s.host, s.target }
 
 // configWith returns a configuration of tables, each delivered to a kafka sink
 // receiving every operation.

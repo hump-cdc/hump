@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+// Controller serves POST /api/snapshot/tables.
 type Controller struct {
 	useCase *UseCase
 }
@@ -21,6 +22,7 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler rendering the snapshot tables.
 func (c *Controller) Handler() func(ctx context.Context, _ *struct{}) (*SnapshotTablesResponse, error) {
 	return func(ctx context.Context, _ *struct{}) (*SnapshotTablesResponse, error) {
 		tables, err := c.useCase.Tables(ctx)
@@ -59,7 +61,7 @@ func columns(source []database.TableColumn) []SnapshotColumn {
 func sinks(source []Sink) []SnapshotSink {
 	result := make([]SnapshotSink, 0, len(source))
 	for _, s := range source {
-		result = append(result, SnapshotSink{Type: s.Type, Host: s.Host, Target: s.Target})
+		result = append(result, SnapshotSink(s))
 	}
 
 	return result

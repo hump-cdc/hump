@@ -1,3 +1,4 @@
+// Package kafka implements the Kafka sink for hump.
 package kafka
 
 import (
@@ -11,7 +12,7 @@ import (
 // reusing) the configured client, building a record from operationContext,
 // and producing it synchronously with ctx. When capture is non-nil the built
 // record's rendered fields are recorded on it for the operations log.
-func Process(ctx context.Context, config sinkcfg.KafkaSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func Process(ctx context.Context, config sinkcfg.KafkaSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

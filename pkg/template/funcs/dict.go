@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -45,7 +46,7 @@ func tmplDict(kv ...any) (map[string]any, error) {
 func tmplGet(args ...any) (any, error) {
 	d, rest, ok := dictArgs(args)
 	if !ok {
-		return nil, fmt.Errorf("get: first or last argument must be map[string]any")
+		return nil, errors.New("get: first or last argument must be map[string]any")
 	}
 	if len(rest) != 1 {
 		return nil, fmt.Errorf("get: expected one key, got %d", len(rest))
@@ -58,7 +59,7 @@ func tmplGet(args ...any) (any, error) {
 func tmplSet(args ...any) (map[string]any, error) {
 	d, rest, ok := dictArgs(args)
 	if !ok {
-		return nil, fmt.Errorf("set: first or last argument must be map[string]any")
+		return nil, errors.New("set: first or last argument must be map[string]any")
 	}
 	if len(rest) != 2 {
 		return nil, fmt.Errorf("set: expected key and value, got %d arg(s)", len(rest))
@@ -72,7 +73,7 @@ func tmplSet(args ...any) (map[string]any, error) {
 func tmplUnset(args ...any) (map[string]any, error) {
 	d, rest, ok := dictArgs(args)
 	if !ok {
-		return nil, fmt.Errorf("unset: first or last argument must be map[string]any")
+		return nil, errors.New("unset: first or last argument must be map[string]any")
 	}
 	if len(rest) != 1 {
 		return nil, fmt.Errorf("unset: expected one key, got %d", len(rest))
@@ -86,7 +87,7 @@ func tmplUnset(args ...any) (map[string]any, error) {
 func tmplHasKey(args ...any) (bool, error) {
 	d, rest, ok := dictArgs(args)
 	if !ok {
-		return false, fmt.Errorf("haskey: first or last argument must be map[string]any")
+		return false, errors.New("haskey: first or last argument must be map[string]any")
 	}
 	if len(rest) != 1 {
 		return false, fmt.Errorf("haskey: expected one key, got %d", len(rest))
@@ -120,7 +121,7 @@ func tmplValues(d map[string]any) []any {
 func tmplPick(args ...any) (map[string]any, error) {
 	d, rest, ok := dictArgs(args)
 	if !ok {
-		return nil, fmt.Errorf("pick: first or last argument must be map[string]any")
+		return nil, errors.New("pick: first or last argument must be map[string]any")
 	}
 	out := make(map[string]any, len(rest))
 	for _, k := range rest {
@@ -149,11 +150,11 @@ func tmplPluck(key string, dicts ...map[string]any) []any {
 // dig key1 key2 ... fallback dict.
 func tmplDig(args ...any) (any, error) {
 	if len(args) < 3 {
-		return nil, fmt.Errorf("dig requires at least 3 arguments")
+		return nil, errors.New("dig requires at least 3 arguments")
 	}
 	dict, ok := args[len(args)-1].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("dig: last argument must be map[string]any")
+		return nil, errors.New("dig: last argument must be map[string]any")
 	}
 	fallback := args[len(args)-2]
 	keys := args[:len(args)-2]

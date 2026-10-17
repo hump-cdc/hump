@@ -24,10 +24,17 @@ var (
 type RabbitMQStreamMode string
 
 const (
-	RabbitMQStreamModePassive           RabbitMQStreamMode = "passive"
+	// RabbitMQStreamModePassive asserts the stream already exists and never
+	// declares it.
+	RabbitMQStreamModePassive RabbitMQStreamMode = "passive"
+
+	// RabbitMQStreamModeCreateWhenMissing declares the stream on first publish if
+	// it is absent.
 	RabbitMQStreamModeCreateWhenMissing RabbitMQStreamMode = "create-when-missing"
 )
 
+// RabbitMQStreamConfig is the stream a sink publishes to, how it is declared,
+// and its retention limits.
 type RabbitMQStreamConfig struct {
 	Name                *template.Template `yaml:"name,omitempty"`
 	Mode                RabbitMQStreamMode `yaml:"mode,omitempty"                validate:"omitempty,oneof=passive create-when-missing"`
@@ -36,14 +43,17 @@ type RabbitMQStreamConfig struct {
 	MaxSegmentSizeBytes int64              `yaml:"maxSegmentSizeBytes,omitempty" validate:"omitempty,gt=0"`
 }
 
+// RabbitMQStreamSink publishes each change to a RabbitMQ Streams stream.
 type RabbitMQStreamSink struct {
 	RabbitMQCommon `yaml:",inline"`
 
 	Stream RabbitMQStreamConfig `yaml:"stream,omitempty"`
 }
 
-func (*RabbitMQStreamSink) Type() sinkport.SinkType { return sinkport.SinkTypeRabbitMQStream }
+// Type returns the sink type key.
+func (*RabbitMQStreamSink) Type() sinkport.Type { return sinkport.SinkTypeRabbitMQStream }
 
+// DisplayName returns the sink type followed by its URL template.
 func (s *RabbitMQStreamSink) DisplayName() string {
 	if s == nil || s.URL == nil || s.URL.Source() == "" {
 		return string(sinkport.SinkTypeRabbitMQStream)
@@ -52,7 +62,8 @@ func (s *RabbitMQStreamSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sinkport.SinkTypeRabbitMQStream), s.URL.Source())
 }
 
-func (s *RabbitMQStreamSink) Metadata(context sinkport.SinkContext) (string, string) {
+// Metadata returns the host of the rendered URL and the rendered stream name.
+func (s *RabbitMQStreamSink) Metadata(context sinkport.Context) (string, string) {
 	if s == nil {
 		return "", ""
 	}
@@ -63,13 +74,14 @@ func (s *RabbitMQStreamSink) Metadata(context sinkport.SinkContext) (string, str
 	return metadata.ParseHost(url), target
 }
 
+// UnmarshalYAML decodes the sink strictly and fills in its defaults.
 func (s *RabbitMQStreamSink) UnmarshalYAML(node ast.Node) error {
 	type rabbitmqStream RabbitMQStreamSink
 	if err := decoder.Decode(node, (*rabbitmqStream)(s)); err != nil {
 		return err
 	}
 
-	s.RabbitMQCommon.SetDefaults()
+	s.SetDefaults()
 	s.setDefaults()
 
 	return nil
@@ -94,6 +106,8 @@ func (s *RabbitMQStreamSink) setDefaults() {
 	}
 }
 
+// CrossValidate rejects stream sinks that share a URL and stream but differ in
+// their retention limits.
 func (*RabbitMQStreamSink) CrossValidate(groups [][]sinkport.Definition) error {
 	type rmqStreamEntry struct {
 		maxAge              time.Duration

@@ -1,3 +1,5 @@
+// Package database is the port to the source PostgreSQL database: logical
+// replication, cleanup, table metadata and snapshot reads.
 package database
 
 import (
@@ -6,6 +8,7 @@ import (
 	"time"
 )
 
+// Database is the source PostgreSQL database hump replicates changes from.
 type Database interface {
 	// GetDbName returns the database name, or an empty string when it is unknown.
 	GetDbName() string
@@ -43,6 +46,8 @@ type Database interface {
 	ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord) error) error
 }
 
+// ProcessMessageHandler receives one decoded row change from Listen; a returned
+// error stops the stream. Its parameters mirror the fields of sink.Context.
 type ProcessMessageHandler func(
 	ctx context.Context,
 

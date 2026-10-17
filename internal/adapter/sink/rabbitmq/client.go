@@ -21,8 +21,8 @@ const (
 	heartbeatInterval = 10 * time.Second
 
 	reconnectBase       = 2 * time.Second
-	reconnectJitterMin  = 100 * time.Millisecond
-	reconnectJitterMax  = 1 * time.Second
+	minReconnectJitter  = 100 * time.Millisecond
+	maxReconnectJitter  = 1 * time.Second
 	confirmChannelDepth = 1
 )
 
@@ -62,7 +62,7 @@ var (
 // getClient returns a cached [rabbitConn] for the rendered URL described by
 // cfg, dialing on first use and registering a [shutdown.OnShutdown] hook so
 // the connection is drained at process exit.
-func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitConn, error) {
+func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.Context) (*rabbitConn, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -285,7 +285,7 @@ func (rc *rabbitConn) supervise() {
 
 		// Reconnect with backoff. Aborts on shutdown.
 		for {
-			wait := reconnectBase + jitter(reconnectJitterMin, reconnectJitterMax)
+			wait := reconnectBase + jitter(minReconnectJitter, maxReconnectJitter)
 			select {
 			case <-rc.quit:
 				return
@@ -312,5 +312,5 @@ func jitter(minD, maxD time.Duration) time.Duration {
 		return minD
 	}
 	delta := maxD - minD
-	return minD + time.Duration(rand.Int64N(int64(delta)))
+	return minD + time.Duration(rand.Int64N(int64(delta))) //nolint:gosec // reconnect jitter, not security-sensitive
 }

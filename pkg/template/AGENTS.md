@@ -83,8 +83,8 @@ of range`, `should be 1 tmplOr 2`. They are user-visible in render errors.
   in `Funcs` under a **lowercase, unseparated** name: `kebabcase`, `hasprefix`, `regexreplaceall`.
   The name exceptions are `aes_encrypt`, `aes_decrypt`, `trace_id` and `span_id`. A few
   implementations break `tmpl<Name>`: `len` is `tmplLength`, `lower`/`upper` are
-  `tmplLowerCase`/`tmplUpperCase`, `aes_encrypt`/`aes_decrypt` are `tmplEncryptAES`/`tmplDecryptAES`, `adler32`/`sha1`/`sha256` are
-  `tmplAdler32Sum`/`tmplSHA1Sum`/`tmplSHA256Sum`. Stdlib functions
+  `tmplLowerCase`/`tmplUpperCase`, `aes_encrypt`/`aes_decrypt` are `tmplEncryptAES`/`tmplDecryptAES`, `adler32`/`sha256` are
+  `tmplAdler32Sum`/`tmplSHA256Sum`. Stdlib functions
   are registered as they are: `html`, `js`, `urlquery` (the `text/template` escapers), `print`,
   `printf`, `println` (`fmt.Sprint*`), `env` and `hostname` (`os`).
 - The subject comes **last**, so it can be piped: `{{ .Next.name | trimprefix "x-" }}`. `get`, `set`,

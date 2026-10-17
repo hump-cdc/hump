@@ -33,7 +33,7 @@ when the API is only described, never served, and answers a closed channel.
 
 WAL rows (`Listen`) and snapshot rows (`adapter/snapshot`) reach the processing use case through
 this one signature, which is why sinks, operation filters and the operations log cannot tell them
-apart. Its parameters are the fields of `port/sink.SinkContext` minus `Version`; a field added
+apart. Its parameters are the fields of `port/sink.Context` minus `Version`; a field added
 to one belongs in the other. A snapshot row is an `insert` with nil `prev` and no headers.
 
 The handler is not safe for concurrent calls — `StartSnapshot` pauses WAL delivery precisely so

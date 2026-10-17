@@ -1,3 +1,5 @@
+// Package config turns the YAML table configuration into a validated
+// [Configuration] with every default filled in; [Parse] is its entry point.
 package config
 
 import (
@@ -8,14 +10,17 @@ import (
 	"github.com/goccy/go-yaml/ast"
 )
 
+// Configuration is the parsed configuration: the tables hump replicates.
 type Configuration struct {
 	Tables []Table `yaml:"tables" validate:"min=1"`
 }
 
+// ResolveAll returns every configured table.
 func (c *Configuration) ResolveAll() []Table {
 	return c.Tables
 }
 
+// Table is one replicated table and the sinks its changes are delivered to.
 type Table struct {
 	Schema domain.TableSchema `yaml:"schema"            validate:"omitempty"`
 	Name   domain.TableName   `yaml:"table"             validate:"required"`
@@ -25,6 +30,7 @@ type Table struct {
 	Sinks   []sinkcfg.Config       `yaml:"sinks"             validate:"min=1"`
 }
 
+// UnmarshalYAML decodes a table strictly and fills in its defaults.
 func (t *Table) UnmarshalYAML(node ast.Node) error {
 	type table Table
 	if err := decoder.Decode(node, (*table)(t)); err != nil {

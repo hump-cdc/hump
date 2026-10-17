@@ -16,8 +16,8 @@ import (
 
 const (
 	reconnectBase      = 2 * time.Second
-	reconnectJitterMin = 100 * time.Millisecond
-	reconnectJitterMax = 1 * time.Second
+	minReconnectJitter = 100 * time.Millisecond
+	maxReconnectJitter = 1 * time.Second
 )
 
 // envKey identifies a cached [stream.Environment] by the rendered URL.
@@ -97,7 +97,7 @@ func getEnvironment(url string) (*envEntry, error) {
 // it runs the stream reconciler, creates the producer, and registers a
 // shutdown hook plus a close-watcher goroutine that evicts the cache entry
 // when the producer closes unexpectedly.
-func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext, streamName string) (*rabbitProducer, error) {
+func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.Context, streamName string) (*rabbitProducer, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -173,7 +173,7 @@ func watchProducerClose(key producerKey, prod *stream.Producer) {
 
 	// Pace eviction to avoid hammering the broker on a transient blip — the
 	// next Process call recreates the producer immediately after this sleep.
-	wait := reconnectBase + jitter(reconnectJitterMin, reconnectJitterMax)
+	wait := reconnectBase + jitter(minReconnectJitter, maxReconnectJitter)
 	time.Sleep(wait)
 }
 
@@ -183,5 +183,5 @@ func jitter(minD, maxD time.Duration) time.Duration {
 		return minD
 	}
 	delta := maxD - minD
-	return minD + time.Duration(rand.Int64N(int64(delta)))
+	return minD + time.Duration(rand.Int64N(int64(delta))) //nolint:gosec // reconnect jitter, not security-sensitive
 }

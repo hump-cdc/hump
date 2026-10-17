@@ -17,6 +17,7 @@ var (
 	defaultKafkaTopic string
 )
 
+// KafkaSink publishes each change as a Kafka record.
 type KafkaSink struct {
 	URL *template.Template `yaml:"url" validate:"required"`
 
@@ -33,8 +34,10 @@ type KafkaSink struct {
 	Headers      map[string]*template.Template `yaml:"headers,omitempty"`
 }
 
-func (*KafkaSink) Type() sinkport.SinkType { return sinkport.SinkTypeKafka }
+// Type returns the sink type key.
+func (*KafkaSink) Type() sinkport.Type { return sinkport.SinkTypeKafka }
 
+// DisplayName returns the sink type followed by its URL template.
 func (s *KafkaSink) DisplayName() string {
 	if s == nil || s.URL == nil || s.URL.Source() == "" {
 		return string(sinkport.SinkTypeKafka)
@@ -43,7 +46,8 @@ func (s *KafkaSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sinkport.SinkTypeKafka), s.URL.Source())
 }
 
-func (s *KafkaSink) Metadata(context sinkport.SinkContext) (string, string) {
+// Metadata returns the host of the rendered URL and the rendered topic.
+func (s *KafkaSink) Metadata(context sinkport.Context) (string, string) {
 	if s == nil {
 		return "", ""
 	}
@@ -54,42 +58,44 @@ func (s *KafkaSink) Metadata(context sinkport.SinkContext) (string, string) {
 	return metadata.ParseHost(url), target
 }
 
+// CrossValidate accepts any configuration: Kafka sinks share no state across tables.
 func (*KafkaSink) CrossValidate([][]sinkport.Definition) error { return nil }
 
-func (k *KafkaSink) UnmarshalYAML(node ast.Node) error {
+// UnmarshalYAML decodes the sink strictly and fills in its defaults.
+func (s *KafkaSink) UnmarshalYAML(node ast.Node) error {
 	type kafka KafkaSink
-	if err := decoder.Decode(node, (*kafka)(k)); err != nil {
+	if err := decoder.Decode(node, (*kafka)(s)); err != nil {
 		return err
 	}
 
-	k.setDefaults()
+	s.setDefaults()
 
 	return nil
 }
 
-func (k *KafkaSink) setDefaults() {
-	if k.Topic == nil {
+func (s *KafkaSink) setDefaults() {
+	if s.Topic == nil {
 		t, _ := template.New(defaultKafkaTopic)
-		k.Topic = t
+		s.Topic = t
 	}
 
-	if k.Payload == nil {
+	if s.Payload == nil {
 		t, _ := template.New(DefaultPayload)
-		k.Payload = t
+		s.Payload = t
 	}
 
-	if k.ClientID == nil {
+	if s.ClientID == nil {
 		t, _ := template.New(DefaultClientID)
-		k.ClientID = t
+		s.ClientID = t
 	}
 
-	if len(k.Headers) == 0 {
-		k.Headers = map[string]*template.Template{}
+	if len(s.Headers) == 0 {
+		s.Headers = map[string]*template.Template{}
 
 		idempotency, _ := template.New(DefaultIdempotencyKey)
-		k.Headers["X-Idempotency-Key"] = idempotency
+		s.Headers["X-Idempotency-Key"] = idempotency
 
 		traceparent, _ := template.New(DefaultTraceparent)
-		k.Headers["traceparent"] = traceparent
+		s.Headers["traceparent"] = traceparent
 	}
 }

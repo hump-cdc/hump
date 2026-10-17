@@ -1,3 +1,5 @@
+// Package operationscollector is the dashboard's operations log: a bounded ring of the
+// newest deliveries, one record per row per sink, allocated only while a client is connected.
 package operationscollector
 
 import (

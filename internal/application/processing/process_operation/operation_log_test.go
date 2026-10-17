@@ -298,8 +298,8 @@ func newTestBinding(tb testing.TB, log OperationLog, attempts int, errs ...error
 }
 
 // newTestContext returns the operation context of one row, identified by id.
-func newTestContext(id string) *sink.SinkContext {
-	return &sink.SinkContext{
+func newTestContext(id string) *sink.Context {
+	return &sink.Context{
 		Timestamp: time.Now(),
 		Operation: domain.OperationTypeUpdate,
 		Database:  "app",
@@ -327,7 +327,7 @@ type fakeSink struct {
 }
 
 // Process implements [sink.Sink].
-func (s *fakeSink) Process(_ context.Context, _ sink.Definition, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func (s *fakeSink) Process(_ context.Context, _ sink.Definition, operationContext *sink.Context, capture *sink.Capture) error {
 	s.calls++
 
 	if capture != nil {
@@ -365,9 +365,9 @@ func (l *benchOperationLog) Record(rec *operationscollector.Record) {
 // fakeDefinition is a sink definition with a fixed host and target.
 type fakeDefinition struct{}
 
-func (fakeDefinition) Type() sink.SinkType                        { return sink.SinkTypeKafka }
-func (fakeDefinition) DisplayName() string                        { return "fake" }
-func (fakeDefinition) Metadata(sink.SinkContext) (string, string) { return "host", "configured" }
+func (fakeDefinition) Type() sink.Type                        { return sink.SinkTypeKafka }
+func (fakeDefinition) DisplayName() string                    { return "fake" }
+func (fakeDefinition) Metadata(sink.Context) (string, string) { return "host", "configured" }
 
 // fakeOperationLog keeps every record it is handed. It copies the buffers,
 // since the real collector swaps them away from the caller. With recycle set it

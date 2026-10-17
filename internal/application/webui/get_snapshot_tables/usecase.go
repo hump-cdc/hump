@@ -23,6 +23,7 @@ type Table struct {
 	Sinks []Sink
 }
 
+// UseCase describes the configured tables as the database holds them.
 type UseCase struct {
 	cfg config.Configuration
 	db  database.Database // db is nil when only the API is described, never served.
@@ -77,7 +78,7 @@ func tableSinks(table config.Table) []Sink {
 			continue
 		}
 
-		host, target := sc.Sink.Metadata(sink.SinkContext{Schema: table.Schema, Table: table.Name})
+		host, target := sc.Sink.Metadata(sink.Context{Schema: table.Schema, Table: table.Name})
 		entry := Sink{Type: string(sc.Sink.Type()), Host: host, Target: target}
 
 		if _, ok := seen[entry]; ok {

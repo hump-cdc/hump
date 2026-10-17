@@ -17,6 +17,8 @@ type Failure struct {
 	Mode resilience.FailureMode `yaml:"mode,omitempty" validate:"omitempty,oneof=crash skip"`
 }
 
+// UnmarshalYAML accepts either a bare mode string or a mapping, then fills in
+// the default mode.
 func (f *Failure) UnmarshalYAML(node ast.Node) error {
 	if scalar, ok := node.(ast.ScalarNode); ok {
 		value, ok := scalar.GetValue().(string)
@@ -39,6 +41,7 @@ func (f *Failure) UnmarshalYAML(node ast.Node) error {
 	return nil
 }
 
+// SetDefaults sets the mode to crash when none is configured.
 func (f *Failure) SetDefaults() {
 	if f.Mode == "" {
 		f.Mode = resilience.FailureModeCrash

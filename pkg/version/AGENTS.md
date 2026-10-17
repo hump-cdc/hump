@@ -17,7 +17,7 @@ Three string variables the linker fills in. `version.go` declares `Version`, `Co
   empty.
 - `Version` reaches the log attributes, the health component, the OpenAPI document, the HTTP sink's
   `User-Agent`, the RabbitMQ client properties, the web UI config and, per row,
-  `sink.SinkContext.Version` (`process_operation/usecase.go`), which sink templates render as
+  `sink.Context.Version` (`process_operation/usecase.go`), which sink templates render as
   `.Version` (the default payload's `source.version`). `Commit` reaches the logs and
   the web UI config. `Date` is set by the build and read by nothing.
 - They must stay `var` of type `string` with a constant initialiser; `-X` cannot set anything else.

@@ -1,3 +1,5 @@
+// Package metadata derives sink metadata, such as the host label, from rendered
+// sink settings.
 package metadata
 
 import (

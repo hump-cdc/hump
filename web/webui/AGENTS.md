@@ -32,7 +32,8 @@ Run in `web/webui`. The `task` targets in the root `taskfile.yaml` wrap some of 
 
 There is no dev proxy: `API_URL` and `VERSION` are compile-time constants (`source.define`,
 declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
-(`src/shared/api/client.ts`). There is no type-check script; `tsconfig.json` has `noEmit`.
+(`src/shared/api/client.ts`). There is no type-check script (`tsconfig.json` has `noEmit`);
+`task check` runs `bun run check`, `bun test` and `bunx tsc --noEmit` here, after the Go lint and tests.
 
 ## Directory layout
 

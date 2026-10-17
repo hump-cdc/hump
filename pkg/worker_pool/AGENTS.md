@@ -31,7 +31,7 @@ and snapshot never overlap because a snapshot pauses WAL delivery.
 
 `T` is the payload every task receives. `Submit` takes it by value alongside the function, so the
 hot path (`process_operation`) passes `binding.fn`, a function built once per binding and
-stored in a struct field, plus a `*sink.SinkContext`, instead of allocating a closure per task.
+stored in a struct field, plus a `*sink.Context`, instead of allocating a closure per task.
 
 ## `mu` is held across the whole batch
 
@@ -46,8 +46,8 @@ mechanism behind shutdown, not an oversight:
 - `Shutdown` must come from a goroutine other than the one driving batches.
 
 After `Shutdown`, `BeginBatch` returns `ErrWorkerPoolClosed`, and `Submit`/`FlushBatch` return
-`ErrNotInFlight`. `process_operation` ignores `BeginBatch`'s result and surfaces the `Submit` error
-instead. A second `Shutdown` returns `ErrWorkerPoolClosed`.
+`ErrNotInFlight`. `process_operation` returns `BeginBatch`'s error wrapped as `begin batch: …` and
+submits nothing. A second `Shutdown` returns `ErrWorkerPoolClosed`.
 
 ## Errors come back two ways
 

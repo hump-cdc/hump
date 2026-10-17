@@ -9,6 +9,7 @@ import (
 // ErrUnavailable is returned when the server runs no snapshot runner.
 var ErrUnavailable = errors.New("snapshot is unavailable")
 
+// UseCase starts snapshot runs.
 type UseCase struct {
 	runner snapshot.Runner // runner is nil when only the API is described, never served.
 }

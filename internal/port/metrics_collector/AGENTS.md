@@ -39,11 +39,11 @@ present with zeros.
 
 ## `Connection` strings must match the metric labels
 
-`Host` and `Target` have to equal, byte for byte, what `Definition.Metadata(SinkContext{Schema,
+`Host` and `Target` have to equal, byte for byte, what `Definition.Metadata(sink.Context{Schema,
 Table})` renders — `cmd/hump/main.go` `topology`, `process_operation.newBinding`,
 `get_config/usecase.go`, `get_snapshot_tables/usecase.go` and `adapter/snapshot/snapshot.go`
 all make that call. `SinkType` is a
-plain `string` here, not `port/sink.SinkType`: this package does not
+plain `string` here, not `port/sink.Type`: this package does not
 import `port/sink`, and should not start to.
 
 ## Who calls what

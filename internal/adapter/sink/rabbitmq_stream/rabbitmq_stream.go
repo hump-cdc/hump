@@ -16,7 +16,7 @@ import (
 // under the producer's serialization mutex and waits for the publisher
 // confirmation. When capture is non-nil the rendered message's fields are
 // recorded on it for the operations log.
-func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func Process(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -17,7 +18,7 @@ func asTime(v any) (time.Time, error) {
 		return x, nil
 	case *time.Time:
 		if x == nil {
-			return time.Time{}, fmt.Errorf("nil time")
+			return time.Time{}, errors.New("nil time")
 		}
 		return *x, nil
 	case int:

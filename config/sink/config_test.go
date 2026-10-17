@@ -18,7 +18,7 @@ import (
 func TestConfigUnmarshalEachSinkType(t *testing.T) {
 	tests := []struct {
 		src  string
-		want sinkport.SinkType
+		want sinkport.Type
 	}{
 		{src: "kafka:\n  url: localhost:9092\n", want: sinkport.SinkTypeKafka},
 		{src: "nats-core:\n  url: nats://localhost:4222\n", want: sinkport.SinkTypeNatsCore},

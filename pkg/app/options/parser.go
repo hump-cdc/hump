@@ -1,3 +1,5 @@
+// Package options parses the command line and environment into Options and
+// resolves where the YAML configuration comes from.
 package options
 
 import (

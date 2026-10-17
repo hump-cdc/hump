@@ -35,7 +35,7 @@ func TestFuncs_AllRegistered(t *testing.T) {
 		// encoding
 		"b32dec", "b32enc", "b64dec", "b64enc",
 		// crypto
-		"adler32", "aes_decrypt", "aes_encrypt", "randbytes", "sha1", "sha256",
+		"adler32", "aes_decrypt", "aes_encrypt", "randbytes", "sha256",
 		// time
 		"ago", "date", "dateinzone", "datemodify", "duration", "durationround",
 		"htmldate", "htmldateinzone", "now", "todate", "unixepoch",
@@ -76,7 +76,7 @@ func TestFuncs_RealTemplate(t *testing.T) {
 		{`{{ snakecase "fooBar" }}`, "foo_bar"},
 		{`{{ "hello" | upper }}`, "HELLO"},
 		{`{{ b64enc "hello" }}`, "aGVsbG8="},
-		{`{{ sha1 "abc" }}`, "a9993e364706816aba3e25717850c26c9cd0d89d"},
+		{`{{ sha256 "abc" }}`, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
 		{`{{ list 1 2 3 | len }}`, "3"},
 		{`{{ add 1 2 3 }}`, "6"},
 		{`{{ default "fb" "" }}`, ""}, // empty string passes through

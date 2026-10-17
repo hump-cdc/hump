@@ -1,11 +1,11 @@
 package sink
 
 import (
-	_ "embed"
-
 	"hump/pkg/template"
 )
 
+// RabbitMQCommon is the connection and message settings shared by the AMQP and
+// RabbitMQ Streams sinks.
 type RabbitMQCommon struct {
 	URL *template.Template `yaml:"url" validate:"required"`
 
@@ -13,6 +13,8 @@ type RabbitMQCommon struct {
 	Headers map[string]*template.Template `yaml:"headers,omitempty"`
 }
 
+// SetDefaults fills in the default payload and the idempotency and traceparent
+// headers when none are configured.
 func (c *RabbitMQCommon) SetDefaults() {
 	if c.Payload == nil {
 		t, _ := template.New(DefaultPayload)

@@ -3,18 +3,25 @@ package options
 import "errors"
 
 var (
+	// ErrConfigConflict is returned by Parse when both --config and --config-file are set.
 	ErrConfigConflict = errors.New("--config and --config-file are mutually exclusive, please provide only one of them")
-	ErrConfigMissing  = errors.New("one of --config / --config-file is required")
-	ErrHelp           = errors.New("help requested")
+	// ErrConfigMissing is returned by Parse when no source yields a configuration.
+	ErrConfigMissing = errors.New("one of --config / --config-file is required")
+	// ErrHelp is returned by Parse when -h/--help is requested.
+	ErrHelp = errors.New("help requested")
 )
 
+// LogFormat is the log output format.
 type LogFormat string
 
+// The supported log formats.
 const (
 	LogFormatPretty LogFormat = "pretty"
 	LogFormatJSON   LogFormat = "json"
 )
 
+// Options is the parsed command line, with the configuration source resolved
+// into Config.
 type Options struct {
 	DatabaseUrl         string `short:"d" long:"database-url" env:"DATABASE_URL" description:"Database connection URL"`
 	Config              string `short:"c" long:"config" description:"Table configuration [$CONFG]"`

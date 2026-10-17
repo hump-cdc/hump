@@ -100,13 +100,27 @@ tasks:
     test:
         desc: Run all tests
         cmds:
-            - gotestsum --format testdox ./...
+            - go tool gotestsum --format testdox ./...
+
+    lint:
+        desc: Run golangci-lint
+        cmds:
+            - go tool golangci-lint run
+
+    lint:fix:
+        desc: Run golangci-lint and apply automatic fixes
+        cmds:
+            - go tool golangci-lint run --fix
+
+    fmt:
+        desc: Format Go code (gofmt, goimports)
+        cmds:
+            - go tool golangci-lint fmt
 
     check:
-        desc: Run all pre-PR checks (gofmt, go vet, tests, web UI lint, tests and type check)
+        desc: Run all pre-PR checks (golangci-lint, tests, web UI lint, tests and type check)
         cmds:
-            - files=$(gofmt -l cmd config internal pkg); if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
-            - go vet ./...
+            - task: lint
             - task: test
             - task: _check:web
 
@@ -122,7 +136,7 @@ tasks:
         desc: Run tests of the package in the current directory
         dir: '{{.USER_WORKING_DIR}}'
         cmds:
-            - gotestsum --format testdox
+            - go tool gotestsum --format testdox
 
     test:cover:
         desc: Run all tests with coverage report
@@ -146,6 +160,6 @@ tasks:
             ARGS: '{{.ARGS | default ""}}'
         cmds:
             - defer: rm -f cover.out
-            - gotestsum --format testdox -- -coverprofile=cover.out {{.ARGS}}
-            - gocov convert cover.out | gocov-html > "${TMPDIR:-/tmp}/hump-cover.html"
+            - go tool gotestsum --format testdox -- -coverprofile=cover.out {{.ARGS}}
+            - go tool gocov convert cover.out | go tool gocov-html > "${TMPDIR:-/tmp}/hump-cover.html"
             - '{{if eq OS "darwin"}}open{{else if eq OS "windows"}}cmd /c start ""{{else}}xdg-open{{end}} "${TMPDIR:-/tmp}/hump-cover.html"'

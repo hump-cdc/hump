@@ -9,8 +9,8 @@ import (
 
 // getSinkType returns the single sink discriminator present in node along with
 // its value node. Returns ("", nil) if none or more than one is present.
-func getSinkType(node *ast.MappingNode) (sinkport.SinkType, ast.Node) {
-	var foundType sinkport.SinkType
+func getSinkType(node *ast.MappingNode) (sinkport.Type, ast.Node) {
+	var foundType sinkport.Type
 	var foundValue ast.Node
 
 	for _, t := range sinkport.SinkTypes {

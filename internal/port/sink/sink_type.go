@@ -1,19 +1,21 @@
 package sink
 
-// SinkType is the YAML discriminator key that selects a concrete sink.
+// Type is the YAML discriminator key that selects a concrete sink.
+type Type string
 
-type SinkType string
-
+// The sink types hump can deliver to; each literal is the key users write.
 const (
-	SinkTypeKafka          SinkType = "kafka"
-	SinkTypeNatsCore       SinkType = "nats-core"
-	SinkTypeNatsJetStream  SinkType = "nats-jetstream"
-	SinkTypeHTTP           SinkType = "http"
-	SinkTypeRabbitMQ       SinkType = "rabbitmq"
-	SinkTypeRabbitMQStream SinkType = "rabbitmq-stream"
+	SinkTypeKafka          Type = "kafka"
+	SinkTypeNatsCore       Type = "nats-core"
+	SinkTypeNatsJetStream  Type = "nats-jetstream"
+	SinkTypeHTTP           Type = "http"
+	SinkTypeRabbitMQ       Type = "rabbitmq"
+	SinkTypeRabbitMQStream Type = "rabbitmq-stream"
 )
 
-var SinkTypes = []SinkType{
+// SinkTypes lists every sink type; config parsing iterates it to find the
+// discriminator, so a type missing here cannot be configured.
+var SinkTypes = []Type{
 	SinkTypeKafka,
 	SinkTypeNatsCore,
 	SinkTypeNatsJetStream,

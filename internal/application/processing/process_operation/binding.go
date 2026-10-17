@@ -17,7 +17,7 @@ import (
 )
 
 // handler is one step of a binding's delivery chain.
-type handler = resilience.Handler[*sink.SinkContext]
+type handler = resilience.Handler[*sink.Context]
 
 type binding struct {
 	sinkName              string
@@ -55,7 +55,7 @@ func newBinding(
 	observer Observer,
 	opLog OperationLog,
 ) *binding {
-	host, target := cfg.Sink.Metadata(sink.SinkContext{
+	host, target := cfg.Sink.Metadata(sink.Context{
 		Schema: schema,
 		Table:  tableName,
 	})
@@ -90,7 +90,7 @@ func newBinding(
 		return resilience.WithRetry(fn, uint(cfg.Retry.MaxAttempts), cfg.Retry.Backoff.Policy(), b, shutdown.Draining())
 	}
 	deliver := func(capture *sink.Capture) handler {
-		return func(ctx context.Context, operationContext *sink.SinkContext) error {
+		return func(ctx context.Context, operationContext *sink.Context) error {
 			return sinksPort.Process(ctx, cfg.Sink, operationContext, capture)
 		}
 	}
@@ -112,7 +112,7 @@ func (b *binding) accepts(op domain.OperationType) bool {
 	return ok
 }
 
-func (b *binding) Process(ctx context.Context, operationContext *sink.SinkContext) error {
+func (b *binding) Process(ctx context.Context, operationContext *sink.Context) error {
 	return b.fn(ctx, operationContext)
 }
 
@@ -121,7 +121,7 @@ func (b *binding) Process(ctx context.Context, operationContext *sink.SinkContex
 // and inside WithStatus so the entry agrees with the counters, and so a skipped
 // failure is still logged as one.
 func (b *binding) withOperation(plain, logged handler) handler {
-	return func(ctx context.Context, operationContext *sink.SinkContext) error {
+	return func(ctx context.Context, operationContext *sink.Context) error {
 		if b.log == nil || !b.log.Connected() {
 			return plain(ctx, operationContext)
 		}
@@ -147,7 +147,7 @@ func (b *binding) withOperation(plain, logged handler) handler {
 // withAttempt appends one attempt to the open record. It wraps the timeout so a
 // deadline counts as the attempt's error and its full duration is measured.
 func (b *binding) withAttempt(fn handler) handler {
-	return func(ctx context.Context, operationContext *sink.SinkContext) error {
+	return func(ctx context.Context, operationContext *sink.Context) error {
 		started := time.Now()
 		err := fn(ctx, operationContext)
 
@@ -164,7 +164,7 @@ func (b *binding) withAttempt(fn handler) handler {
 
 // begin resets the scratch record for one delivery over conn, keeping every
 // buffer it already owns.
-func (o *operation) begin(operationContext *sink.SinkContext, conn metricscollector.Connection) {
+func (o *operation) begin(operationContext *sink.Context, conn metricscollector.Connection) {
 	o.capture.Target = ""
 	o.capture.Payload = o.capture.Payload[:0]
 	clear(o.capture.Metadata)

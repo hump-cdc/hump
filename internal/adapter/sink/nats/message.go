@@ -5,11 +5,10 @@ import (
 	"slices"
 	"strings"
 
-	"hump/internal/domain"
-
-	"github.com/nats-io/nats.go"
 	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
+
+	"github.com/nats-io/nats.go"
 )
 
 // JetStream message header names.
@@ -22,7 +21,7 @@ const (
 // operationContext and returns the resulting [nats.Msg]. The rendered subject
 // is validated. JetStream-specific control headers are applied separately by
 // the JetStream publish path.
-func buildMessage(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*nats.Msg, error) {
+func buildMessage(cfg sinkcfg.NatsCommon, operationContext *sink.Context) (*nats.Msg, error) {
 	subject, err := cfg.Subject.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render subject: %w", err)
@@ -56,23 +55,6 @@ func buildMessage(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*
 	}, nil
 }
 
-// natsHeaders flattens NATS message headers into a plain string map (first
-// value per key) for the operations stream. It returns nil when there are none.
-func natsHeaders(header nats.Header) domain.Headers {
-	if len(header) == 0 {
-		return nil
-	}
-
-	out := make(domain.Headers, len(header))
-	for name, values := range header {
-		if len(values) == 0 {
-			continue
-		}
-		out[name] = values[0]
-	}
-	return out
-}
-
 // validateSubject enforces NATS subject grammar: non-empty, no whitespace, no
 // wildcards (`*`/`>`), only `.` as a segment separator, every segment non-empty.
 func validateSubject(subject string) error {
@@ -99,7 +81,7 @@ func validateSubject(subject string) error {
 // merges them into header. Empty rendered values cause the corresponding
 // header to be omitted. Nats-Expected-Stream is always set from the static
 // stream name and overwrites any user-declared entry.
-func applyJetStreamHeaders(header nats.Header, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext) error {
+func applyJetStreamHeaders(header nats.Header, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.Context) error {
 	if cfg.MsgID != nil {
 		msgID, err := cfg.MsgID.Render(operationContext)
 		if err != nil {

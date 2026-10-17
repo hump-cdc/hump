@@ -13,7 +13,7 @@ func TestSinkTypeAndDisplayName(t *testing.T) {
 		name      string
 		populated sinkport.Definition
 		nilRecv   sinkport.Definition
-		wantType  sinkport.SinkType
+		wantType  sinkport.Type
 	}{
 		{name: "http", populated: &HTTPSink{URL: url}, nilRecv: (*HTTPSink)(nil), wantType: sinkport.SinkTypeHTTP},
 		{name: "kafka", populated: &KafkaSink{URL: url}, nilRecv: (*KafkaSink)(nil), wantType: sinkport.SinkTypeKafka},
@@ -70,7 +70,7 @@ func TestSinkMetadataNilReceiver(t *testing.T) {
 
 	for _, s := range sinks {
 		t.Run(string(s.Type()), func(t *testing.T) {
-			host, target := s.Metadata(sinkport.SinkContext{})
+			host, target := s.Metadata(sinkport.Context{})
 			if host != "" || target != "" {
 				t.Fatalf("Metadata = (%q, %q), want empty", host, target)
 			}

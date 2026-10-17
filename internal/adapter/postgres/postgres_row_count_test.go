@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -226,7 +227,7 @@ func TestGetRowCountRunsConcurrentCallsIndependently(t *testing.T) {
 		case strings.Contains(sql, "row count: planner estimate"):
 			return planEstimate(tableNumber(sql) * 10)
 		case strings.Contains(sql, "row count: exact"):
-			return singleValue(fmt.Sprint(tableNumber(sql)))
+			return singleValue(strconv.Itoa(tableNumber(sql)))
 		default:
 			return queryResult{}
 		}

@@ -19,9 +19,9 @@ the process was started with — there is no query, no error path and no state.
 
 | Field | Key | Rendered with |
 |---|---|---|
-| `Config.Sinks` | `(type, host)`, once across **all** tables, first-seen order | `Metadata(sink.SinkContext{})` |
-| `Table.Sinks` | `(type, host)`, once per table | `Metadata(sink.SinkContext{})` |
-| `Table.Targets` | `(type, host, target)`, once per table | `Metadata(SinkContext{Schema, Table})` |
+| `Config.Sinks` | `(type, host)`, once across **all** tables, first-seen order | `Metadata(sink.Context{})` |
+| `Table.Sinks` | `(type, host)`, once per table | `Metadata(sink.Context{})` |
+| `Table.Targets` | `(type, host, target)`, once per table | `Metadata(sink.Context{Schema, Table})` |
 
 The first two render against a **zero context**: sink URLs are templates, but in practice they
 resolve from the environment, not from the row. One that does depend on the table renders an empty
@@ -32,7 +32,7 @@ A `sinkcfg.Config` whose `Sink` is nil is skipped everywhere.
 
 ## `Targets` has to match the metrics topology byte for byte
 
-`tableTargets` makes the same `Metadata(SinkContext{Schema, Table})` call as `topology()` in
+`tableTargets` makes the same `Metadata(sink.Context{Schema, Table})` call as `topology()` in
 `cmd/hump/main.go` and `newBinding` in `process_operation`, because the dashboard joins these edges
 to `/api/metrics` by `(type, host, target)` as plain strings. Render one side differently and the
 flows view shows edges with no counts — see `adapter/metrics_collector/AGENTS.md`, "Topology comes

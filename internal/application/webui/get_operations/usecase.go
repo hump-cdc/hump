@@ -28,6 +28,7 @@ type Filter struct {
 	Text       string
 }
 
+// UseCase searches the operations log.
 type UseCase struct {
 	collector operationscollector.Collector // collector is nil when the web UI is disabled.
 }

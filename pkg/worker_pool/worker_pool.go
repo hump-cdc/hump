@@ -1,3 +1,5 @@
+// Package workerpool runs tasks on a fixed set of goroutines in batches: a
+// batch is submitted, then awaited as a whole.
 package workerpool
 
 import (

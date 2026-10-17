@@ -18,7 +18,7 @@ import (
 // operationContext, and publishing it with a synchronous flush. When capture is
 // non-nil the built message's rendered fields are recorded on it for the
 // operations log.
-func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func ProcessCore(ctx context.Context, cfg sinkcfg.NatsCoreSink, operationContext
 // per-(connection, stream) reconcile guard, and publishes asserting the
 // expected stream. When capture is non-nil the built message's rendered fields
 // are recorded on it for the operations log.
-func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func ProcessJetStream(ctx context.Context, cfg sinkcfg.NatsJetStreamSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

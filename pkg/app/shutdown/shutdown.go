@@ -1,3 +1,5 @@
+// Package shutdown is the process-global registry of teardown hooks, run in
+// stages, and the drain signal that tells workers to stop taking new work.
 package shutdown
 
 import (

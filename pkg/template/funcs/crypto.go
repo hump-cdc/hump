@@ -1,24 +1,18 @@
 package funcs
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"hash/adler32"
 	"io"
+	"strconv"
 )
-
-// tmplSHA1Sum returns the hex SHA-1 digest of s.
-func tmplSHA1Sum(s string) string {
-	sum := sha1.Sum([]byte(s))
-	return hex.EncodeToString(sum[:])
-}
 
 // tmplSHA256Sum returns the hex SHA-256 digest of s.
 func tmplSHA256Sum(s string) string {
@@ -28,7 +22,7 @@ func tmplSHA256Sum(s string) string {
 
 // tmplAdler32Sum returns the Adler-32 checksum of s as a decimal string.
 func tmplAdler32Sum(s string) string {
-	return fmt.Sprintf("%d", adler32.Checksum([]byte(s)))
+	return strconv.FormatUint(uint64(adler32.Checksum([]byte(s))), 10)
 }
 
 // tmplRandBytes returns n cryptographically-random bytes encoded as standard
@@ -53,13 +47,13 @@ func tmplEncryptAES(key, plaintext string) (string, error) {
 	// k is always 32 bytes (AES-256), so NewCipher never returns an error.
 	block, _ := aes.NewCipher(k[:])
 
-	pt := pkcs7Pad([]byte(plaintext), aes.BlockSize)
+	pt := pkcs7Pad([]byte(plaintext))
 	ct := make([]byte, aes.BlockSize+len(pt))
 	iv := ct[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return "", err
 	}
-	mode := cipher.NewCBCEncrypter(block, iv)
+	mode := cipher.NewCBCEncrypter(block, iv) //nolint:gosec // iv is filled from crypto/rand above
 	mode.CryptBlocks(ct[aes.BlockSize:], pt)
 	return base64.StdEncoding.EncodeToString(ct), nil
 }
@@ -90,16 +84,13 @@ func tmplDecryptAES(key, b64 string) (string, error) {
 	return string(pt), nil
 }
 
-func pkcs7Pad(b []byte, blockSize int) []byte {
-	pad := blockSize - len(b)%blockSize
-	out := make([]byte, len(b)+pad)
-	copy(out, b)
-	for i := len(b); i < len(out); i++ {
-		out[i] = byte(pad)
-	}
-	return out
+// pkcs7Pad appends PKCS#7 padding to b up to the next multiple of aes.BlockSize.
+func pkcs7Pad(b []byte) []byte {
+	pad := byte(aes.BlockSize - len(b)%aes.BlockSize)
+	return append(bytes.Clone(b), bytes.Repeat([]byte{pad}, int(pad))...)
 }
 
+// pkcs7Unpad strips PKCS#7 padding from b, rejecting a malformed pad.
 func pkcs7Unpad(b []byte, blockSize int) ([]byte, error) {
 	n := len(b)
 	if n == 0 || n%blockSize != 0 {

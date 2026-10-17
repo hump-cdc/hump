@@ -33,7 +33,7 @@ The result follows the port's order, and the port is asked in configuration orde
   of the table, whereas a run — `adapter/snapshot` — lists and counts only sinks whose configured
   operations include `insert`. A table with an update-only sink shows that sink here and not in
   the run's progress.
-- `tableSinks` renders with `Metadata(SinkContext{Schema, Table})`, the same call the metrics
+- `tableSinks` renders with `Metadata(sink.Context{Schema, Table})`, the same call the metrics
   topology and `get_config.tableTargets` make, so the strings line up across views. A nil `Sink`
   is skipped.
 - A nil database answers an **empty list**, not an error. That path exists for `cmd/openapi`,

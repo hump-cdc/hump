@@ -1,7 +1,6 @@
 package sink
 
 import (
-	_ "embed"
 	"fmt"
 
 	"hump/config/decoder"
@@ -12,6 +11,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 )
 
+// HTTPSink delivers each change as an HTTP request.
 type HTTPSink struct {
 	URL *template.Template `yaml:"url"               validate:"required"`
 
@@ -20,8 +20,10 @@ type HTTPSink struct {
 	Headers map[string]*template.Template `yaml:"headers,omitempty"`
 }
 
-func (*HTTPSink) Type() sinkport.SinkType { return sinkport.SinkTypeHTTP }
+// Type returns the sink type key.
+func (*HTTPSink) Type() sinkport.Type { return sinkport.SinkTypeHTTP }
 
+// DisplayName returns the sink type followed by its URL template.
 func (s *HTTPSink) DisplayName() string {
 	if s == nil || s.URL == nil || s.URL.Source() == "" {
 		return string(sinkport.SinkTypeHTTP)
@@ -30,7 +32,8 @@ func (s *HTTPSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sinkport.SinkTypeHTTP), s.URL.Source())
 }
 
-func (s *HTTPSink) Metadata(context sinkport.SinkContext) (string, string) {
+// Metadata returns the host of the rendered URL and the URL itself.
+func (s *HTTPSink) Metadata(context sinkport.Context) (string, string) {
 	if s == nil {
 		return "", ""
 	}
@@ -40,43 +43,45 @@ func (s *HTTPSink) Metadata(context sinkport.SinkContext) (string, string) {
 	return metadata.ParseHost(url), url
 }
 
+// CrossValidate accepts any configuration: HTTP sinks share no state across tables.
 func (*HTTPSink) CrossValidate([][]sinkport.Definition) error { return nil }
 
-func (h *HTTPSink) UnmarshalYAML(node ast.Node) error {
+// UnmarshalYAML decodes the sink strictly and fills in its defaults.
+func (s *HTTPSink) UnmarshalYAML(node ast.Node) error {
 	type http HTTPSink
-	if err := decoder.Decode(node, (*http)(h)); err != nil {
+	if err := decoder.Decode(node, (*http)(s)); err != nil {
 		return err
 	}
 
-	h.setDefaults()
+	s.setDefaults()
 
 	return nil
 }
 
-func (h *HTTPSink) setDefaults() {
-	if h.Method == nil {
+func (s *HTTPSink) setDefaults() {
+	if s.Method == nil {
 		t, _ := template.New("POST")
-		h.Method = t
+		s.Method = t
 	}
 
-	if h.Body == nil {
+	if s.Body == nil {
 		t, _ := template.New(DefaultPayload)
-		h.Body = t
+		s.Body = t
 	}
 
-	if len(h.Headers) == 0 {
-		h.Headers = map[string]*template.Template{}
+	if len(s.Headers) == 0 {
+		s.Headers = map[string]*template.Template{}
 
 		contentType, _ := template.New("application/json")
-		h.Headers["Content-Type"] = contentType
+		s.Headers["Content-Type"] = contentType
 
 		clientID, _ := template.New(DefaultClientID)
-		h.Headers["X-Client-ID"] = clientID
+		s.Headers["X-Client-ID"] = clientID
 
 		idempotency, _ := template.New(DefaultIdempotencyKey)
-		h.Headers["X-Idempotency-Key"] = idempotency
+		s.Headers["X-Idempotency-Key"] = idempotency
 
 		traceparent, _ := template.New(DefaultTraceparent)
-		h.Headers["traceparent"] = traceparent
+		s.Headers["traceparent"] = traceparent
 	}
 }

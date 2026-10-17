@@ -1,6 +1,6 @@
 # adapter/sink — how this package hangs together
 
-The delivery end of the pipeline. One row change arrives as a `port/sink.SinkContext`, and the
+The delivery end of the pipeline. One row change arrives as a `port/sink.Context`, and the
 adapter renders it into a broker-specific message, publishes it, and reports an error the retry
 layer can classify. Everything here is called from `process_operation.binding`, once per
 attempt, on a worker goroutine.
@@ -48,7 +48,7 @@ Shared conventions inside that: headers land on the capture under a `header.` pr
 empty rendered header is dropped rather than sent, and `template.ErrRender` is permanent in
 every sink (`pkg/template` wraps every execution failure with it).
 
-**Adding a sink** touches six places: a `SinkType` constant and the `SinkTypes` list in
+**Adding a sink** touches six places: a `SinkType<Name>` constant and the `SinkTypes` list in
 `internal/port/sink/sink_type.go` (which is what drives `getSinkType`, so the YAML
 discriminator needs no further edit), a `config/sink/config_<name>.go` implementing
 `Definition` (`Type`, `DisplayName`, `Metadata`) plus `CrossValidate` and `UnmarshalYAML`, a
@@ -96,7 +96,7 @@ being cached as a permanent failure. The differences:
 - **RabbitMQ classic** invalidates on connection reconnect only. Reopening a dead channel
   (`reopenChannelLocked`) deliberately does not, because exchange declarations live on the
   broker, not on the channel.
-- **RabbitMQ Streams** has an `invalidate` that is never called, so a sticky success outlives
+- **RabbitMQ Streams** has no invalidation, so a sticky success outlives
   the stream on the broker: if the stream is dropped, the evicted producer is recreated against
   the cached outcome rather than re-declared, even in `create-when-missing` mode.
 

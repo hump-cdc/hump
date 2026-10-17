@@ -14,7 +14,7 @@ import (
 // socket the fake server answers on.
 func BenchmarkStartReceivesMessages(b *testing.B) {
 	server := usersServer(b)
-	w, _ := newReplicationWal(b, server, newTestConnection(b, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(b, server, newTestConnection(b, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

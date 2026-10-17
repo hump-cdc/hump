@@ -31,6 +31,7 @@ import (
 //go:embed webui
 var webuiFS embed.FS
 
+// WebUIController serves the web UI API and the embedded SPA on one port.
 type WebUIController struct {
 	configController     *getconfig.Controller
 	metricsController    *getmetrics.Controller
@@ -43,6 +44,8 @@ type WebUIController struct {
 	stopController       *stopsnapshot.Controller
 }
 
+// NewWebUIController returns a WebUIController routing the API to the given
+// per-use-case controllers.
 func NewWebUIController(
 	configController *getconfig.Controller,
 	metricsController *getmetrics.Controller,
@@ -67,6 +70,8 @@ func NewWebUIController(
 	}
 }
 
+// Serve listens on port until the registered shutdown hook closes the server.
+// Requests inherit ctx; it returns nil on a clean shutdown.
 func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 	logger := log.Scope("controller")
 
@@ -83,9 +88,10 @@ func (c *WebUIController) Serve(ctx context.Context, port uint) error {
 
 	// Server
 	server := &http.Server{
-		Addr:        fmt.Sprintf(":%d", port),
-		Handler:     router,
-		BaseContext: func(net.Listener) context.Context { return ctx },
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           router,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	// Shutdown

@@ -46,7 +46,7 @@ var (
 
 // getClient returns a cached [natsConn] for the rendered NATS connection
 // described by cfg, creating one on first use.
-func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.SinkContext) (*natsConn, error) {
+func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.Context) (*natsConn, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -148,7 +148,7 @@ type natsAuth struct {
 // resolveAuth renders the configured auth group and returns the rendered field
 // values used to derive the cache key plus the [nats.Option] that applies the
 // credentials at connect time.
-func resolveAuth(cfg sinkcfg.NatsCommon, opCtx *sink.SinkContext) (natsAuth, error) {
+func resolveAuth(cfg sinkcfg.NatsCommon, opCtx *sink.Context) (natsAuth, error) {
 	if cfg.Credentials != nil && cfg.Credentials.Source() != "" {
 		credentials, err := cfg.Credentials.Render(opCtx)
 		if err != nil {

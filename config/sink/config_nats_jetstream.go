@@ -14,19 +14,29 @@ import (
 	"github.com/goccy/go-yaml/ast"
 )
 
+// JetStreamReconcileMode selects how a JetStream stream is reconciled at first
+// publish.
 type JetStreamReconcileMode string
 
 const (
-	JetStreamReconcileCreateOrUpdate    JetStreamReconcileMode = "create-or-update"
+	// JetStreamReconcileCreateOrUpdate creates the stream or updates an existing
+	// one to match the configuration.
+	JetStreamReconcileCreateOrUpdate JetStreamReconcileMode = "create-or-update"
+
+	// JetStreamReconcileCreateWhenMissing creates the stream only if it is absent
+	// and leaves an existing one untouched.
 	JetStreamReconcileCreateWhenMissing JetStreamReconcileMode = "create-when-missing"
 )
 
+// NatsStream names the JetStream stream a sink publishes to and the subjects
+// it captures.
 type NatsStream struct {
 	Name     string   `yaml:"name"               validate:"required"`
 	Subjects []string `yaml:"subjects,omitempty"`
 }
 
-// NatsJetStreamSink is the config for a JetStream sink.
+// NatsJetStreamSink publishes each change to a JetStream stream, which it
+// reconciles before the first publish.
 type NatsJetStreamSink struct {
 	NatsCommon `yaml:",inline"`
 
@@ -39,8 +49,10 @@ type NatsJetStreamSink struct {
 	Storage   string                 `yaml:"storage,omitempty"   validate:"omitempty,oneof=file memory"`
 }
 
-func (*NatsJetStreamSink) Type() sinkport.SinkType { return sinkport.SinkTypeNatsJetStream }
+// Type returns the sink type key.
+func (*NatsJetStreamSink) Type() sinkport.Type { return sinkport.SinkTypeNatsJetStream }
 
+// DisplayName returns the sink type followed by its URL template.
 func (s *NatsJetStreamSink) DisplayName() string {
 	if s == nil || s.URL == nil || s.URL.Source() == "" {
 		return string(sinkport.SinkTypeNatsJetStream)
@@ -49,7 +61,8 @@ func (s *NatsJetStreamSink) DisplayName() string {
 	return fmt.Sprintf("%s(%s)", string(sinkport.SinkTypeNatsJetStream), s.URL.Source())
 }
 
-func (s *NatsJetStreamSink) Metadata(context sinkport.SinkContext) (string, string) {
+// Metadata returns the host of the rendered URL and the rendered subject.
+func (s *NatsJetStreamSink) Metadata(context sinkport.Context) (string, string) {
 	if s == nil {
 		return "", ""
 	}
@@ -60,6 +73,7 @@ func (s *NatsJetStreamSink) Metadata(context sinkport.SinkContext) (string, stri
 	return metadata.ParseHost(url), target
 }
 
+// UnmarshalYAML decodes the sink strictly and fills in its defaults.
 func (s *NatsJetStreamSink) UnmarshalYAML(node ast.Node) error {
 	type natsJetStream NatsJetStreamSink
 	if err := decoder.Decode(node, (*natsJetStream)(s)); err != nil {
@@ -82,6 +96,8 @@ func (s *NatsJetStreamSink) setDefaults() {
 	}
 }
 
+// CrossValidate rejects JetStream sinks that share a URL and stream but differ
+// in subjects, retention or storage.
 func (*NatsJetStreamSink) CrossValidate(groups [][]sinkport.Definition) error {
 	type jsEntry struct {
 		subjects  []string

@@ -240,8 +240,8 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `randbytes`    | `randbytes n`    | `n` cryptographic random bytes, base64-encoded |
 | `shuffle`      | `shuffle s`      | `s` with runes randomly reordered              |
 
-`randalpha`/`randalphanum`/`randnumeric`/`randascii` use `math/rand` and are
-**not** cryptographically secure. Use `randbytes` when you need that property.
+`randalpha`/`randalphanum`/`randnumeric`/`randascii` draw from `crypto/rand`.
+`shuffle` uses `math/rand` and is **not** cryptographically secure.
 
 ### Type conversion
 
@@ -291,14 +291,10 @@ Compile errors abort the render.
 
 | Name         | Signature                       | Notes                                                              |
 | ------------ | ------------------------------- | ------------------------------------------------------------------ |
-| `sha1`        | `sha1 s` → hex digest             |                                                                    |
 | `sha256`      | `sha256 s` → hex digest           |                                                                    |
 | `adler32`     | `adler32 s` → decimal string      |                                                                    |
 | `aes_encrypt` | `aes_encrypt key plaintext`       | AES-256-CBC; `key` is SHA-256-derived. IV-prefixed, base64-encoded |
 | `aes_decrypt` | `aes_decrypt key b64`             | Reverses `aes_encrypt`                                             |
-
-`sha1` is for non-security uses (cache keys, dedupe). Don't use it for
-authentication.
 
 ### Date & time
 
@@ -461,7 +457,7 @@ partitionKey: '{{ required "id is required" .Next.id }}'
 
 ```yaml
 headers:
-  Idempotency-Key: '{{ printf "%s/%s/%v/%s" .Schema .Table .Next.id .Operation | sha1 }}'
+  Idempotency-Key: '{{ printf "%s/%s/%v/%s" .Schema .Table .Next.id .Operation | sha256 }}'
 ```
 
 ## Reference
@@ -967,7 +963,7 @@ Like `indent` but with a leading newline.
 
 #### `randalpha`
 
-`randalpha n` — `n` random ASCII letters (math/rand).
+`randalpha n` — `n` random ASCII letters (crypto/rand).
 
 ```
 {{ randalpha 8 }} → e.g. KdwQpAzM
@@ -1196,14 +1192,6 @@ Standard base32 decode.
 ```
 
 ### Hashes & crypto
-
-#### `sha1`
-
-Hex SHA-1 digest. **Not for security use.**
-
-```
-{{ sha1 "abc" }} → a9993e364706816aba3e25717850c26c9cd0d89d
-```
 
 #### `sha256`
 

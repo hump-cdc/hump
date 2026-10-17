@@ -49,6 +49,7 @@ type OperationItem struct {
 	Attempts    []OperationAttempt `json:"attempts"        doc:"Every attempt the delivery took, oldest first"`
 }
 
+// OperationsResponse is the response of POST /api/operations.
 type OperationsResponse struct {
 	Body struct {
 		Total   int             `json:"total"   doc:"Records matching the filter, of which the window is one page"`

@@ -58,10 +58,10 @@ func (c *connectionOptions) apply(opts ...option) {
 }
 
 // withReplication enables the replication=database runtime parameter, allowing
-// logical replication commands. Defaults to false.
-func withReplication(enabled bool) option {
+// logical replication commands. Without it the parameter is off.
+func withReplication() option {
 	return func(c *connectionOptions) {
-		c.replication = enabled
+		c.replication = true
 	}
 }
 

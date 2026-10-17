@@ -3,6 +3,7 @@ package funcs
 import (
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 )
 
@@ -49,13 +50,14 @@ func canBeNil(typ reflect.Type) bool {
 		return true
 	case reflect.Struct:
 		return typ == reflect.TypeFor[reflect.Value]()
+	default:
+		return false
 	}
-	return false
 }
 
-func isTrue(val reflect.Value) (truth, ok bool) {
+func isTrue(val reflect.Value) (truth bool) {
 	if !val.IsValid() {
-		return false, true
+		return false
 	}
 	switch val.Kind() {
 	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
@@ -74,13 +76,13 @@ func isTrue(val reflect.Value) (truth, ok bool) {
 		truth = val.Uint() != 0
 	case reflect.Struct:
 		truth = true
+	default:
 	}
-	return truth, true
+	return truth
 }
 
 func truth(arg reflect.Value) bool {
-	t, _ := isTrue(indirectInterface(arg))
-	return t
+	return isTrue(indirectInterface(arg))
 }
 
 func intLike(typ reflect.Kind) bool {
@@ -89,8 +91,9 @@ func intLike(typ reflect.Kind) bool {
 		return true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func prepareArg(value reflect.Value, argType reflect.Type) (reflect.Value, error) {
@@ -110,19 +113,23 @@ func prepareArg(value reflect.Value, argType reflect.Type) (reflect.Value, error
 	return reflect.Value{}, fmt.Errorf("value has type %s; should be %s", value.Type(), argType)
 }
 
-func indexArg(tmplIndex reflect.Value, cap int) (int, error) {
+func indexArg(tmplIndex reflect.Value, capacity int) (int, error) {
 	var x int64
 	switch tmplIndex.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		x = tmplIndex.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		x = int64(tmplIndex.Uint())
+		u := tmplIndex.Uint()
+		if u > math.MaxInt64 {
+			return 0, fmt.Errorf("tmplIndex out of range: %d", u)
+		}
+		x = int64(u)
 	case reflect.Invalid:
-		return 0, fmt.Errorf("cannot tmplIndex tmplSlice/array with nil")
+		return 0, errors.New("cannot tmplIndex tmplSlice/array with nil")
 	default:
 		return 0, fmt.Errorf("cannot tmplIndex tmplSlice/array with type %s", tmplIndex.Type())
 	}
-	if x < 0 || int(x) < 0 || int(x) > cap {
+	if x < 0 || int(x) < 0 || int(x) > capacity {
 		return 0, fmt.Errorf("tmplIndex out of range: %d", x)
 	}
 	return int(x), nil
@@ -133,13 +140,13 @@ func indexArg(tmplIndex reflect.Value, cap int) (int, error) {
 func tmplIndex(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) {
 	item = indirectInterface(item)
 	if !item.IsValid() {
-		return reflect.Value{}, fmt.Errorf("tmplIndex of untyped nil")
+		return reflect.Value{}, errors.New("tmplIndex of untyped nil")
 	}
 	for _, tmplIndex := range indexes {
 		tmplIndex = indirectInterface(tmplIndex)
 		var isNil bool
 		if item, isNil = indirect(item); isNil {
-			return reflect.Value{}, fmt.Errorf("tmplIndex of nil pointer")
+			return reflect.Value{}, errors.New("tmplIndex of nil pointer")
 		}
 		switch item.Kind() {
 		case reflect.Array, reflect.Slice, reflect.String:
@@ -170,30 +177,30 @@ func tmplIndex(item reflect.Value, indexes ...reflect.Value) (reflect.Value, err
 func tmplSlice(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) {
 	item = indirectInterface(item)
 	if !item.IsValid() {
-		return reflect.Value{}, fmt.Errorf("tmplSlice of untyped nil")
+		return reflect.Value{}, errors.New("tmplSlice of untyped nil")
 	}
 	var isNil bool
 	if item, isNil = indirect(item); isNil {
-		return reflect.Value{}, fmt.Errorf("tmplSlice of nil pointer")
+		return reflect.Value{}, errors.New("tmplSlice of nil pointer")
 	}
 	if len(indexes) > 3 {
 		return reflect.Value{}, fmt.Errorf("too many tmplSlice indexes: %d", len(indexes))
 	}
-	var cap int
+	var capacity int
 	switch item.Kind() {
 	case reflect.String:
 		if len(indexes) == 3 {
-			return reflect.Value{}, fmt.Errorf("cannot 3-tmplIndex tmplSlice a string")
+			return reflect.Value{}, errors.New("cannot 3-tmplIndex tmplSlice a string")
 		}
-		cap = item.Len()
+		capacity = item.Len()
 	case reflect.Array, reflect.Slice:
-		cap = item.Cap()
+		capacity = item.Cap()
 	default:
 		return reflect.Value{}, fmt.Errorf("can't tmplSlice item of type %s", item.Type())
 	}
 	idx := [3]int{0, item.Len()}
 	for i, tmplIndex := range indexes {
-		x, err := indexArg(tmplIndex, cap)
+		x, err := indexArg(tmplIndex, capacity)
 		if err != nil {
 			return reflect.Value{}, err
 		}
@@ -215,13 +222,14 @@ func tmplSlice(item reflect.Value, indexes ...reflect.Value) (reflect.Value, err
 func tmplLength(item reflect.Value) (int, error) {
 	item, isNil := indirect(item)
 	if isNil {
-		return 0, fmt.Errorf("len of nil pointer")
+		return 0, errors.New("len of nil pointer")
 	}
 	switch item.Kind() {
 	case reflect.Array, reflect.Chan, reflect.Map, reflect.Slice, reflect.String:
 		return item.Len(), nil
+	default:
+		return 0, fmt.Errorf("len of type %s", item.Type())
 	}
-	return 0, fmt.Errorf("len of type %s", item.Type())
 }
 
 // tmplCall returns the result of evaluating the first argument as a function.
@@ -230,7 +238,7 @@ func tmplCall(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	const name = "tmplCall"
 	fn = indirectInterface(fn)
 	if !fn.IsValid() {
-		return reflect.Value{}, fmt.Errorf("tmplCall of nil")
+		return reflect.Value{}, errors.New("tmplCall of nil")
 	}
 	typ := fn.Type()
 	if typ.Kind() != reflect.Func {
@@ -247,10 +255,8 @@ func tmplCall(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 			return reflect.Value{}, fmt.Errorf("wrong number of args for %s: got %d want at least %d", name, len(args), numIn-1)
 		}
 		dddType = typ.In(numIn - 1).Elem()
-	} else {
-		if len(args) != numIn {
-			return reflect.Value{}, fmt.Errorf("wrong number of args for %s: got %d want %d", name, len(args), numIn)
-		}
+	} else if len(args) != numIn {
+		return reflect.Value{}, fmt.Errorf("wrong number of args for %s: got %d want %d", name, len(args), numIn)
 	}
 	argv := make([]reflect.Value, len(args))
 	for i, arg := range args {
@@ -347,8 +353,9 @@ func basicKind(v reflect.Value) (kind, error) {
 		return complexKind, nil
 	case reflect.String:
 		return stringKind, nil
+	default:
+		return invalidKind, errBadComparisonType
 	}
-	return invalidKind, errBadComparisonType
 }
 
 func isNilValue(v reflect.Value) bool {
@@ -358,8 +365,9 @@ func isNilValue(v reflect.Value) bool {
 	switch v.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return v.IsNil()
+	default:
+		return false
 	}
-	return false
 }
 
 func canCompare(v1, v2 reflect.Value) bool {
@@ -385,9 +393,9 @@ func tmplEq(arg1 reflect.Value, arg2 ...reflect.Value) (bool, error) {
 		if k1 != k2 {
 			switch {
 			case k1 == intKind && k2 == uintKind:
-				t = arg1.Int() >= 0 && uint64(arg1.Int()) == arg.Uint()
+				t = intEqUint(arg1.Int(), arg.Uint())
 			case k1 == uintKind && k2 == intKind:
-				t = arg.Int() >= 0 && arg1.Uint() == uint64(arg.Int())
+				t = intEqUint(arg.Int(), arg1.Uint())
 			default:
 				if arg1.IsValid() && arg.IsValid() {
 					return false, fmt.Errorf("incompatible types for comparison: %v tmplAnd %v", arg1.Type(), arg.Type())
@@ -448,9 +456,9 @@ func tmplLt(arg1, arg2 reflect.Value) (bool, error) {
 	if k1 != k2 {
 		switch {
 		case k1 == intKind && k2 == uintKind:
-			t = arg1.Int() < 0 || uint64(arg1.Int()) < arg2.Uint()
+			t = intLtUint(arg1.Int(), arg2.Uint())
 		case k1 == uintKind && k2 == intKind:
-			t = arg2.Int() >= 0 && arg1.Uint() < uint64(arg2.Int())
+			t = uintLtInt(arg1.Uint(), arg2.Int())
 		default:
 			return false, fmt.Errorf("incompatible types for comparison: %v tmplAnd %v", arg1.Type(), arg2.Type())
 		}
@@ -466,6 +474,7 @@ func tmplLt(arg1, arg2 reflect.Value) (bool, error) {
 			t = arg1.String() < arg2.String()
 		case uintKind:
 			t = arg1.Uint() < arg2.Uint()
+		default:
 		}
 	}
 	return t, nil
@@ -493,4 +502,28 @@ func tmplGe(arg1, arg2 reflect.Value) (bool, error) {
 		return false, err
 	}
 	return !lessThan, nil
+}
+
+// intEqUint reports whether the signed i equals the unsigned u.
+func intEqUint(i int64, u uint64) bool {
+	if i < 0 || u > math.MaxInt64 {
+		return false
+	}
+	return i == int64(u)
+}
+
+// intLtUint reports whether the signed i is less than the unsigned u.
+func intLtUint(i int64, u uint64) bool {
+	if i < 0 || u > math.MaxInt64 {
+		return true
+	}
+	return i < int64(u)
+}
+
+// uintLtInt reports whether the unsigned u is less than the signed i.
+func uintLtInt(u uint64, i int64) bool {
+	if i < 0 || u > math.MaxInt64 {
+		return false
+	}
+	return int64(u) < i
 }

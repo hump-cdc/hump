@@ -7,24 +7,9 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	sinkcfg "hump/config/sink"
-	"hump/internal/domain"
 	sink "hump/internal/port/sink"
 	"hump/pkg/template"
 )
-
-// tableHeaders flattens an AMQP header table into a plain string map for the
-// operations stream. It returns nil when there are no headers.
-func tableHeaders(headers amqp.Table) domain.Headers {
-	if len(headers) == 0 {
-		return nil
-	}
-
-	out := make(domain.Headers, len(headers))
-	for name, v := range headers {
-		out[name] = fmt.Sprint(v)
-	}
-	return out
-}
 
 // rabbitMessage bundles the rendered exchange/routing key with the
 // [amqp.Publishing] ready for [amqp.Channel.PublishWithContext].
@@ -39,7 +24,7 @@ type rabbitMessage struct {
 // and returns the assembled [rabbitMessage]. Empty-rendered headers are
 // dropped (matches the Kafka/NATS sinks). DeliveryMode defaults to persistent;
 // Priority is parsed from the rendered string and range-checked.
-func buildMessage(cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext) (*rabbitMessage, error) {
+func buildMessage(cfg sinkcfg.RabbitMQSink, operationContext *sink.Context) (*rabbitMessage, error) {
 	exchange, err := cfg.Exchange.Name.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render exchange.name: %w", err)
@@ -96,7 +81,7 @@ func deliveryModeByte(mode sinkcfg.RabbitMQDeliveryMode) uint8 {
 // renderProperties renders each [sinkcfg.RabbitMQProperties] template and
 // assigns the non-empty results to the matching [amqp.Publishing] field.
 // Priority is parsed to uint8 and rejected if out of range.
-func renderProperties(p *amqp.Publishing, props sinkcfg.RabbitMQProperties, opCtx *sink.SinkContext) error {
+func renderProperties(p *amqp.Publishing, props sinkcfg.RabbitMQProperties, opCtx *sink.Context) error {
 	var err error
 
 	if p.MessageId, err = props.MessageID.Render(opCtx); err != nil {
@@ -141,7 +126,7 @@ func renderProperties(p *amqp.Publishing, props sinkcfg.RabbitMQProperties, opCt
 
 // renderHeaders renders every templated header. Empty-rendered values are
 // dropped, matching the Kafka/NATS conventions.
-func renderHeaders(headers map[string]*template.Template, opCtx *sink.SinkContext) (amqp.Table, error) {
+func renderHeaders(headers map[string]*template.Template, opCtx *sink.Context) (amqp.Table, error) {
 	if len(headers) == 0 {
 		return nil, nil
 	}

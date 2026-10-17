@@ -34,10 +34,8 @@ Blank issues are disabled.
 | Docker with Compose v2 | Runs the dev environment (`docker compose`, not `docker-compose`) | [Docker Desktop](https://docs.docker.com/get-docker/), OrbStack or Colima |
 | Task | Runs everything in [taskfile.yaml](taskfile.yaml) | [taskfile.dev](https://taskfile.dev/installation/) or `brew install go-task` |
 | bun | Builds and tests the web UI | [bun.sh](https://bun.sh/) or `brew install oven-sh/bun/bun` |
-| gotestsum | Runs Go tests | `go install gotest.tools/gotestsum@latest` |
-| gocov, gocov-html | Coverage reports only | `go install github.com/axw/gocov/gocov@latest`<br>`go install github.com/matm/gocov-html/cmd/gocov-html@latest` |
 
-Make sure `$(go env GOPATH)/bin` is on your `PATH` so the Go tools resolve.
+The Go tools (golangci-lint, gotestsum, gocov, gocov-html) are pinned as `tool` dependencies in [go.mod](go.mod) and run through `go tool`, so there is nothing to install. The first run compiles them, which takes 1–2 minutes. Later runs use the build cache.
 
 On first checkout, install the web UI dependencies:
 
@@ -101,6 +99,9 @@ DATABASE_URL=postgres://hump:hump@localhost:5435/hump?sslmode=disable task run  
 | `task web:storybook` | Storybook on port 6006 |
 | `task build` | Builds `./bin/hump` with the embedded UI |
 | `task openapi` | Writes the OpenAPI spec to `web/webui/src/shared/api/openapi.json` |
+| `task lint` | Runs golangci-lint with the config in [.golangci.yml](.golangci.yml) |
+| `task lint:fix` | Runs golangci-lint and applies the fixes it can make automatically |
+| `task fmt` | Formats Go code with gofmt and goimports (`golangci-lint fmt`) |
 
 `task web:dev` has the API URL fixed in `taskfile.yaml`, so it won't follow a changed `WEB_PORT`.
 
@@ -196,7 +197,7 @@ Dependencies point inwards, towards `internal/domain`:
 
 Open a **New sink** issue first. Once it's approved, the change touches these places (from [internal/adapter/sink/AGENTS.md](internal/adapter/sink/AGENTS.md)):
 
-1. A `SinkType` constant and an entry in the `SinkTypes` list in `internal/port/sink/sink_type.go`.
+1. A `SinkType<Name>` constant and an entry in the `SinkTypes` list in `internal/port/sink/sink_type.go`.
 2. `config/sink/config_<name>.go` implementing `Definition` (`Type`, `DisplayName`, `Metadata`), plus `CrossValidate` and `UnmarshalYAML`.
 3. A case in `unmarshalSink` and an entry in `crossValidators`, both in `config/sink/config_sinks.go`.
 4. A case in `internal/adapter/sink/sink.go`, the sink registry.
@@ -232,7 +233,7 @@ Some generated files are committed. Before you open a pull request, run `task bu
 
 ## Checks
 
-`task check` has to pass. It runs `gofmt`, `go vet` and `task test`, then, in `web/webui`, `biome check`, `bun test` and `tsc --noEmit`. CI runs the same checks on every pull request.
+`task check` has to pass. It runs `task lint` and `task test`, then, in `web/webui`, `biome check`, `bun test` and `tsc --noEmit`. CI runs the same checks on every pull request.
 
 ## Commits and pull requests
 

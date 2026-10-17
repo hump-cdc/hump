@@ -22,7 +22,7 @@ import belongs in a port or an adapter. (`unavailable_test.go` imports `pkg/temp
 | `replica_identity.go` | `ReplicaIdentity` and its constants |
 
 One concept per file, named after it. `OperationType`, `DbName`, `TableSchema`, `TableName`,
-`Headers` and `DbRecord` are the field types of `port/sink.SinkContext`, which is what a template
+`Headers` and `DbRecord` are the field types of `port/sink.Context`, which is what a template
 sees as `.Operation`, `.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next`.
 `DeliveryStatus`, `ReplicaIdentity` and `TableIdentifier` are not part of it.
 

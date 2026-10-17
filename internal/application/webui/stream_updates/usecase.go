@@ -14,6 +14,8 @@ type Feed struct {
 	Snapshots <-chan snapshot.State   // Snapshots is nil without a runner.
 }
 
+// UseCase subscribes clients to the live feed; a connected client is what
+// turns the collectors on.
 type UseCase struct {
 	metrics    metricscollector.Collector    // metrics is nil when telemetry is disabled.
 	operations operationscollector.Collector // operations is nil when the web UI is disabled.

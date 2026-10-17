@@ -156,7 +156,7 @@ func resolveSinkPresets(tables []yaml.MapSlice, presets map[string]yaml.MapSlice
 			resolved = append(resolved, mergeMapSlice(rest, base))
 		}
 
-		tables[i] = mapSet(t, "sinks", resolved)
+		tables[i] = mapSet(t, "sinks", resolved) //nolint:gosec // i comes from range over tables
 	}
 
 	return nil

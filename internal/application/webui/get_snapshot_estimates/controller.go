@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/sse"
 )
 
+// Controller serves POST /api/snapshot/estimate.
 type Controller struct {
 	useCase *UseCase
 }
@@ -30,6 +31,7 @@ func (c *Controller) Events() map[string]any {
 	}
 }
 
+// Handler returns the SSE handler streaming row counts as they arrive.
 func (c *Controller) Handler() func(ctx context.Context, input *EstimatesRequest, send sse.Sender) {
 	return func(ctx context.Context, input *EstimatesRequest, send sse.Sender) {
 		// Returning cancels ctx, which is what stops the use case's goroutines

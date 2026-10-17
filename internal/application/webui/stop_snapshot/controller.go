@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+// Controller serves POST /api/snapshot/stop.
 type Controller struct {
 	useCase *UseCase
 }
@@ -22,6 +23,8 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler stopping the run in progress, or clearing
+// a finished one.
 func (c *Controller) Handler() func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 	return func(_ context.Context, _ *struct{}) (*struct{}, error) {
 		err := c.useCase.Stop()

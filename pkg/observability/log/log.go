@@ -1,3 +1,5 @@
+// Package log configures the slog default logger from the environment and
+// derives scoped loggers from it.
 package log
 
 import (
@@ -11,6 +13,7 @@ import (
 	"golang.org/x/term"
 )
 
+// Log is a slog logger carrying the build and scope attributes.
 type Log struct {
 	*slog.Logger
 }
@@ -70,7 +73,7 @@ func Scope(area string) *Log {
 // WithScope returns a child [Log] with the "area" attribute set to area,
 // overriding any previously set scope.
 func (l *Log) WithScope(area string) *Log {
-	return &Log{Logger: l.Logger.With("area", area)}
+	return &Log{Logger: l.With("area", area)}
 }
 
 // WithTraceparent returns a child [Log] enriched with trace correlation
@@ -85,8 +88,8 @@ func (l *Log) WithTraceparent(traceparent string) *Log {
 	}
 
 	if traceID, spanID, ok := parseTraceparent(traceparent); ok {
-		return &Log{Logger: l.Logger.With("trace_id", traceID, "span_id", spanID)}
+		return &Log{Logger: l.With("trace_id", traceID, "span_id", spanID)}
 	}
 
-	return &Log{Logger: l.Logger.With("trace_id", traceparent)}
+	return &Log{Logger: l.With("trace_id", traceparent)}
 }

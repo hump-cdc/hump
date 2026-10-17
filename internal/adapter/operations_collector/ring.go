@@ -62,11 +62,7 @@ func (r *ring) write(rec *port.Record) {
 
 // total is how many records the ring currently holds.
 func (r *ring) total() int {
-	if r.written < uint64(len(r.slots)) {
-		return int(r.written)
-	}
-
-	return len(r.slots)
+	return len(r.slots[:min(r.written, uint64(len(r.slots)))])
 }
 
 // page copies the records in [start, end) counted back from the newest.
@@ -250,14 +246,14 @@ func clone(rec *port.Record) port.Record {
 	return out
 }
 
-// clamp bounds v to [0, max].
-func clamp(v, max int) int {
+// clamp bounds v to [0, upper].
+func clamp(v, upper int) int {
 	if v < 0 {
 		return 0
 	}
 
-	if v > max {
-		return max
+	if v > upper {
+		return upper
 	}
 
 	return v

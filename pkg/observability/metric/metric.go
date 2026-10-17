@@ -1,3 +1,5 @@
+// Package metric builds the Prometheus registry the process exposes its
+// metrics through.
 package metric
 
 import (

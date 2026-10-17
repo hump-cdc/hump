@@ -7,7 +7,7 @@ import (
 	metricscollector "hump/internal/port/metrics_collector"
 )
 
-func TestBindingSkipsRecordWithoutObserver(t *testing.T) {
+func TestBindingSkipsRecordWithoutObserver(_ *testing.T) {
 	// main passes a Collector that is nil when telemetry is disabled; converting
 	// one nil interface to another has to keep it nil.
 	var collector metricscollector.Collector

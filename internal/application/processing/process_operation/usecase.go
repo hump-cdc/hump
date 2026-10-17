@@ -1,7 +1,10 @@
+// Package process_operation delivers one WAL row change to every sink
+// configured for its table, in parallel, returning once all of them finish.
 package process_operation
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"hump/config"
@@ -17,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Configuration resolves the configured tables with their sinks.
 type Configuration interface {
 	ResolveAll() []config.Table
 }
@@ -37,9 +41,10 @@ type OperationLog interface {
 	Record(rec *operationscollector.Record)
 }
 
+// UseCase fans row changes out to the sink bindings of their table.
 type UseCase struct {
 	bindings map[domain.TableIdentifier][]*binding
-	wp       *workerpool.WorkerPool[*sink.SinkContext]
+	wp       *workerpool.WorkerPool[*sink.Context]
 }
 
 // NewUseCase builds the sink bindings of every configured table, labelling its
@@ -79,7 +84,7 @@ func NewUseCase(cfg Configuration, dbName string, sinksPort sink.Sink, metricsFa
 	}
 
 	// Setup the worker pool with the number of workers equal to the maximum number of sinks
-	wp := workerpool.New[*sink.SinkContext](
+	wp := workerpool.New[*sink.Context](
 		workerpool.WithWorkers(workerCount),
 		workerpool.WithQueueSize(workerCount),
 		workerpool.WithErrorBufferSize(1024),
@@ -94,7 +99,7 @@ func NewUseCase(cfg Configuration, dbName string, sinksPort sink.Sink, metricsFa
 		}
 	}()
 
-	shutdown.OnShutdown(shutdown.StageWorkers, "process_operation", func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageWorkers, "process_operation", func(_ context.Context) error {
 		return wp.Shutdown()
 	})
 
@@ -127,7 +132,7 @@ func (uc *UseCase) Process(
 		"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
 	)
 
-	operationContext := &sink.SinkContext{
+	operationContext := &sink.Context{
 		Version: version.Version,
 
 		Timestamp: timestamp,
@@ -146,7 +151,9 @@ func (uc *UseCase) Process(
 	bindings := uc.bindings[domain.TableIdentifier{Schema: schema, Name: table}]
 	var submitErr error
 
-	uc.wp.BeginBatch()
+	if err := uc.wp.BeginBatch(); err != nil {
+		return fmt.Errorf("begin batch: %w", err)
+	}
 	for _, binding := range bindings {
 		if !binding.accepts(operation) {
 			continue

@@ -1,3 +1,5 @@
+// Package health exposes the health-check endpoint and the checks components
+// flip as their connections come and go.
 package health
 
 import (
@@ -8,17 +10,19 @@ import (
 	hg "github.com/hellofresh/health-go/v5"
 )
 
+// Health is the health-check endpoint with one check per monitored component.
 type Health struct {
 	health *hg.Health
 
-	Postgres  *HealthCheck
-	WalSender *HealthCheck
+	Postgres  *Check
+	WalSender *Check
 }
 
+// New creates the health checks for component, all starting unhealthy.
 func New(component string) (*Health, error) {
 	h := &Health{
-		Postgres:  newHealthCheck("Postgres"),
-		WalSender: newHealthCheck("WAL Sender"),
+		Postgres:  newCheck("Postgres"),
+		WalSender: newCheck("WAL Sender"),
 	}
 
 	health, err := hg.New(
@@ -38,6 +42,7 @@ func New(component string) (*Health, error) {
 	return h, nil
 }
 
+// Handler returns the HTTP handler that reports the checks.
 func (h *Health) Handler() http.Handler {
 	return h.health.Handler()
 }

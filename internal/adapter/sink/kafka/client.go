@@ -39,7 +39,7 @@ var (
 // described by config, creating one on first use. The returned client is
 // shared across callers with identical url parameters and is closed on
 // process shutdown via [shutdown.OnShutdown].
-func getClient(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) (*kgo.Client, error) {
+func getClient(config sinkcfg.KafkaSink, operationContext *sink.Context) (*kgo.Client, error) {
 	url, err := config.URL.Render(operationContext)
 	if err != nil {
 		return nil, fmt.Errorf("render url: %w", err)
@@ -110,7 +110,7 @@ func getClient(config sinkcfg.KafkaSink, operationContext *sink.SinkContext) (*k
 
 	clients[key] = client
 
-	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("kafka_sink(%s)", url), func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("kafka_sink(%s)", url), func(_ context.Context) error {
 		client.Close()
 		return nil
 	})

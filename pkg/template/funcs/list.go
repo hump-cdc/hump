@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -21,7 +22,7 @@ func toAnySlice(list any) ([]any, error) {
 		return nil, fmt.Errorf("expected list, got %T", list)
 	}
 	out := make([]any, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
+	for i := range rv.Len() {
 		out[i] = rv.Index(i).Interface()
 	}
 	return out, nil
@@ -203,7 +204,7 @@ func tmplUntil(n int) []int {
 	}
 	if n > 0 {
 		out := make([]int, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			out[i] = i
 		}
 		return out
@@ -272,7 +273,7 @@ func tmplSeqRange(start, end, step int) []int {
 // tmplChunk splits list into groups of size. The final group may be smaller.
 func tmplChunk(size int, list any) ([][]any, error) {
 	if size <= 0 {
-		return nil, fmt.Errorf("chunk size must be positive")
+		return nil, errors.New("chunk size must be positive")
 	}
 	xs, err := toAnySlice(list)
 	if err != nil {

@@ -7,7 +7,7 @@ type templateStatic struct {
 }
 
 // Render returns the source string unchanged; data is ignored.
-func (t templateStatic) Render(data any) (string, error) {
+func (t templateStatic) Render(_ any) (string, error) {
 	return t.source, nil
 }
 

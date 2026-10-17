@@ -14,6 +14,8 @@ var (
 	defaultNatsSubject string
 )
 
+// NatsCommon is the connection, auth and message settings shared by the core
+// NATS and JetStream sinks; at most one auth method may be set.
 type NatsCommon struct {
 	URL  *template.Template `yaml:"url"            validate:"required"`
 	Name *template.Template `yaml:"name,omitempty"`
@@ -29,6 +31,7 @@ type NatsCommon struct {
 	NKeySeed    *template.Template `yaml:"nkeySeed,omitempty"`
 }
 
+// setDefaults fills in the default subject, payload and headers.
 func (c *NatsCommon) setDefaults() {
 	if c.Subject == nil {
 		t, _ := template.New(defaultNatsSubject)

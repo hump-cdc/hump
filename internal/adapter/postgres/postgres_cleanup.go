@@ -13,7 +13,7 @@ func (p *Postgres) Cleanup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	bs := newBootstrapper(conn)
 

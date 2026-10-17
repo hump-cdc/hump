@@ -443,7 +443,6 @@ func TestNew_FuncMap_AllCallable(t *testing.T) {
 		{"b32dec", `{{ b32dec (b32enc "x") }}`, nil, "x"},
 
 		// crypto deterministic
-		{"sha1", `{{ sha1 "abc" }}`, nil, "a9993e364706816aba3e25717850c26c9cd0d89d"},
 		{"sha256", `{{ sha256 "abc" }}`, nil, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
 		{"adler32", `{{ adler32 "abc" }}`, nil, "38600999"},
 

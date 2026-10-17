@@ -1,3 +1,5 @@
+// Package getoperations serves the operations log of the web UI: one page of
+// sink deliveries, newest first, cut by a filter.
 package getoperations
 
 import (
@@ -10,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+// Controller serves POST /api/operations.
 type Controller struct {
 	useCase *UseCase
 }
@@ -21,6 +24,7 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler rendering one page of the operations log.
 func (c *Controller) Handler() func(ctx context.Context, input *OperationsRequest) (*OperationsResponse, error) {
 	return func(_ context.Context, input *OperationsRequest) (*OperationsResponse, error) {
 		page, err := c.useCase.Search(Filter{

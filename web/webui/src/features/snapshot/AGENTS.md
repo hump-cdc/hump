@@ -7,7 +7,7 @@ which view is on screen.
 
 - **Public contract**: `index.ts` exports `Snapshot` and nothing else. Types, hooks and the store
   under `model/` are private to the slice.
-- **Consumer**: `pages/snapshot/ui/snapshot-page.tsx`, which only adds the page padding.
+- **Consumer**: `pages/snapshot/ui/snapshot-page.tsx`, which only adds the page frame (width cap, padding).
 - **Imports**: `shared/api` (generated `Snapshot` SDK, event models, `errorMessage`),
   `shared/state` (`keys`), `shared/utils` (`useSwitchAnimation`, `SwitchViewValueContext`,
   `useSwitchViewValue`, formatters) and `shared/ui/*` (`table`, `where-input`, `progress-bar`,

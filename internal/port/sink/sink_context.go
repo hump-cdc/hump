@@ -6,7 +6,9 @@ import (
 	"hump/internal/domain"
 )
 
-type SinkContext struct {
+// Context is one row change being delivered and the root of every sink
+// template; its fields are what a template sees as .Operation, .Next and so on.
+type Context struct {
 	Version string
 
 	Timestamp time.Time

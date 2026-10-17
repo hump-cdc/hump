@@ -2,11 +2,13 @@ package getconfig
 
 import "hump/internal/domain"
 
+// ConfigSink is a sink endpoint a table is connected to.
 type ConfigSink struct {
 	Type string `json:"type" doc:"Sink type"`
 	Host string `json:"host" doc:"Connection host the sink URL renders to"`
 }
 
+// ConfigTarget is a table-to-target edge with the operations it carries.
 type ConfigTarget struct {
 	Type       string                 `json:"type"       doc:"Sink type"`
 	Host       string                 `json:"host"       doc:"Connection host the sink URL renders to"`
@@ -14,6 +16,7 @@ type ConfigTarget struct {
 	Operations []domain.OperationType `json:"operations" doc:"Row operations delivered to the target" enum:"insert,update,delete,truncate"`
 }
 
+// ConfigTable is a configured table with its sinks and targets.
 type ConfigTable struct {
 	Schema  domain.TableSchema `json:"schema"  doc:"Table schema"`
 	Name    domain.TableName   `json:"name"    doc:"Table name"`
@@ -22,6 +25,7 @@ type ConfigTable struct {
 	Targets []ConfigTarget     `json:"targets" doc:"Table-to-target edges, with the operations each receives"`
 }
 
+// ConfigResponse is the body of GET /api/config.
 type ConfigResponse struct {
 	Body struct {
 		App struct {

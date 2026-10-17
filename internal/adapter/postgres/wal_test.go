@@ -24,7 +24,7 @@ import (
 func TestNewWalOpensReplicationSession(t *testing.T) {
 	server := usersServer(t)
 
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	if w.dbName != "db" {
 		t.Errorf("dbName = %q, want %q", w.dbName, "db")
@@ -57,7 +57,7 @@ func TestStartFailsWhenReplicationCannotStart(t *testing.T) {
 	server := usersServer(t)
 	server.failReplicationStart("42704", "replication slot does not exist")
 
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	err := w.Start(context.Background(), failingHandler(t))
 	if err == nil || !strings.Contains(err.Error(), "StartReplication failed") {
@@ -75,7 +75,7 @@ func TestStartFailsWhenReplicationCannotStart(t *testing.T) {
 
 func TestStartStopsWhenContextIsCancelled(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -102,7 +102,7 @@ func TestStartStopsWhenContextIsCancelled(t *testing.T) {
 
 func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -153,7 +153,7 @@ func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 
 func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -201,7 +201,7 @@ func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
 
 func TestStartConfirmsInFlightTransactionOnShutdown(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -244,7 +244,7 @@ func TestStartConfirmsInFlightTransactionOnShutdown(t *testing.T) {
 
 func TestStartDoesNotConfirmTransactionWhenHandlerFailsOnShutdown(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -284,7 +284,7 @@ func TestStartDoesNotConfirmTransactionWhenHandlerFailsOnShutdown(t *testing.T) 
 
 func TestStartKeepsWaitingAfterReceiveTimeout(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -303,7 +303,7 @@ func TestStartKeepsWaitingAfterReceiveTimeout(t *testing.T) {
 
 func TestStartConfirmsCommitEnd(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -341,7 +341,7 @@ func TestStartConfirmsCommitEnd(t *testing.T) {
 
 func TestStartIgnoresKeepaliveInsideTransaction(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -370,7 +370,7 @@ func TestStartIgnoresKeepaliveInsideTransaction(t *testing.T) {
 
 func TestStartKeepsReceivingAfterReplyRequestedFlush(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -406,7 +406,7 @@ func TestStartKeepsReceivingAfterReplyRequestedFlush(t *testing.T) {
 
 func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 	w.standbyInterval = testStandbyInterval
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -434,7 +434,7 @@ func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
 
 func TestStartConfirmsKeepaliveOutsideTransaction(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -454,7 +454,7 @@ func TestStartConfirmsKeepaliveOutsideTransaction(t *testing.T) {
 
 func TestStartIgnoresUnexpectedMessage(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -488,7 +488,7 @@ func TestStartStopsOnStreamFailure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := usersServer(t)
-			w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+			w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -519,7 +519,7 @@ func TestStartStopsOnStreamFailure(t *testing.T) {
 func TestStartStopsWhenStandbyUpdateFails(t *testing.T) {
 	server := usersServer(t)
 
-	conn := newTestConnection(t, server, withReplication(true))
+	conn := newTestConnection(t, server, withReplication())
 	conn.connectionConfig.DialFunc = brokenWriteDialer(2)
 
 	w, health := newReplicationWal(t, server, conn)
@@ -547,7 +547,7 @@ func TestStartStopsWhenStandbyUpdateFails(t *testing.T) {
 func TestStartStopsWhenStandbyTickCannotBeSent(t *testing.T) {
 	server := usersServer(t)
 
-	conn := newTestConnection(t, server, withReplication(true))
+	conn := newTestConnection(t, server, withReplication())
 	conn.connectionConfig.DialFunc = brokenWriteDialer(2)
 
 	w, health := newReplicationWal(t, server, conn)
@@ -569,7 +569,7 @@ func TestStartStopsWhenStandbyTickCannotBeSent(t *testing.T) {
 
 func TestFlushReportsUnhealthyWhenStatusCannotBeSent(t *testing.T) {
 	server := usersServer(t)
-	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication()))
 
 	if err := w.session.Close(context.Background()); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -591,7 +591,7 @@ func TestFlushReportsUnhealthyWhenStatusCannotBeSent(t *testing.T) {
 
 func TestStopClosesConnectionAndReportsUnhealthy(t *testing.T) {
 	server := usersServer(t)
-	conn := newTestConnection(t, server, withReplication(true))
+	conn := newTestConnection(t, server, withReplication())
 
 	w, health := newReplicationWal(t, server, conn)
 
@@ -612,7 +612,7 @@ func TestStopClosesConnectionAndReportsUnhealthy(t *testing.T) {
 func TestStopReportsCloseFailure(t *testing.T) {
 	server := usersServer(t)
 
-	conn := newTestConnection(t, server, withReplication(true))
+	conn := newTestConnection(t, server, withReplication())
 	conn.connectionConfig.DialFunc = brokenCloseDialer
 
 	w, health := newReplicationWal(t, server, conn)
@@ -1016,7 +1016,7 @@ func TestProcessMessageReturnsHandlerFailure(t *testing.T) {
 
 func TestStartKeepsTheStreamAliveWhileTheHandlerBlocks(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 	w.standbyInterval = testStandbyInterval
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1072,7 +1072,7 @@ func TestStartKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
 		return nil
 	}
 
-	conn := newTestConnection(t, server, withReplication(true))
+	conn := newTestConnection(t, server, withReplication())
 	w, _ := newReplicationWal(t, server, conn, configuredTable("public", "users"))
 	w.introspector = newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, ensure)
 	w.standbyInterval = testStandbyInterval
@@ -1105,7 +1105,7 @@ func TestStartKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
 
 func TestOnShutdownConfirmsPositionOfInFlightChange(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication()), configuredTable("public", "users"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

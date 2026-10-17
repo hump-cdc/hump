@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+// Controller serves POST /api/snapshot/start.
 type Controller struct {
 	useCase *UseCase
 }
@@ -22,6 +23,7 @@ func NewController(useCase *UseCase) *Controller {
 	}
 }
 
+// Handler returns the huma handler starting a run over the requested tables.
 func (c *Controller) Handler() func(ctx context.Context, input *SnapshotStartRequest) (*struct{}, error) {
 	return func(_ context.Context, input *SnapshotStartRequest) (*struct{}, error) {
 		err := c.useCase.Start(requests(input.Body.Tables))

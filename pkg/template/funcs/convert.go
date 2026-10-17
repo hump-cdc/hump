@@ -48,7 +48,7 @@ func tmplInt64(v any) int64 {
 	case int64:
 		return x
 	case uint:
-		return int64(x)
+		return clampUint64(uint64(x))
 	case uint8:
 		return int64(x)
 	case uint16:
@@ -56,7 +56,7 @@ func tmplInt64(v any) int64 {
 	case uint32:
 		return int64(x)
 	case uint64:
-		return int64(x)
+		return clampUint64(x)
 	case float32:
 		return int64(x)
 	case float64:
@@ -71,8 +71,9 @@ func tmplInt64(v any) int64 {
 			return int64(f)
 		}
 		return 0
+	default:
+		return 0
 	}
-	return 0
 }
 
 // tmplFloat64 converts v to float64; unparseable strings yield 0.
@@ -204,4 +205,12 @@ func tmplFromJSONArray(s string) ([]any, error) {
 		return nil, err
 	}
 	return v, nil
+}
+
+// clampUint64 converts u to int64, clamping values above math.MaxInt64.
+func clampUint64(u uint64) int64 {
+	if u > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(u)
 }

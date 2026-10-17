@@ -43,14 +43,6 @@ func (r *reconciler) stateFor(name string) *streamState {
 	return s
 }
 
-// invalidate clears every cached state so the next call to ensure re-runs
-// the declaration. Used after an environment is recreated.
-func (r *reconciler) invalidate() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.states = map[string]*streamState{}
-}
-
 // ensure runs the configured reconcile mode against name. Transient errors
 // are returned without marking the state done.
 func (r *reconciler) ensure(ctx context.Context, env *stream.Environment, cfg sinkcfg.RabbitMQStreamSink, name string) error {

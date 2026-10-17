@@ -50,6 +50,8 @@ const (
 	RabbitMQDeliveryTransient RabbitMQDeliveryMode = "transient"
 )
 
+// RabbitMQExchange is the AMQP exchange a sink publishes to and how it is
+// declared.
 type RabbitMQExchange struct {
 	Name       *template.Template   `yaml:"name,omitempty"`
 	Type       string               `yaml:"type,omitempty" validate:"omitempty,oneof=direct topic fanout headers"`
@@ -59,6 +61,7 @@ type RabbitMQExchange struct {
 	Arguments  map[string]any       `yaml:"arguments,omitempty"`
 }
 
+// RabbitMQProperties holds the templates of the AMQP message properties.
 type RabbitMQProperties struct {
 	MessageID       *template.Template `yaml:"messageId,omitempty"`
 	CorrelationID   *template.Template `yaml:"correlationId,omitempty"`
@@ -71,6 +74,7 @@ type RabbitMQProperties struct {
 	Priority        *template.Template `yaml:"priority,omitempty"`
 }
 
+// RabbitMQSink publishes each change to an AMQP exchange.
 type RabbitMQSink struct {
 	RabbitMQCommon `yaml:",inline"`
 
@@ -83,8 +87,10 @@ type RabbitMQSink struct {
 	Properties RabbitMQProperties `yaml:"properties,omitempty"`
 }
 
-func (*RabbitMQSink) Type() sinkport.SinkType { return sinkport.SinkTypeRabbitMQ }
+// Type returns the sink type key.
+func (*RabbitMQSink) Type() sinkport.Type { return sinkport.SinkTypeRabbitMQ }
 
+// DisplayName returns the sink type followed by its URL template.
 func (s *RabbitMQSink) DisplayName() string {
 	if s == nil || s.URL == nil || s.URL.Source() == "" {
 		return string(sinkport.SinkTypeRabbitMQ)
@@ -95,7 +101,7 @@ func (s *RabbitMQSink) DisplayName() string {
 
 // Metadata returns the connection host (rendered URL) and the rendered exchange
 // name for the given context.
-func (s *RabbitMQSink) Metadata(context sinkport.SinkContext) (string, string) {
+func (s *RabbitMQSink) Metadata(context sinkport.Context) (string, string) {
 	if s == nil {
 		return "", ""
 	}
@@ -106,13 +112,14 @@ func (s *RabbitMQSink) Metadata(context sinkport.SinkContext) (string, string) {
 	return metadata.ParseHost(url), target
 }
 
+// UnmarshalYAML decodes the sink strictly and fills in its defaults.
 func (s *RabbitMQSink) UnmarshalYAML(node ast.Node) error {
 	type rabbitmq RabbitMQSink
 	if err := decoder.Decode(node, (*rabbitmq)(s)); err != nil {
 		return err
 	}
 
-	s.RabbitMQCommon.SetDefaults()
+	s.SetDefaults()
 	s.setDefaults()
 
 	return nil
@@ -162,6 +169,8 @@ func (s *RabbitMQSink) setDefaults() {
 	}
 }
 
+// CrossValidate rejects RabbitMQ sinks that share a URL and exchange but differ
+// in its type, durability, auto-delete or arguments.
 func (*RabbitMQSink) CrossValidate(groups [][]sinkport.Definition) error {
 	type rmqEntry struct {
 		exchangeType string

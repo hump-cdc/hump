@@ -11,8 +11,8 @@ in particular not `config`, which depends on this package.
 | File | Role |
 |---|---|
 | `sink.go` | `Sink` (the adapter side) and `Definition` (the config side) |
-| `sink_context.go` | `SinkContext` — one row change, and the root of every template |
-| `sink_type.go` | `SinkType`, its constants, `SinkTypes` |
+| `sink_context.go` | `Context` — one row change, and the root of every template |
+| `sink_type.go` | `Type`, its `SinkType*` constants, `SinkTypes` |
 | `capture.go` | `Capture` — what an adapter actually sent, for the operations log |
 | `errors.go` | `ErrUnknownSinkType`, `ErrSinkPermanent` |
 
@@ -27,7 +27,7 @@ process, not one per configured sink.
 The step-by-step contract of `Process` is in `adapter/sink/AGENTS.md`, along with the six
 places adding a sink type touches.
 
-## `SinkContext` is user-facing
+## `Context` is user-facing
 
 Its exported fields are what a template sees as `.Version`, `.Timestamp`, `.Operation`,
 `.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next` — documented in README and
@@ -39,7 +39,7 @@ belongs in the other.
 
 ## `Definition.Metadata` is called with a partial context
 
-`Metadata(SinkContext) (host, target)` produces the Prometheus labels and the topology keys.
+`Metadata(Context) (host, target)` produces the Prometheus labels and the topology keys.
 Outside a delivery it is called with only `Schema` and `Table` set — by `process_operation`
 `newBinding`, `cmd/hump/main.go` `topology`, `get_config`, `get_snapshot_tables` and
 `adapter/snapshot` — and
@@ -48,7 +48,7 @@ assume `Prev`, `Next`, `Headers` or `Operation` are populated, and must render t
 for the same `(Schema, Table)` everywhere: see `adapter/metrics_collector/AGENTS.md` for what
 goes silently empty when they differ.
 
-## `SinkType` is the YAML discriminator
+## `Type` is the YAML discriminator
 
 The literals are the keys users write under a sink (`kafka:`, `nats-jetstream:` …), so a rename
 is a breaking config change. `SinkTypes` is not decoration: `config/sink` `getSinkType` and

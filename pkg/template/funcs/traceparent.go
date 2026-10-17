@@ -68,7 +68,7 @@ func isValidTraceparent(version, traceID, parentID, flags string) bool {
 }
 
 func isLowerHex(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		switch {
 		case c >= '0' && c <= '9':
@@ -81,7 +81,7 @@ func isLowerHex(s string) bool {
 }
 
 func isAllZero(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] != '0' {
 			return false
 		}

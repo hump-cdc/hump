@@ -1,3 +1,5 @@
+// Package postgres is the CDC source adapter: it bootstraps the publication and
+// replication slot, then decodes the logical replication stream into row changes.
 package postgres
 
 import (
@@ -151,13 +153,15 @@ func (p *Postgres) validateCompatibility(ctx context.Context, conn *connection) 
 	return nil
 }
 
-// closeDetached runs close on a context detached from the caller's, which is
+// closeDetached runs closeFn on a context detached from the caller's, which is
 // usually already cancelled by the time shutdown reaches it. On a cancelled one
 // pgconn races its deadline handler against the Terminate write instead of
 // sending it cleanly.
-func closeDetached(close func(context.Context) error) {
+//
+//nolint:contextcheck // detached close: the caller ctx is usually cancelled at shutdown
+func closeDetached(closeFn func(context.Context) error) {
 	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
 	defer cancel()
 
-	_ = close(ctx)
+	_ = closeFn(ctx)
 }

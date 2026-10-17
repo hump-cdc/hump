@@ -175,7 +175,7 @@ func TestWaitGivesUpOnStuckServers(t *testing.T) {
 
 // newTestRunner returns a runner detached from the global shutdown registry,
 // with short timeouts, and the function that cancels its parent context.
-func newTestRunner(t *testing.T) (*runner, context.CancelFunc) {
+func newTestRunner(t *testing.T) (*Runner, context.CancelFunc) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())

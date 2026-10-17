@@ -2,12 +2,14 @@ package getmetrics
 
 import "time"
 
+// MetricsRequest is the body of POST /api/metrics.
 type MetricsRequest struct {
 	Body struct {
 		Duration string `json:"duration" enum:"1m,5m,10m" doc:"Width of the buckets the points are aggregated into"`
 	}
 }
 
+// MetricsPoint is one bucket of the metrics series.
 type MetricsPoint struct {
 	Timestamp           time.Time          `json:"timestamp"           doc:"Start of the bucket"`
 	Delivered           int64              `json:"delivered"           doc:"Messages delivered successfully during the bucket"`
@@ -28,11 +30,13 @@ type MetricsTableOps struct {
 	Truncate MetricsTableOp `json:"t" doc:"Table truncations"`
 }
 
+// MetricsTableOp counts one row operation of a table.
 type MetricsTableOp struct {
 	Count int64    `json:"n"             doc:"Operations replicated since start"`
 	P95   *float64 `json:"p95,omitempty" doc:"P95 latency of processing a row through every sink in milliseconds over the requested window; absent without an estimate"`
 }
 
+// MetricsSinkTarget holds the delivery stats of one target of a sink.
 type MetricsSinkTarget struct {
 	Target     string   `json:"target"            doc:"Rendered target: topic, subject, exchange, stream or URL"`
 	Operations int64    `json:"operations"        doc:"Deliveries finished since start, retries excluded"`
@@ -40,6 +44,7 @@ type MetricsSinkTarget struct {
 	P95        *float64 `json:"p95,omitempty"     doc:"P95 latency of a single write attempt in milliseconds over the requested window; absent without an estimate"`
 }
 
+// MetricsSink holds the delivery stats of one sink endpoint.
 type MetricsSink struct {
 	Type       string              `json:"type"              doc:"Sink type"`
 	Host       string              `json:"host"              doc:"Connection host the sink URL renders to"`
@@ -49,6 +54,7 @@ type MetricsSink struct {
 	Targets    []MetricsSinkTarget `json:"targets"           doc:"Distinct targets the sink renders to; tables sharing a target collapse into one entry"`
 }
 
+// MetricsConnection counts deliveries over one table-to-target edge.
 type MetricsConnection struct {
 	Table   string `json:"table"   doc:"Schema-qualified source table"`
 	Sink    string `json:"sink"    doc:"Sink type"`
@@ -58,6 +64,7 @@ type MetricsConnection struct {
 	Failure int64  `json:"failure" doc:"Failed deliveries over the connection since start, retries excluded"`
 }
 
+// MetricsResponse is the response of POST /api/metrics.
 type MetricsResponse struct {
 	Body struct {
 		Duration      string                     `json:"duration"      doc:"Width of the buckets the points are aggregated into"`

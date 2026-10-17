@@ -1,5 +1,6 @@
 package workerpool
 
+// BackpressurePolicy decides what Submit does when the task queue is full.
 type BackpressurePolicy int
 
 const (

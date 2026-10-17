@@ -80,6 +80,8 @@ func (h *connHooks) OnBrokerConnect(meta kgo.BrokerMetadata, _ time.Duration, _ 
 		logger.Info("Kafka broker connected", "seed", h.url, "broker", broker)
 	case stateFailed:
 		logger.Info("Kafka broker reconnected", "seed", h.url, "broker", broker)
+	case stateConnected:
+		// Already connected: a routine reconnect after an idle reap stays silent.
 	}
 }
 

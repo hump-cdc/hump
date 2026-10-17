@@ -16,7 +16,7 @@ import (
 // basic.return if the broker cannot route the mandatory message). When capture
 // is non-nil the rendered message's fields are recorded on it for the
 // operations log.
-func Process(ctx context.Context, cfg sinkcfg.RabbitMQSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func Process(ctx context.Context, cfg sinkcfg.RabbitMQSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

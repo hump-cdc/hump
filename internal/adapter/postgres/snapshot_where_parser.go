@@ -535,9 +535,9 @@ func (p *snapshotWhereParser) parsePrimary() (string, error) {
 		return "(" + inner + ")", nil
 	case snapshotWhereTokenWord:
 		return p.parseWord()
+	default:
+		return "", p.unexpected(t)
 	}
-
-	return "", p.unexpected(t)
 }
 
 // parseWord parses a primary that starts with a bare word: a keyword literal,

@@ -48,7 +48,7 @@ func TestSink_TypeAndDisplayName(t *testing.T) {
 		name        string
 		populated   interface{ DisplayName() string }
 		nilRecv     interface{ DisplayName() string }
-		wantType    sink.SinkType
+		wantType    sink.Type
 		wantDisplay string
 	}{
 		{

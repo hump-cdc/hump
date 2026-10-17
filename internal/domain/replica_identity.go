@@ -1,5 +1,7 @@
 package domain
 
+// ReplicaIdentity is how hump manages a table's REPLICA IDENTITY, set by the
+// table's replica key in YAML.
 type ReplicaIdentity string
 
 const (

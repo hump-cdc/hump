@@ -1,7 +1,9 @@
+// Package template provides Template, the string type behind every templated
+// config setting: either a plain string or a parsed text/template, decided once at load.
 package template
 
 import (
-	"fmt"
+	"errors"
 	"hump/pkg/template/funcs"
 	"strings"
 	"text/template"
@@ -67,12 +69,12 @@ func (t Template) MarshalYAML() (any, error) {
 func (t *Template) UnmarshalYAML(node ast.Node) error {
 	scalar, ok := node.(ast.ScalarNode)
 	if !ok {
-		return fmt.Errorf("should be string")
+		return errors.New("should be string")
 	}
 
 	value, ok := scalar.GetValue().(string)
 	if !ok {
-		return fmt.Errorf("should be string")
+		return errors.New("should be string")
 	}
 
 	*t = *parseTemplate(value)

@@ -1,3 +1,5 @@
+// Command openapi writes the web UI's OpenAPI spec, without starting a server,
+// to the path in OPENAPI_OUT.
 package main
 
 import (
@@ -87,11 +89,11 @@ func main() {
 		log.Fatalf("resolve output path: %v", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil { //nolint:gosec // public spec dir in the repo
 		log.Fatalf("create output dir: %v", err)
 	}
 
-	if err := os.WriteFile(out, spec, 0o644); err != nil {
+	if err := os.WriteFile(out, spec, 0o644); err != nil { //nolint:gosec // public spec file committed to the repo
 		log.Fatalf("write %s: %v", out, err)
 	}
 

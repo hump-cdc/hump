@@ -158,7 +158,7 @@ func TestCollectorRejectsUnknownDuration(t *testing.T) {
 	c := New(&countingGatherer{metrics: newTestMetrics()})
 	t.Cleanup(c.close)
 
-	if _, err := c.Dump("2m"); err != port.ErrUnknownDuration {
+	if _, err := c.Dump("2m"); !errors.Is(err, port.ErrUnknownDuration) {
 		t.Fatalf("got %v, want ErrUnknownDuration", err)
 	}
 }

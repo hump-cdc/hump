@@ -10,13 +10,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// publishChannel is the slice of [amqp.Channel] the reconciler depends on.
-// Defined as an interface so tests can supply a fake without dialing.
-type publishChannel interface {
-	ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args amqp.Table) error
-	ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args amqp.Table) error
-}
-
 // exchangeState guards a single exchange's reconcile outcome. mu serializes
 // concurrent reconcile attempts for the same name so only one publisher
 // declares at a time. done is set once the reconcile reaches a sticky

@@ -17,6 +17,7 @@ type Metrics struct {
 	Snapshot metricscollector.Snapshot
 }
 
+// UseCase dumps the metrics collector at a chosen bucket width.
 type UseCase struct {
 	collector metricscollector.Collector // collector is nil when telemetry is disabled.
 }

@@ -1,3 +1,5 @@
+// Command hump streams PostgreSQL logical replication changes to the configured
+// sinks. main is the composition root: it builds the adapters and wires them in.
 package main
 
 import (
@@ -43,17 +45,25 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+// logger is the process-level logger, with no area attribute.
 var logger = log.Scope("")
 
+// main exits with the code run returns.
 func main() {
+	os.Exit(run())
+}
+
+// run wires and runs the process and returns its exit code. It is split from
+// main so that its deferred calls run before os.Exit.
+func run() int {
 	opts, e := options.Parse()
 	if errors.Is(e, options.ErrHelp) {
-		os.Exit(0)
+		return 0
 	}
 
 	if e != nil {
 		logger.Error(e.Error())
-		os.Exit(1)
+		return 1
 	}
 
 	r, release := app.New(context.Background())
@@ -63,16 +73,14 @@ func main() {
 	configuration, err := cfg.Parse(opts.Config)
 	if err != nil {
 		logger.Error(err.Error(), "error", err)
-		os.Exit(1)
-		return
+		return 1
 	}
 
 	// Observability
 	health, err := health.New("hump")
 	if err != nil {
 		logger.Error("Unable to init health probes", "error", err)
-		os.Exit(1)
-		return
+		return 1
 	}
 	metrics, metricHandler, metricGatherer := metric.New("hump")
 
@@ -129,7 +137,7 @@ func main() {
 		if opts.TelemetryPort != nil {
 			r.Serve(
 				// Observability
-				func(ctx context.Context) error {
+				func(_ context.Context) error {
 					t := controller.NewObservabilityController(health.Handler(), metricHandler)
 					return t.Serve(*opts.TelemetryPort)
 				})
@@ -179,12 +187,14 @@ func main() {
 	err = r.Wait()
 	if err != nil {
 		logger.Error(err.Error(), "error", err)
-		os.Exit(1)
-	} else {
-		logger.Info("Good bye!")
+		return 1
 	}
+
+	logger.Info("Good bye!")
+	return 0
 }
 
+// formatSinks joins the display names of sinks for the configuration log.
 func formatSinks(sinks []sinkcfg.Config) string {
 	parts := make([]string, 0, len(sinks))
 	for _, s := range sinks {
@@ -204,7 +214,7 @@ func topology(configuration cfg.Configuration) []metricsCollectorPort.Connection
 				continue
 			}
 
-			host, target := sc.Sink.Metadata(sinkPort.SinkContext{Schema: table.Schema, Table: table.Name})
+			host, target := sc.Sink.Metadata(sinkPort.Context{Schema: table.Schema, Table: table.Name})
 			conns = append(conns, metricsCollectorPort.Connection{
 				Table:    domain.TableIdentifier{Schema: table.Schema, Name: table.Name},
 				SinkType: string(sc.Sink.Type()),

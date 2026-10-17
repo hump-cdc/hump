@@ -1,3 +1,5 @@
+// Package app runs the process lifecycle: long-lived functions, OS signals and
+// the staged shutdown that drains them.
 package app
 
 import (
@@ -19,7 +21,8 @@ const (
 	hookTimeout = 5 * time.Second
 )
 
-type runner struct {
+// Runner runs the process's workers and servers and joins them on shutdown.
+type Runner struct {
 	context context.Context
 	cancel  context.CancelCauseFunc
 	release context.CancelFunc
@@ -41,14 +44,14 @@ type runner struct {
 	errs []error
 }
 
-// New creates a runner whose context is cancelled on SIGINT/SIGTERM or when
+// New creates a Runner whose context is cancelled on SIGINT/SIGTERM or when
 // any function it runs returns an error. The returned CancelFunc releases the
 // OS signal hook and should be deferred by the caller.
-func New(ctx context.Context) (*runner, context.CancelFunc) {
+func New(ctx context.Context) (*Runner, context.CancelFunc) {
 	ctx, release := signals(ctx, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(ctx)
 
-	return &runner{
+	return &Runner{
 		release:      release,
 		context:      ctx,
 		cancel:       cancel,
@@ -62,20 +65,20 @@ func New(ctx context.Context) (*runner, context.CancelFunc) {
 // Run launches each worker function in its own goroutine. Wait lets workers
 // finish before any shutdown hook runs, so their context being cancelled means
 // "take no new work", not "abort".
-func (r *runner) Run(fns ...func(context.Context) error) {
+func (r *Runner) Run(fns ...func(context.Context) error) {
 	r.spawn(&r.workers, fns)
 }
 
 // Serve launches each server function in its own goroutine. Servers are
 // stopped by their StageServers hooks and joined after them.
-func (r *runner) Serve(fns ...func(context.Context) error) {
+func (r *Runner) Serve(fns ...func(context.Context) error) {
 	r.spawn(&r.servers, fns)
 }
 
 // Wait blocks until the runner's context is done (OS signal or error), then
 // drains workers, runs shutdown hooks, joins servers and returns every error
 // the functions reported, apart from shutdown causes.
-func (r *runner) Wait() error {
+func (r *Runner) Wait() error {
 	<-r.context.Done()
 
 	// Restore default signal handling, so a second signal kills the process.
@@ -102,7 +105,7 @@ func (r *runner) Wait() error {
 
 // spawn runs each of fns in a goroutine tracked by wg. A returned error is
 // recorded and cancels the runner's context with it as the cause.
-func (r *runner) spawn(wg *sync.WaitGroup, fns []func(context.Context) error) {
+func (r *Runner) spawn(wg *sync.WaitGroup, fns []func(context.Context) error) {
 	for _, fn := range fns {
 		wg.Go(func() {
 			if err := fn(r.context); err != nil {
@@ -114,7 +117,7 @@ func (r *runner) spawn(wg *sync.WaitGroup, fns []func(context.Context) error) {
 }
 
 // record keeps err for Wait to return.
-func (r *runner) record(err error) {
+func (r *Runner) record(err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -123,7 +126,7 @@ func (r *runner) record(err error) {
 
 // result joins the recorded errors, dropping the ones that only restate a
 // requested shutdown.
-func (r *runner) result() error {
+func (r *Runner) result() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

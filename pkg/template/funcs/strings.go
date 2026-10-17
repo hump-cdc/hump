@@ -1,7 +1,9 @@
 package funcs
 
 import (
+	crand "crypto/rand"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"strings"
 	"unicode"
@@ -232,7 +234,7 @@ func tmplRepeat(count int, v any) string {
 }
 
 // tmplReplace returns s with every occurrence of old replaced by new.
-func tmplReplace(old, new, s string) string { return strings.ReplaceAll(s, old, new) }
+func tmplReplace(old, replacement, s string) string { return strings.ReplaceAll(s, old, replacement) }
 
 // tmplPlural picks one when count == 1, otherwise many.
 func tmplPlural(one, many string, count int) string {
@@ -245,15 +247,23 @@ func tmplPlural(one, many string, count int) string {
 const (
 	asciiLetters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	asciiDigits  = "0123456789"
+	// asciiPrintable is the printable ASCII range, codes 32-126 inclusive.
+	asciiPrintable = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 )
 
+// randString returns n bytes drawn uniformly from alphabet by crypto/rand.
 func randString(n int, alphabet string) string {
 	if n <= 0 || alphabet == "" {
 		return ""
 	}
+	limit := big.NewInt(int64(len(alphabet)))
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = alphabet[rand.Intn(len(alphabet))]
+		v, err := crand.Int(crand.Reader, limit)
+		if err != nil {
+			panic(err) // crypto/rand.Reader does not fail since Go 1.24
+		}
+		b[i] = alphabet[v.Int64()]
 	}
 	return string(b)
 }
@@ -269,20 +279,11 @@ func tmplRandNumeric(n int) string { return randString(n, asciiDigits) }
 
 // tmplRandAscii returns a random string of n printable ASCII characters
 // (codes 32-126 inclusive).
-func tmplRandAscii(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = byte(32 + rand.Intn(95))
-	}
-	return string(b)
-}
+func tmplRandAscii(n int) string { return randString(n, asciiPrintable) }
 
 // tmplShuffle returns s with its runes randomly reordered.
 func tmplShuffle(s string) string {
 	r := []rune(s)
-	rand.Shuffle(len(r), func(i, j int) { r[i], r[j] = r[j], r[i] })
+	rand.Shuffle(len(r), func(i, j int) { r[i], r[j] = r[j], r[i] }) //nolint:gosec // shuffle order is not security-sensitive
 	return string(r)
 }

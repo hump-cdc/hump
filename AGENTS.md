@@ -50,3 +50,13 @@ Principles:
 Packages under `internal/` carry their own `AGENTS.md` with the details. The sink packages
 (`internal/adapter/sink/{http,kafka,nats,rabbitmq,rabbitmq_stream}`) have none; they are covered
 by `internal/adapter/sink/AGENTS.md`.
+
+## Before finishing a task
+
+Every time you finish a task, run both linters and fix everything they report before you call
+the task done:
+
+- Go: `task lint` (golangci-lint with `.golangci.yml`; its `depguard` rules enforce the layer
+  import rules above). `task lint:fix` applies the automatic fixes.
+- Web UI: `bun run check` in `web/webui` (Biome: lint, format, import order).
+  `bun run check --write` applies the safe fixes.

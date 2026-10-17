@@ -14,7 +14,7 @@ adapters. `log` is imported directly by 16 of the module's 51 packages: `cmd/hum
 | `log/log.go` | the slog default handler (set in `init`), `Scope`, `WithScope`, `WithTraceparent` |
 | `log/traceparent.go` | the traceparent parser behind `WithTraceparent` |
 | `health/health.go` | `Health` — the health-go instance and its two checks |
-| `health/health_check.go` | `HealthCheck` — one flag a component flips |
+| `health/health_check.go` | `Check` — one flag a component flips |
 | `health/errors.go` | `ErrNotOperational` |
 | `metric/metric.go` | `New` — the registry, its factory and its handler |
 
@@ -56,7 +56,7 @@ allocate.
 ## health
 
 `New` hardcodes the two checks the process has, `Postgres` and `WAL Sender`, as exported fields; a
-new check is a field, a `newHealthCheck` and a `configure()` in `New`. This package names
+new check is a field, a `newCheck` and a `configure()` in `New`. This package names
 application components on purpose — it is the one place the probe list lives.
 
 - A check starts **not operational**, so the probes fail until the adapter calls `MarkHealthy`.

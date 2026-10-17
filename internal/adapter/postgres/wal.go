@@ -78,7 +78,7 @@ const standbyTimeout = time.Second * 10
 
 // newWal opens the replication session on conn for the given publication and
 // slot and returns a wal ready to be started. conn must have been created with
-// withReplication(true); wal takes ownership of it and closes it in Stop. m is
+// withReplication(); wal takes ownership of it and closes it in Stop. m is
 // owned by the caller and shared across sessions; a nil gate never pauses.
 func newWal(
 	ctx context.Context,

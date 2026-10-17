@@ -10,10 +10,10 @@ the HTTP sink register nothing).
 
 | File | Role |
 |---|---|
-| `runner.go` | the `runner`: `New`, `Run`, `Serve`, `Wait` |
+| `runner.go` | `Runner`: `New`, `Run`, `Serve`, `Wait` |
 | `signal.go` | `signals` — a context cancelled by SIGINT/SIGTERM, with the signal as its cause |
 | `errors.go` | `ErrShutdown`, `ErrDrainTimeout` |
-| `options/types.go` | the `Options` struct (go-flags tags) and the config errors |
+| `options/types.go` | the `Options` struct (go-flags tags), `LogFormat` and the errors `Parse` returns |
 | `options/parser.go` | `Parse` and the config source resolution |
 | `shutdown/shutdown.go` | the stages and the global API: `OnShutdown`, `Shutdown`, `Drain`, `Draining` |
 | `shutdown/registry.go` | the registry: stage ordering, the per-hook timeout |
@@ -49,7 +49,8 @@ What ends up in the result:
 - Hook errors are logged by the registry and then discarded (`_ = r.shutdown(...)`). A failing or
   timed-out hook does not change the exit code.
 
-`New` returns the unexported `*runner`; callers hold it by inference and nothing names the type.
+`New` returns `*Runner` and the `release` func for the signal hook, which the caller defers.
+`main.go` holds the runner by inference; nothing outside `app` names the type.
 
 ## The shutdown registry
 

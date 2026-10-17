@@ -28,11 +28,17 @@ const (
 type TableStatus string
 
 const (
-	TableWait       TableStatus = "wait"
+	// TableWait is a table waiting for a free reader.
+	TableWait TableStatus = "wait"
+	// TableProcessing is a table being read.
 	TableProcessing TableStatus = "processing"
-	TableDone       TableStatus = "done"
-	TableSuccess    TableStatus = "success"
-	TableError      TableStatus = "error"
+	// TableDone is a table whose read ended while the run goes on; Error is set
+	// when it failed.
+	TableDone TableStatus = "done"
+	// TableSuccess is a table of a finished run that completed.
+	TableSuccess TableStatus = "success"
+	// TableError is a table of a finished run that failed or never finished.
+	TableError TableStatus = "error"
 )
 
 var (

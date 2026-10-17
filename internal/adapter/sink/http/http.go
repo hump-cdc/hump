@@ -1,3 +1,4 @@
+// Package http implements the HTTP sink for hump.
 package http
 
 import (
@@ -17,7 +18,7 @@ var defaultClient = &nethttp.Client{}
 // configured URL, method, body, and headers from operationContext and issuing
 // the request with ctx. When capture is non-nil the request and the response
 // status are recorded on it for the operations log.
-func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sink.SinkContext, capture *sink.Capture) error {
+func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sin
 	if err != nil {
 		return wrapError(fmt.Errorf("http request to %s: %w", message.url, err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	_, _ = io.Copy(io.Discard, resp.Body)
 

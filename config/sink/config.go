@@ -1,3 +1,5 @@
+// Package sink holds the configuration of a table's sinks: one type per sink
+// kind, their defaults, and the validation across tables.
 package sink
 
 import (
@@ -14,6 +16,7 @@ import (
 	_ "embed"
 )
 
+// Default templates shared by the sink types, embedded from templ/.
 var (
 	//go:embed templ/payload.tmpl
 	DefaultPayload string
@@ -28,6 +31,8 @@ var (
 	DefaultTraceparent string
 )
 
+// Config is one sink entry of a table: the sink definition plus its delivery
+// policies and the operations it receives.
 type Config struct {
 	Sink sinkport.Definition `yaml:"-"`
 
@@ -37,6 +42,8 @@ type Config struct {
 	Operations []domain.OperationType `yaml:"operations,omitempty" validate:"omitempty,min=1,unique,dive,oneof=insert update delete truncate"`
 }
 
+// MarshalYAML writes the definition back under its sink type key, next to the
+// policies and operations.
 func (sc Config) MarshalYAML() (any, error) {
 	out := map[string]any{}
 
@@ -59,6 +66,8 @@ func (sc Config) MarshalYAML() (any, error) {
 	return out, nil
 }
 
+// UnmarshalYAML decodes the sink definition from its type key, then the rest
+// of the entry, and fills in the defaults.
 func (sc *Config) UnmarshalYAML(node ast.Node) error {
 	mapping, ok := node.(*ast.MappingNode)
 	if !ok {

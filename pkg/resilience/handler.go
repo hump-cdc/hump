@@ -1,3 +1,5 @@
+// Package resilience wraps a Handler with timeouts, retries with backoff,
+// outcome hooks and a failure mode.
 package resilience
 
 import "context"

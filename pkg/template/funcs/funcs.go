@@ -1,3 +1,5 @@
+// Package funcs provides Funcs, the function map every parsed hump template gets:
+// the text/template builtins plus sprig-style helpers.
 package funcs
 
 import (
@@ -130,7 +132,6 @@ var Funcs = template.FuncMap{
 	"aes_decrypt": tmplDecryptAES,
 	"aes_encrypt": tmplEncryptAES,
 	"randbytes":   tmplRandBytes,
-	"sha1":        tmplSHA1Sum,
 	"sha256":      tmplSHA256Sum,
 
 	// date / time

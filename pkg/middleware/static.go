@@ -96,7 +96,7 @@ func (s *static) index(writer http.ResponseWriter, request *http.Request, routes
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.WriteHeader(status)
 
-	writer.Write(index)
+	_, _ = writer.Write(index) // client gone; nothing to recover
 
 	return true
 }

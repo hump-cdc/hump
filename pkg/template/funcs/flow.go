@@ -29,10 +29,9 @@ func tmplEmpty(v any) bool {
 		return rv.Complex() == 0
 	case reflect.Pointer, reflect.Interface, reflect.Func:
 		return rv.IsNil()
-	case reflect.Struct:
+	default:
 		return false
 	}
-	return false
 }
 
 // tmplRequired returns v unchanged when non-empty; otherwise returns an error

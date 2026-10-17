@@ -1,3 +1,5 @@
+// Package sink dispatches one rendered row change to the broker-specific sink
+// package its configured definition selects.
 package sink
 
 import (
@@ -12,14 +14,19 @@ import (
 	p "hump/internal/port/sink"
 )
 
+// Sink implements the sink port by routing each delivery to the sink package
+// matching its definition type.
 type Sink struct {
 }
 
+// New returns a Sink.
 func New() *Sink {
 	return &Sink{}
 }
 
-func (s *Sink) Process(ctx context.Context, cfg p.Definition, operationContext *p.SinkContext, capture *p.Capture) error {
+// Process delivers operationContext to the sink cfg describes, recording the
+// rendered message on capture when it is non-nil.
+func (s *Sink) Process(ctx context.Context, cfg p.Definition, operationContext *p.Context, capture *p.Capture) error {
 	var err error
 
 	switch sink := cfg.(type) {

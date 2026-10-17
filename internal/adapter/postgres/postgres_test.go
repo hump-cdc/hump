@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -732,12 +733,12 @@ func sendRows(backend *pgproto3.Backend, result queryResult) {
 			backend.Send(&pgproto3.CopyData{Data: data})
 		}
 		backend.Send(&pgproto3.CopyDone{})
-		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("COPY " + fmt.Sprint(len(result.copyOut)))})
+		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("COPY " + strconv.Itoa(len(result.copyOut)))})
 	default:
 		for _, row := range result.rows {
 			backend.Send(&pgproto3.DataRow{Values: row})
 		}
-		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT " + fmt.Sprint(len(result.rows)))})
+		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT " + strconv.Itoa(len(result.rows)))})
 	}
 }
 

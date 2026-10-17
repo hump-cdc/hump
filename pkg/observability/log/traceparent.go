@@ -30,7 +30,7 @@ func parseTraceparent(traceparent string) (traceID, spanID string, ok bool) {
 }
 
 func isHex(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		switch {
 		case c >= '0' && c <= '9':

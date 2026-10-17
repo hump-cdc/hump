@@ -60,6 +60,7 @@ body:
         - Missing events
         - Wrong payload
         - Crash or stuck replication
+        - Not applicable
         - Other
     validations:
       required: true
@@ -87,8 +88,6 @@ body:
     attributes:
       label: PostgreSQL version
       placeholder: "16.4"
-    validations:
-      required: true
 
   - type: dropdown
     id: postgres-hosting
@@ -101,6 +100,13 @@ body:
         - Google Cloud SQL
         - Azure Database for PostgreSQL
         - Other
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser, OS and assistive technology
+      description: For web console issues. Screenshots or recordings are optional; you don't need to tell us about any disability.
+      placeholder: Firefox 131 on macOS 15, VoiceOver
 
   - type: dropdown
     id: area
@@ -121,6 +127,7 @@ body:
         - Web console
         - Metrics / health probes
         - Configuration / CLI
+        - Accessibility
         - Other
 
   - type: textarea

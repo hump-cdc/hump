@@ -10,7 +10,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hellofresh/health-go/v5 v5.5.5
 	github.com/jackc/pglogrepl v0.0.0-20260401131349-e37c41485510
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/lmittmann/tint v1.1.3
 	github.com/nats-io/nats.go v1.52.0

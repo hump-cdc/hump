@@ -60,6 +60,9 @@ the 7-day Dependabot cooldown in `.github/dependabot.yml`.
   (`bun add`, `bun update`), bun silently skips versions younger than 7 days and fails only when
   no older version matches (e.g. an exact too-new version). Entries already in `bun.lock` are
   not re-checked, so do not hand-edit `bun.lock`.
+  Pin every dependency in `web/webui/package.json` to an exact version: no `^`, `~`, `*` or
+  `latest`. `install.exact` in `bunfig.toml` makes `bun add` / `bun update` save exact versions,
+  but it does not check what you type into `package.json` by hand, so write those exact too.
 - Go: no tooling enforces it. Before `go get` of a version, check its publish time with
   `go list -m -json <module>@<version>` (the `Time` field) and pick one at least 7 days old.
 

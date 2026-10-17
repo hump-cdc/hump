@@ -8,13 +8,13 @@ is described in `internal/controller/AGENTS.md`.
 ## Stack
 
 - React 19, TypeScript 6 (`strict`), bun as package manager and test runner.
-- rsbuild 1 (`rsbuild.config.ts`): entry `app/main.tsx`, output `../../internal/controller/webui`.
-- TanStack Router (file-based), TanStack Query 5, Table 8, Virtual 3; zustand 5 for client state.
+- rsbuild 2 (`rsbuild.config.ts`): entry `app/main.tsx`, output `../../internal/controller/webui`.
+- TanStack Router (file-based), TanStack Query 5, Table 9, Virtual 3; zustand 5 for client state.
 - Tailwind v4 through PostCSS; design tokens in `app/styles.css` (base palette → semantic
   light/`.dark` tokens → `@theme` utilities). Radix UI, `@base-ui/react` (the combobox), `cva`,
   `lucide-react`, `@xyflow/react`.
 - `@hey-api/openapi-ts` generates the API client, zod 4 schemas and TanStack Query helpers.
-- Biome 2.4.5 (lint, format, import order). Storybook 10 (`storybook-react-rsbuild`).
+- Biome 2.5.15 (lint, format, import order). Storybook 10 (`storybook-react-rsbuild`).
 
 ## Commands
 
@@ -25,6 +25,7 @@ Run in `web/webui`. The `task` targets in the root `taskfile.yaml` wrap some of 
 | `bun run dev` | dev server on port 3000; `task web:dev` adds `API_URL=http://localhost:3200` |
 | `bun run build` | production build into `internal/controller/webui`; `task web:build` |
 | `bun run preview` | `rsbuild preview`: serves the last production build locally |
+| `bun run analyze` | production build with Rsdoctor (`RSDOCTOR=true`): opens the bundle analysis page; its report goes to `internal/controller/webui/.rsdoctor` (gitignored, not embedded) and the next `build` cleans it |
 | `bun run check` / `lint` / `format` | `biome check` / `biome lint` / `biome format` |
 | `bun test` | every `*.test.ts(x)`, colocated with the code under test, written on `bun:test` |
 | `bun run storybook` | Storybook on port 6006; `task web:storybook` |

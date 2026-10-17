@@ -47,9 +47,6 @@ export default defineConfig(({ command }) => ({
         legalComments: 'none',
     },
     server: { port: 3000 },
-    performance: {
-        bundleAnalyze: process.env.BUNDLE_ANALYZE ? {} : undefined,
-    },
     tools: {
         cssLoader: {
             url: { filter: (url: string) => !url.startsWith('/fonts/') },

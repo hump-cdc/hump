@@ -7,7 +7,7 @@ Storybook: `Content/Data Table`.
 
 `index.ts` exports the `DataTable` component and the types `DataTableColumn<T>`,
 `DataTableProps<T>`, `DataTableRange`, `DetailComponent<T>`. The other `data-table.*` files
-(header, row, expand button, skeleton, sizing, column state, consts) are internal.
+(header, row, expand button, skeleton, sizing, column model, column state, consts) are internal.
 
 ## Usage
 

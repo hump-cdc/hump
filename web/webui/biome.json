@@ -1,5 +1,5 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.4.5/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
     "vcs": {
         "enabled": false,
         "clientKind": "git",
@@ -356,7 +356,7 @@
         "enabled": true,
         "actions": {
             "source": {
-                "recommended": true,
+                "preset": "recommended",
                 "organizeImports": {
                     "level": "on",
                     "options": {
@@ -387,7 +387,7 @@
     "linter": {
         "enabled": true,
         "rules": {
-            "recommended": true,
+            "preset": "recommended",
             "style": {
                 "useImportType": "off"
             },

@@ -5,23 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"hump/pkg/app/shutdown"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 	"net/http"
 )
 
-// TelemetryController is the HTTP-facing surface that serves the process
+// ObservabilityController is the HTTP-facing surface that serves the process
 // health probes (/health/startup, /health/ready, /health/live) and the
 // Prometheus /metrics scrape endpoint on a single port.
-type TelemetryController struct {
+type ObservabilityController struct {
 	healthHandler  http.Handler
 	metricsHandler http.Handler
 }
 
-// NewTelemetryController constructs a [TelemetryController] that serves the
-// health handler under /health/startup, /health/ready and /health/live, and
-// the metrics handler under /metrics.
-func NewTelemetryController(healthHandler, metricsHandler http.Handler) *TelemetryController {
-	return &TelemetryController{
+// NewObservabilityController constructs an [ObservabilityController] that
+// serves the health handler under /health/startup, /health/ready and
+// /health/live, and the metrics handler under /metrics.
+func NewObservabilityController(healthHandler, metricsHandler http.Handler) *ObservabilityController {
+	return &ObservabilityController{
 		healthHandler:  healthHandler,
 		metricsHandler: metricsHandler,
 	}
@@ -30,8 +30,8 @@ func NewTelemetryController(healthHandler, metricsHandler http.Handler) *Telemet
 // Serve binds to the given TCP port and blocks until the registered shutdown
 // hook closes the underlying server. It returns nil on a clean shutdown and
 // the server error otherwise.
-func (c *TelemetryController) Serve(port uint) error {
-	logger := log.Scope("telemetry")
+func (c *ObservabilityController) Serve(port uint) error {
+	logger := log.Scope("observability")
 
 	mux := http.NewServeMux()
 
@@ -45,11 +45,11 @@ func (c *TelemetryController) Serve(port uint) error {
 		Handler: mux,
 	}
 
-	shutdown.OnShutdown(shutdown.StageServers, "telemetry", func(ctx context.Context) error {
+	shutdown.OnShutdown(shutdown.StageServers, "observability", func(ctx context.Context) error {
 		return server.Shutdown(ctx)
 	})
 
-	logger.Info(fmt.Sprintf("Telemetry started at http://localhost:%d", port))
+	logger.Info(fmt.Sprintf("Observability started at http://localhost:%d", port))
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

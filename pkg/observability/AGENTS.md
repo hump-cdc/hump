@@ -1,4 +1,4 @@
-# pkg/telemetry — how this package hangs together
+# pkg/observability — how this package hangs together
 
 Three independent packages and no code at this level: logging, health probes and the Prometheus
 registry. `cmd/hump/main.go` builds the health and metric objects once and hands them to the
@@ -60,7 +60,7 @@ application components on purpose — it is the one place the probe list lives.
 - `MarkUnhealthy(err)` makes the probe report `err`; with a nil error it reports
   `ErrNotOperational`.
 - State is an `atomic.Pointer`, so marking is safe from any goroutine and costs one allocation.
-- `Handler()` is a single handler. `controller/telemetry.go` mounts it on `/health/startup`,
+- `Handler()` is a single handler. `controller/observability.go` mounts it on `/health/startup`,
   `/health/ready` and `/health/live` alike — the three paths always agree.
 
 `adapter/postgres` does not import this package; it declares the two-method interface it needs and

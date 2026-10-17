@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 )
 
 var logger = log.Scope("web")

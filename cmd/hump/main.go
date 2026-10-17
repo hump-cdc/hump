@@ -36,9 +36,9 @@ import (
 	snapshotPort "hump/internal/port/snapshot"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
-	"hump/pkg/telemetry/health"
-	"hump/pkg/telemetry/log"
-	"hump/pkg/telemetry/metric"
+	"hump/pkg/observability/health"
+	"hump/pkg/observability/log"
+	"hump/pkg/observability/metric"
 
 	"github.com/goccy/go-yaml"
 )
@@ -67,7 +67,7 @@ func main() {
 		return
 	}
 
-	// Telemetry
+	// Observability
 	health, err := health.New("hump")
 	if err != nil {
 		logger.Error("Unable to init health probes", "error", err)
@@ -128,9 +128,9 @@ func main() {
 		// Run
 		if opts.TelemetryPort != nil {
 			r.Serve(
-				// Telemetry
+				// Observability
 				func(ctx context.Context) error {
-					t := controller.NewTelemetryController(health.Handler(), metricHandler)
+					t := controller.NewObservabilityController(health.Handler(), metricHandler)
 					return t.Serve(*opts.TelemetryPort)
 				})
 		}

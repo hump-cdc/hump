@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"hump/pkg/app/shutdown"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 	"sync"
 	"syscall"
 	"time"

@@ -97,7 +97,7 @@ of range`, `should be 1 tmplOr 2`. They are user-visible in render errors.
 
 `trace_id` and `span_id` validate strictly (lowercase hex, no `ff` version, no all-zero ids) and
 disagree on failure: `trace_id` returns its input unchanged, `span_id` returns `""`. The parser the
-logger uses is a different, more lenient one — see `pkg/telemetry/AGENTS.md`.
+logger uses is a different, more lenient one — see `pkg/observability/AGENTS.md`.
 
 ## Adding a function
 

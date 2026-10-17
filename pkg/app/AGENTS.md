@@ -32,7 +32,7 @@ process-global registry of teardown hooks that every adapter registers itself wi
 So for a worker, a cancelled context means **"take no new work"**, not "abort": it is still expected
 to finish what it picked up, and nothing is torn down under it until it returns or 30s pass. A
 server is the opposite — it is stopped by its own `StageServers` hook, which it registers from inside
-its `Serve` function. `TelemetryController.Serve` does not even take the context. The bounded join
+its `Serve` function. `ObservabilityController.Serve` does not even take the context. The bounded join
 in step 5 exists for a server that died or never got as far as registering that hook.
 
 What ends up in the result:

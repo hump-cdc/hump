@@ -16,7 +16,7 @@ import (
 	streamupdates "hump/internal/application/webui/stream_updates"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/middleware"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 	"hump/pkg/version"
 	"net"
 	"net/http"

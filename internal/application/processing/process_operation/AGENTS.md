@@ -106,7 +106,7 @@ sink that succeeded for that row before a sibling failed sees it twice.
 | `OnSuccess` / `OnFailure` | once per delivery | `sink_messages_total` + observer |
 | `OnSkip` | a failure swallowed by skip mode | an error log line with sink and table |
 
-Both metrics are declared without a prefix; the factory from `pkg/telemetry/metric` adds `hump_`,
+Both metrics are declared without a prefix; the factory from `pkg/observability/metric` adds `hump_`,
 and `db` is a constant label. The `host` and `target` labels come from `cfg.Sink.Metadata` rendered **once, at construction**,
 from the schema and table alone. They are the configured target, not what a templated topic or URL
 renders to per row, and they have to match what the dashboard's topology computes —

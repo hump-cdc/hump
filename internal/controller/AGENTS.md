@@ -10,7 +10,7 @@ elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Co
 | File | Role |
 |---|---|
 | `process.go` | `ProcessController` — the WAL listener, `db.Listen(ctx, process)` |
-| `telemetry.go` | `TelemetryController` — health probes and the Prometheus scrape on `TELEMETRY_PORT` |
+| `observability.go` | `ObservabilityController` — health probes and the Prometheus scrape on `TELEMETRY_PORT` |
 | `webui.go` | `WebUIController` — the web UI API and the embedded SPA on `WEB_PORT` |
 | `webui/` | the built SPA, embedded through `//go:embed webui` — a build artifact, see below |
 
@@ -27,7 +27,7 @@ elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Co
 `WebUIController.Serve` passes the runner's context as the server's `BaseContext`, so every request
 context dies at the start of shutdown. That is what ends the SSE handlers (`/api/live`,
 `/api/snapshot`, `/api/snapshot/estimate`); without it `server.Shutdown` would hang on the open
-streams until the `StageServers` hook timed out. `TelemetryController.Serve` takes no context — it has nothing long-lived.
+streams until the `StageServers` hook timed out. `ObservabilityController.Serve` takes no context — it has nothing long-lived.
 
 Both servers are optional: `main.go` starts each only when its port option is set, and neither in
 `--cleanup` mode.
@@ -98,7 +98,7 @@ dependencies, so only its request validation is reachable. The tests decode resp
 client-shaped struct on purpose: they catch a field that marshals into something the generated
 client cannot parse (payload as text rather than base64, duration as whole milliseconds, metadata
 as `{}` rather than `null`), plus the window semantics and huma's 422s. `Serve`, the static handler
-wiring, `telemetry.go` and `process.go` have no tests here; `middleware.Static` and `Cors` are
+wiring, `observability.go` and `process.go` have no tests here; `middleware.Static` and `Cors` are
 tested in `pkg/middleware`.
 
 Helpers live below the last test function — see the `go` skill.

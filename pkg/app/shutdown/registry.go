@@ -3,7 +3,7 @@ package shutdown
 import (
 	"context"
 	"errors"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 	"slices"
 	"sync"
 	"time"

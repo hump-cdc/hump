@@ -3,6 +3,7 @@ package funcs
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -14,9 +15,16 @@ func tmplAtoi(s string) int {
 }
 
 // tmplInt converts v to int via numeric or string coercion. Bools become 0/1.
-// Unparseable values yield 0.
+// Unparseable values yield 0; values outside the int range are clamped.
 func tmplInt(v any) int {
-	return int(tmplInt64(v))
+	n := tmplInt64(v)
+	switch {
+	case n > math.MaxInt:
+		return math.MaxInt
+	case n < math.MinInt:
+		return math.MinInt
+	}
+	return int(n)
 }
 
 // tmplInt64 is like tmplInt but returns int64.

@@ -1,6 +1,10 @@
 package funcs
 
-import "testing"
+import (
+	"math"
+	"strconv"
+	"testing"
+)
 
 func TestConvertTemplates(t *testing.T) {
 	cases := []struct {
@@ -12,6 +16,7 @@ func TestConvertTemplates(t *testing.T) {
 		{"atoi", `{{ atoi .Value }}`, "42", "42"},
 		{"atoi bad", `{{ atoi .Value }}`, "abc", "0"},
 		{"int from string", `{{ int .Value }}`, "12", "12"},
+		{"int from big string", `{{ int .Value }}`, "9223372036854775807", strconv.Itoa(math.MaxInt)},
 		{"int from float", `{{ int .Value }}`, 3.7, "3"},
 		{"int from bool", `{{ int .Value }}`, true, "1"},
 		{"int nil", `{{ int .Value }}`, nil, "0"},

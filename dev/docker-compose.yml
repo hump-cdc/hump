@@ -107,7 +107,7 @@ services:
 
     # NATS
     nats:
-        image: nats:2.14.0
+        image: nats:2.15.1
         restart: unless-stopped
         ports:
             - "4222:4222"
@@ -118,7 +118,7 @@ services:
             - nats-data:/data
 
     nats2:
-        image: nats:2.14.0
+        image: nats:2.15.1
         restart: unless-stopped
         ports:
             - "4223:4222"

@@ -10,14 +10,14 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hellofresh/health-go/v5 v5.5.5
 	github.com/jackc/pglogrepl v0.0.0-20260401131349-e37c41485510
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/lmittmann/tint v1.1.3
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nkeys v0.4.16
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
-	github.com/rabbitmq/amqp091-go v1.11.0
+	github.com/rabbitmq/amqp091-go v1.14.0
 	github.com/rabbitmq/rabbitmq-stream-go-client v1.8.1
 	github.com/twmb/franz-go v1.21.0
 	go.uber.org/goleak v1.3.0

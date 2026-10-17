@@ -1,15 +1,14 @@
-import type { Header } from '@tanstack/react-table'
-
 import type { ReactNode, Ref } from 'react'
 
 import { cn } from '@/shared/utils'
 
+import type { ColumnHeader } from './data-table.column-model'
 import { EXPAND_COLUMN_WIDTH } from './data-table.consts'
 import type { DataTableColumn } from './data-table.types'
 
 type DataTableHeaderProps<T> = {
     columns: DataTableColumn<T>[]
-    headers: Header<T, unknown>[]
+    headers: ColumnHeader[]
     widths: number[]
     totalWidth: number
     height: number
@@ -49,7 +48,7 @@ export const DataTableHeader = <T,>({
 
 type HeaderCellProps<T> = {
     column: DataTableColumn<T>
-    header: Header<T, unknown>
+    header: ColumnHeader
     width: number
 }
 
@@ -71,7 +70,7 @@ const HeaderCell = <T,>({ column, header, width }: HeaderCellProps<T>): ReactNod
  * Drag handle straddling the column's right border, drawn as a short divider.
  * Flex columns show the divider too but refill the width, so they get no handler.
  */
-const ResizeGrip = <T,>({ header }: { header: Header<T, unknown> }): ReactNode => {
+const ResizeGrip = ({ header }: { header: ColumnHeader }): ReactNode => {
     const canResize = header.column.getCanResize()
     const onResize = canResize ? header.getResizeHandler() : undefined
 

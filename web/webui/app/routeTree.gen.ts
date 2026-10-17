@@ -11,10 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SidebarRouteRouteImport } from './routes/_sidebar/route'
 import { Route as SidebarIndexRouteImport } from './routes/_sidebar/index'
-import { Route as SidebarStatisticsRouteImport } from './routes/_sidebar/statistics'
-import { Route as SidebarSnapshotRouteImport } from './routes/_sidebar/snapshot'
-import { Route as SidebarOperationsRouteImport } from './routes/_sidebar/operations'
 import { Route as SidebarConfigurationRouteImport } from './routes/_sidebar/configuration'
+import { Route as SidebarOperationsRouteImport } from './routes/_sidebar/operations'
+import { Route as SidebarSnapshotRouteImport } from './routes/_sidebar/snapshot'
+import { Route as SidebarStatisticsRouteImport } from './routes/_sidebar/statistics'
 
 const SidebarRouteRoute = SidebarRouteRouteImport.update({
   id: '/_sidebar',
@@ -25,14 +25,9 @@ const SidebarIndexRoute = SidebarIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
-const SidebarStatisticsRoute = SidebarStatisticsRouteImport.update({
-  id: '/statistics',
-  path: '/statistics',
-  getParentRoute: () => SidebarRouteRoute,
-} as any)
-const SidebarSnapshotRoute = SidebarSnapshotRouteImport.update({
-  id: '/snapshot',
-  path: '/snapshot',
+const SidebarConfigurationRoute = SidebarConfigurationRouteImport.update({
+  id: '/configuration',
+  path: '/configuration',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
 const SidebarOperationsRoute = SidebarOperationsRouteImport.update({
@@ -40,9 +35,14 @@ const SidebarOperationsRoute = SidebarOperationsRouteImport.update({
   path: '/operations',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
-const SidebarConfigurationRoute = SidebarConfigurationRouteImport.update({
-  id: '/configuration',
-  path: '/configuration',
+const SidebarSnapshotRoute = SidebarSnapshotRouteImport.update({
+  id: '/snapshot',
+  path: '/snapshot',
+  getParentRoute: () => SidebarRouteRoute,
+} as any)
+const SidebarStatisticsRoute = SidebarStatisticsRouteImport.update({
+  id: '/statistics',
+  path: '/statistics',
   getParentRoute: () => SidebarRouteRoute,
 } as any)
 
@@ -72,11 +72,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/configuration'
-    | '/operations'
-    | '/snapshot'
-    | '/statistics'
+    '/' | '/configuration' | '/operations' | '/snapshot' | '/statistics'
   fileRoutesByTo: FileRoutesByTo
   to: '/configuration' | '/operations' | '/snapshot' | '/statistics' | '/'
   id:
@@ -109,18 +105,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SidebarIndexRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
-    '/_sidebar/statistics': {
-      id: '/_sidebar/statistics'
-      path: '/statistics'
-      fullPath: '/statistics'
-      preLoaderRoute: typeof SidebarStatisticsRouteImport
-      parentRoute: typeof SidebarRouteRoute
-    }
-    '/_sidebar/snapshot': {
-      id: '/_sidebar/snapshot'
-      path: '/snapshot'
-      fullPath: '/snapshot'
-      preLoaderRoute: typeof SidebarSnapshotRouteImport
+    '/_sidebar/configuration': {
+      id: '/_sidebar/configuration'
+      path: '/configuration'
+      fullPath: '/configuration'
+      preLoaderRoute: typeof SidebarConfigurationRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
     '/_sidebar/operations': {
@@ -130,11 +119,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SidebarOperationsRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
-    '/_sidebar/configuration': {
-      id: '/_sidebar/configuration'
-      path: '/configuration'
-      fullPath: '/configuration'
-      preLoaderRoute: typeof SidebarConfigurationRouteImport
+    '/_sidebar/snapshot': {
+      id: '/_sidebar/snapshot'
+      path: '/snapshot'
+      fullPath: '/snapshot'
+      preLoaderRoute: typeof SidebarSnapshotRouteImport
+      parentRoute: typeof SidebarRouteRoute
+    }
+    '/_sidebar/statistics': {
+      id: '/_sidebar/statistics'
+      path: '/statistics'
+      fullPath: '/statistics'
+      preLoaderRoute: typeof SidebarStatisticsRouteImport
       parentRoute: typeof SidebarRouteRoute
     }
   }

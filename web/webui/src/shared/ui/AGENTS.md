@@ -76,7 +76,7 @@ shared/ui/
 
 - Component is a **`React.FC`** with a `type` props alias. Generic components cannot be an
   `FC`: `DataTable` is a generic arrow function returning `ReactElement` (its internal
-  `DataTableHeader`, `HeaderCell` and `ResizeGrip` are generic arrows returning `ReactNode`;
+  `DataTableHeader` and `HeaderCell` are generic arrows returning `ReactNode`;
   `DataTableRow` is a `memo` of a generic arrow, cast to `<T>(props) => ReactNode`),
   `Table`, `TableRow` and `TableRowHeader` generic `function`s returning `ReactNode`. The flow
   node configs `TableNode` (`flow/node.table.tsx`), `SinkNode` (`flow-detailed/node.sink.tsx`,

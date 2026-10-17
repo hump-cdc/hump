@@ -1,10 +1,9 @@
 import {
     type ColumnDef,
     type ColumnSizingState,
-    getCoreRowModel,
     type OnChangeFn,
-    type Table,
-    useReactTable,
+    type ReactTable,
+    useTable,
 } from '@tanstack/react-table'
 import { useVirtualizer, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual'
 
@@ -24,6 +23,7 @@ import {
 
 import { cn } from '@/shared/utils'
 
+import { type ColumnFeatures, type ColumnModelRow, columnFeatures } from './data-table.column-model'
 import { loadColumnSizing, saveColumnSizing } from './data-table.column-state'
 import {
     DEFAULT_DETAIL_HEIGHT,
@@ -39,7 +39,7 @@ import { type ColumnSizing, columnId, isResizableColumn, resolveColumnWidths } f
 import type { DataTableColumn, DataTableProps, DataTableRange } from './data-table.types'
 
 /** Stand-in row data for TanStack Table, which here only models the columns. */
-const NO_ROWS: never[] = []
+const NO_ROWS: ColumnModelRow[] = []
 
 /**
  * A virtualized table with a fixed header, resizable columns and expandable
@@ -248,6 +248,9 @@ const useViewportSize = (ref: RefObject<HTMLDivElement | null>): ViewportSize =>
     return size
 }
 
+/** TanStack Table instance of the column model. */
+type ColumnModel = ReactTable<ColumnFeatures, ColumnModelRow>
+
 /** Column widths the user dragged, seeded from localStorage when the table has an `id`. */
 const usePersistedSizing = <T,>(
     id: string | undefined,
@@ -267,8 +270,8 @@ const useColumnModel = <T,>(
     widths: number[],
     columnSizing: ColumnSizing,
     onColumnSizingChange: OnChangeFn<ColumnSizingState>,
-): Table<T> => {
-    const columnDefs = useMemo<ColumnDef<T>[]>(
+): ColumnModel => {
+    const columnDefs = useMemo<ColumnDef<ColumnFeatures, ColumnModelRow>[]>(
         () =>
             columns.map((column, index) => ({
                 id: columnId(index),
@@ -280,10 +283,10 @@ const useColumnModel = <T,>(
         [columns, widths],
     )
 
-    return useReactTable<T>({
+    return useTable({
+        features: columnFeatures,
         data: NO_ROWS,
         columns: columnDefs,
-        getCoreRowModel: getCoreRowModel(),
         columnResizeMode: 'onChange',
         state: { columnSizing },
         onColumnSizingChange,
@@ -291,8 +294,8 @@ const useColumnModel = <T,>(
 }
 
 /** Saves the column widths once a resize drag ends. */
-const usePersistOnResizeEnd = <T,>(table: Table<T>, id: string | undefined, columnSizing: ColumnSizing): void => {
-    const resizing = table.getState().columnSizingInfo.isResizingColumn
+const usePersistOnResizeEnd = (table: ColumnModel, id: string | undefined, columnSizing: ColumnSizing): void => {
+    const resizing = table.state.columnResizing.isResizingColumn
     const wasResizing = useRef(false)
 
     useEffect(() => {

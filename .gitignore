@@ -23,6 +23,8 @@ go.work.sum
 # Build artifacts
 /dist/
 /build/
+# Rsdoctor report of `bun run analyze` in web/webui, written next to the built web UI
+/internal/controller/webui/.rsdoctor/
 
 # Editor / IDE
 *.swp

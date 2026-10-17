@@ -69,6 +69,10 @@ Every change to `public.users` now lands in the `public.users` topic. See the [d
 
 The full documentation is at [hump.dev/docs](https://hump.dev/docs/getting-started). It covers configuration, sinks, templating, delivery guarantees, snapshots and observability.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, set up the dev environment and open a pull request.
+
 ## License
 
 Hump is released under the [MIT License](LICENSE).

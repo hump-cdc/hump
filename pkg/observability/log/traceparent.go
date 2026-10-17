@@ -1,13 +1,13 @@
 package log
 
 const (
-	traceparentLen   = 55
-	traceIDStart     = 3
-	traceIDEnd       = 35
-	spanIDStart      = 36
-	spanIDEnd        = 52
-	versionEnd       = 2
-	flagsStart       = 53
+	traceparentLen = 55
+	traceIDStart   = 3
+	traceIDEnd     = 35
+	spanIDStart    = 36
+	spanIDEnd      = 52
+	versionEnd     = 2
+	flagsStart     = 53
 )
 
 // parseTraceparent parses a W3C traceparent header.

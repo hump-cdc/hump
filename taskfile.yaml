@@ -81,10 +81,42 @@ tasks:
         cmds:
             - go run -ldflags "{{.LDFLAGS}}" ./cmd/hump -f dev/hump.yaml --cleanup
 
+    dev:up:
+        desc: Start the dev environment (PostgreSQL, Kafka, NATS, RabbitMQ, HTTP sink)
+        cmds:
+            - docker compose -f dev/docker-compose.yml up -d
+
+    dev:down:
+        desc: Stop the dev environment
+        cmds:
+            - docker compose -f dev/docker-compose.yml down
+
+    dev:reset:
+        desc: Recreate the dev environment from scratch, removing its volumes
+        cmds:
+            - docker compose -f dev/docker-compose.yml down -v
+            - docker compose -f dev/docker-compose.yml up -d
+
     test:
         desc: Run all tests
         cmds:
             - gotestsum --format testdox ./...
+
+    check:
+        desc: Run all pre-PR checks (gofmt, go vet, tests, web UI lint, tests and type check)
+        cmds:
+            - files=$(gofmt -l cmd config internal pkg); if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
+            - go vet ./...
+            - task: test
+            - task: _check:web
+
+    _check:web:
+        internal: true
+        dir: web/webui
+        cmds:
+            - bun run check
+            - bun test
+            - bunx tsc --noEmit
 
     test:file:
         desc: Run tests of the package in the current directory
@@ -116,4 +148,4 @@ tasks:
             - defer: rm -f cover.out
             - gotestsum --format testdox -- -coverprofile=cover.out {{.ARGS}}
             - gocov convert cover.out | gocov-html > "${TMPDIR:-/tmp}/hump-cover.html"
-            - open "${TMPDIR:-/tmp}/hump-cover.html"
+            - '{{if eq OS "darwin"}}open{{else if eq OS "windows"}}cmd /c start ""{{else}}xdg-open{{end}} "${TMPDIR:-/tmp}/hump-cover.html"'

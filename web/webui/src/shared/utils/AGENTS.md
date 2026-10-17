@@ -35,8 +35,8 @@ are grouped with a space, not a comma: `formatNumber*` and `formatNumberCompact`
 | `formatLatency(ms)` | **milliseconds** | `12ms` below 1000, else seconds with 2 digits: `1.24s`; negatives clamp to 0 |
 | `scaleLatency(ms)` | milliseconds | `{ value, suffix, fractionDigits }`; suffix has no space (`'ms'`, `'s'`) |
 | `formatDuration(s)` | **seconds** | `48s`, `1m 48s`; rounded to whole seconds, negatives clamp to 0, no hours unit |
-| `formatDateTime(d)` | `Date` | `DD Mon YYYY, HH:mm:ss`, local time |
-| `formatDateTimeRange(a, b)` | two `Date`s | `… → HH:mm:ss`; the end repeats the date only when it is another local day |
+| `formatDateTime(d)` | `Date` | `Intl.DateTimeFormat('en-GB')` output, local time: `17 Oct 2026, 14:03:05` in Node, `17 Oct 2026 at 14:03:05` in Bun; the separator is engine-dependent |
+| `formatDateTimeRange(a, b)` | two `Date`s | `formatDateTime(a) → HH:mm:ss`, same separator caveat; the end repeats the date only when it is another local day |
 | `formatTimeCompact(ts)` | epoch ms | zero-padded local `HH:MM`, for chart axes |
 | `formatTime(d)` | `Date` | `HH:mm:ss.SSS`, 24-hour, local time |
 
@@ -46,7 +46,8 @@ are grouped with a space, not a comma: `formatNumber*` and `formatNumberCompact`
 - The `scale*` pair exists for `shared/ui/number-flow`, which animates the number and needs the
   value and its unit apart. They must stay consistent with `formatBytes`/`formatLatency`; the
   thresholds are written twice in each file.
-- The millisecond boundary rounds before it compares units: `formatLatency(999.6)` is `1000ms`.
+- The millisecond boundary compares before it rounds: `formatLatency(999.6)` stays in the `ms`
+  branch and prints `1000ms`.
 - No formatter sets a `timeZone`: every date and time is printed in the browser's local time.
 
 ## Hooks and the rest

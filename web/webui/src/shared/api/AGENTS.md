@@ -1,8 +1,9 @@
 # shared/api — how this module hangs together
 
 The typed HTTP client of the web UI. Almost all of it is generated from the OpenAPI spec the Go
-side emits; the hand-written part is two small files. FSD layer: `shared`. It imports nothing from
-the upper layers and nothing from another `shared/*` segment.
+side emits; the hand-written part is three small files (`client.ts`, `error-message.ts`,
+`index.ts`). FSD layer: `shared`. It imports nothing from the upper layers and nothing from
+another `shared/*` segment.
 
 Consumers (through `@/shared/api` only — biome forbids reaching into the folder):
 `entities/config`, `entities/flows`, `entities/metrics`, `entities/operations`,
@@ -50,8 +51,8 @@ What `openapi-ts.config.ts` decides, and where it shows:
 | `typescript` `definitions.name` | schema types are suffixed: `ErrorModel` → `ErrorModelModel` |
 | `sdk` `byTags` + `nesting` | a static class per tag, method = operationId minus its first segment: `snapshot.stream` → `Snapshot.stream` |
 | `sdk` `transformer: true` | every response with a body goes through its zod schema (`responseTransformer`) |
-| `@tanstack/react-query` | `getApiConfigOptions`/`getApiConfigQueryKey` for the one plain GET; `post*Mutation` for POSTs |
-| `zod` | `<Name>Schema` + inferred type `<Name>`, per-operation `zGetApi…Response` |
+| `@tanstack/react-query` | `getApiConfigOptions`/`getApiConfigQueryKey` for the one plain GET; `post*Mutation` for POSTs, except the SSE `POST /api/snapshot/estimate` |
+| `zod` | `<Name>Schema` + inferred type `<Name>`, per-operation `z<Method>Api…Response`: `zGetApi…` for the three GETs (Config, Live, Snapshot), `zPostApi…` for the five POSTs (Metrics, Operations, SnapshotEstimate, SnapshotStop, SnapshotTables) |
 
 Two things follow. Responses are **parsed at runtime** (`parseAsync`), not only typed. And the
 reads that are POSTs (`/api/metrics`, `/api/operations`,

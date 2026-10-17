@@ -81,7 +81,7 @@ Eviction is uneven: Kafka and NATS never delete an entry (the `shutdown.StageSin
 the client and leaves the map alone), RabbitMQ deletes its entry from inside the shutdown hook,
 and RabbitMQ Streams also evicts a producer from
 `watchProducerClose` when the broker closes it. That goroutine deletes the entry and *then*
-sleeps ~2s, so the sleep gates nothing: the next `Process` recreates the producer immediately.
+sleeps 2.1–3s (2s base + 100ms–1s jitter), so the sleep gates nothing: the next `Process` recreates the producer immediately.
 
 ## Three reconcilers, one shape
 
@@ -135,4 +135,5 @@ asserts the ack path finishes in under 5ms — a regression lock on a removed 50
 wait, not a performance nicety. There are no broker integration tests here;
 `dev/docker-compose.yml` brings up Kafka, NATS and RabbitMQ for manual runs.
 
-Helpers live below the last test function — see the `go` skill.
+`newTestConn` sits above `TestAwaitPublishResult`, not below the last test as the `go` skill
+puts helpers.

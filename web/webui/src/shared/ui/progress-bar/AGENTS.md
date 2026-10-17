@@ -24,7 +24,7 @@ Plus the `div` attributes (except `children`) and `ref`; `className` goes to the
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `value` | `number` | — | completion, 0 to 100; values outside are clamped |
+| `value` | `number` | required | completion, 0 to 100; values outside are clamped |
 | `variant` | `'primary' \| 'success' \| 'neutral'` | `'primary'` | colour of the fill |
 | `size` | `'sm' \| 'md'` | `'md'` | height of the track |
 

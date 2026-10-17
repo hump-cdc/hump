@@ -52,5 +52,6 @@ on an idle collector is a silent no-op rather than an error.
   indices into the *matching* records, half-open, clamped to `Total`. Out of range is an empty
   page, never an error; neither `Dump` nor `Search` returns one.
 
-`SinkType`, `Host` and the list filters are plain strings: this package imports `domain` only,
-not `port/sink`.
+`SinkType`, `Host` and the `SinkTypes`, `Hosts`, `Targets` and `Tables` filters are plain strings:
+this package imports `domain` only, not `port/sink`. `Operations` and `Statuses` are
+`[]domain.OperationType` and `[]domain.DeliveryStatus`.

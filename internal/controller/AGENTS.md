@@ -1,7 +1,8 @@
 # controller — how this package hangs together
 
-The process's entry points: everything `cmd/hump/main.go` hands to the runner lives here. There is
-no logic of its own — each controller binds a transport (WAL listener, HTTP port) to handlers built
+The process's entry points: everything `cmd/hump/main.go` hands to the runner lives here, except the
+`--cleanup` worker, an inline closure in `main.go` that calls `db.Cleanup`. There is no
+logic of its own — each controller binds a transport (WAL listener, HTTP port) to handlers built
 elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Controller` in
 `internal/application/...`; this package only decides which path and which port they answer on.
 

@@ -24,7 +24,9 @@ import { BarChart } from '@/shared/ui/charts/bar-chart'
 ```
 
 - `data` is wide: one row per x step, one column per series `dataKey`. Rows are plotted by
-  index; `xAxisKey` only names the column shown as the tooltip heading.
+  index; `xAxisKey` names the column shown as the tooltip heading. When its values are unique,
+  they also key the marks, so a mark follows its label across updates; otherwise marks are keyed
+  by index.
 - The size is `h-40 w-full` unless `className` overrides it (`MetricCard` passes `h-8`,
   `h-20` or `h-32`).
 - Memoize `data` and `series`: the chart definition is rebuilt when either changes identity.

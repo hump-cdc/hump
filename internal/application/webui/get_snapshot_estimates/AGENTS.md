@@ -2,9 +2,9 @@
 
 `POST /api/snapshot/estimate` (`snapshot.estimate`, registered in `internal/controller/webui.go`),
 an SSE stream despite the verb: the body lists tables with their filters, and row counts come back
-as they arrive — for each table the planner's estimate first (`rough: true`), then the exact count
-unless it timed out. It feeds the snapshot dialog while the user is still editing filters, so it is
-independent of any run and safe to call at any time.
+as they arrive — for each table the planner's estimate first (`rough: true`), then the exact count,
+which is dropped silently if it fails or times out. It feeds the snapshot dialog while the user is
+still editing filters, so it is independent of any run and safe to call at any time.
 
 ## Layout
 

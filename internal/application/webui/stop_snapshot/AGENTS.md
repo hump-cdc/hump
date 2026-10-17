@@ -32,8 +32,8 @@ the run goroutine, and the new state reaches clients over `GET /api/snapshot` (`
 | anything else | returned raw, so huma answers 500 |
 
 `ErrUnavailable` is declared in this package and, separately, in `start_snapshot`; they are not the
-same variable. A served route never has a nil runner — `cmd/hump/main.go` builds one whenever the
-web port is set. The nil path exists for `cmd/openapi`, which constructs the use case with nil to
+same variable. A served route never has a nil runner — `cmd/hump/main.go` builds one whenever it
+serves the web UI (`!opts.Cleanup && opts.WebPort != nil`). The nil path exists for `cmd/openapi`, which constructs the use case with nil to
 register the route, and for tests.
 
 ## Tests

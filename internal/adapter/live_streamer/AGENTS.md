@@ -74,9 +74,9 @@ Three regimes, and only the third costs anything:
 
 1. **Nobody connected.** `binding.withOperation` sees `!Connected()` and takes the plain chain, so
    `Record` is never called. The decorator adds one interface hop to `Connected()`.
-2. **Ring on, no SSE subscriber** — the idle tail after a dashboard closes, or a client that only
-   hit `/api/operations`. `Record` is one delegation plus `watched.Load()`, one atomic load, no
-   lock, no allocation. `TestStreamerRecordDoesNotAllocateWithoutSubscribers` pins the zero.
+2. **Ring on, no SSE subscriber** — the idle tail after a dashboard closes. Only `stream_updates`
+   turns the ring on; `/api/operations` only searches it. `Record` is one delegation plus
+   `watched.Load()`, one atomic load, no lock, no allocation. `TestStreamerRecordDoesNotAllocateWithoutSubscribers` pins the zero.
 3. **Subscribed.** One uncontended mutex and a five-string struct copy per delivery.
 
 `watched` is a **hint**, exactly like `Connected()`: a subscriber that appears mid-window misses the

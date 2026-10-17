@@ -16,7 +16,7 @@ lays the three out and owns everything URL-related.
 | `filter/ui/operations-filter.tsx` | five `MultiComboBox` facets and the search input |
 | `list/index.ts` | `OperationsList` only — the hook, the row type and the mappers stay private |
 | `list/model/use-operations.ts` | block loading, the debounced search, the live refetch |
-| `list/model/blocks.ts` | pure block arithmetic: `BLOCK_SIZE`, `blocksForRange`, `clampBlocks`, `pickTotal`, `rowAt` |
+| `list/model/blocks.ts` | pure block arithmetic: `BLOCK_SIZE`, `blocksForRange`, `clampBlocks`, `sameBlocks`, `BlockPage`, `pickTotal`, `rowAt` |
 | `list/model/to-request.ts` | filter store → request filter, which is also the query key |
 | `list/model/map-operation.ts`, `types.ts` | API record → `Operation` / `Attempt` |
 | `list/ui/` | the `DataTable` wiring, its columns, the expandable attempts table |
@@ -86,7 +86,8 @@ newest first — see `internal/application/webui/get_operations/AGENTS.md`.
   old rows on screen until the new ones arrive.
 - The other blocks are clamped by block 0's total (`clampBlocks`), so nothing past the end is
   requested. `rowCount` is the total of the most recently fetched page (`pickTotal`, by the
-  page's `updatedAt`, which `toPage` copies from the response's `receivedAt`), not block 0's.
+  page's `updatedAt`, which `toPage` copies from `receivedAt`, the `Date.now()` that `fetchBlock`
+  adds to the response), not block 0's.
 - The backend answers with the **clamped** window; `rowAt` ignores a page whose `from` is not its
   block's start rather than show rows at the wrong index.
 - The request filter **is** the query key, hence `toOperationsFilter` sorts every list and leaves
@@ -110,8 +111,10 @@ after 300 ms of quiet, at most 1 s into a steady stream, with `cancelRefetch: fa
 request is not restarted by the next batch.
 
 - The list refreshes **itself, and only while mounted**. `shared/live`'s `LiveUpdates` invalidates
-  metrics on every batch but touches operations only on reconnect, and then just marks them stale
-  (`shared/state/invalidate.ts`).
+  metrics on every batch but touches operations only on reconnect
+  (`shared/state/invalidate.ts`). That filter has no `refetchType`, so TanStack's default
+  `'active'` applies: a mounted list is refetched, inactive operations queries are only marked
+  stale.
 - The prefix is `['operations']`, which also covers `keys.queries.recentOperations` — the flows
   inspector's list. A key added under that root is invalidated from here too.
 - Rows are positions counted from the newest, so every delivery shifts them; a refetch replaces the
@@ -133,7 +136,7 @@ bottom sheet with a tabs body instead of the panel. `shown` holds the last selec
 close animation, when `selected` is already `null`.
 
 `toHeaders` lists every metadata entry and strips the `header.` prefix the sinks file headers
-under, so headers and other metadata (`http.status`) share one list.
+under, so headers and other metadata (the HTTP sink's `method` and `status`) share one list.
 
 ## What changes together
 

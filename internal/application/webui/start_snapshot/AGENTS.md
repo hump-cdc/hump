@@ -34,8 +34,8 @@ Two things to know about that table:
   `database.ValidateWhere` returned, and the runner's is the one its port documents — match that.
 
 `ErrUnavailable` is declared in this package and, separately, in `stop_snapshot`; they are not the
-same variable. A served route never has a nil runner — `cmd/hump/main.go` builds one whenever the
-web port is set. The nil path exists for `cmd/openapi`, which constructs the use case with nil to
+same variable. A served route never has a nil runner — `cmd/hump/main.go` builds one whenever it
+serves the web UI (`!opts.Cleanup && opts.WebPort != nil`). The nil path exists for `cmd/openapi`, which constructs the use case with nil to
 register the route, and for tests.
 
 ## Request

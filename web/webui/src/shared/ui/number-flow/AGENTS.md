@@ -45,8 +45,9 @@ import { NumberFlow } from '@/shared/ui/number-flow'
 | `latency` | milliseconds | `ms` rounded below 1000, otherwise seconds with 2 fraction digits and `s` |
 | `duration` | seconds | delegated to `DurationFlow` |
 
-The scalar kinds mirror the string formatters in `@/shared/utils` (`scaleBytes`, `scaleLatency`),
-so an animated value reads the same as a formatted one.
+The scalar kinds mirror the string formatters in `@/shared/utils` (`formatBytes`, `formatLatency`),
+so an animated value reads the same as a formatted one. `bytes` and `latency` scale through
+`scaleBytes` / `scaleLatency`, which return `{ value, suffix, fractionDigits }` instead of a string.
 
 ### DurationFlow (internal)
 

@@ -2,7 +2,10 @@
 
 Three independent packages and no code at this level: logging, health probes and the Prometheus
 registry. `cmd/hump/main.go` builds the health and metric objects once and hands them to the
-adapters; `log` is imported by nearly every package in the repository.
+adapters. `log` is imported directly by 16 of the module's 51 packages: `cmd/hump`,
+`internal/controller`, both `processing` use cases, nine of the eleven adapter packages (all but
+`adapter/sink` and `adapter/sink/http`), `pkg/app`, `pkg/app/shutdown` and `pkg/middleware`.
+`domain`, the ports, `config` and the `webui` use cases do not import it.
 
 ## Layout
 

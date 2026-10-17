@@ -57,7 +57,8 @@ The returned error covers what is known before the counting starts: an invalid f
 rough planner estimate, then the exact count, and closes. A failed estimate arrives as a
 `RowCount` with `Error` set, not as a second return value, and ends the stream; a failed exact
 count is **dropped silently**, so the rough element may be the only one. A consumer has to read
-until the channel closes, prefer the non-`Rough` element, and cope with zero or one elements.
+until the channel closes, prefer the non-`Rough` element, and cope with one or two elements: a lone error element, a
+lone rough one, or rough then exact.
 
 ## Errors
 

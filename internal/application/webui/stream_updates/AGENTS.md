@@ -19,7 +19,11 @@ client is what turns the collectors on.**
 `metrics_collector` and `operations_collector` are idle by default: no scrape loop, no ring, no
 cost. They wake on `Connect` and go idle again some time after the last `Disconnect`. **Nothing
 else in the web UI calls `Connect`.** `/api/metrics` and `/api/operations` only read, so without an
-open `/api/live` they answer zeros and an empty page. See "Idle by default" in
+open `/api/live` everything scraped is empty: `/api/metrics` returns no `points`, zero counts and
+no `p95` in `tables`, and zero `operations` with no `success` or `p95` in `sinks`, and
+`/api/operations` returns an empty page. `connections[].success` and `failure` are the exception.
+The pipeline pushes them through `Record` whether or not the collector is active, so they keep
+counting. See "Idle by default" in
 `adapter/metrics_collector/AGENTS.md` and "Nothing at all until a client connects" in
 `adapter/operations_collector/AGENTS.md`.
 
@@ -64,8 +68,9 @@ estimate, rounded down (`progress` in `usecase.go`). It is 0 outside `processing
 estimate is unknown — the runner estimates before it reads, and zeroes the estimates when it
 finishes. 100 can show briefly, between the last row and the run turning `done`.
 
-The runner publishes up to five times a second; the handler forwards a state only when its
-rendered event differs from the last one sent, which is the whole dedupe. Do not move the
+The runner throttles per-row progress to five updates a second; everything else (start, estimates,
+a table starting or finishing, the end of the run) publishes at once. The handler forwards a state only when its rendered event differs from the last
+one sent, which is the whole dedupe. Do not move the
 comparison to the raw `State` — that changes on every row.
 
 ## Changing an event touches two places
@@ -87,10 +92,12 @@ A closed **snapshot** channel is not one of them: the runner shuts down at the s
 handler just sets its channel to nil and leaves ending the stream to the feed.
 
 Every dependency may be nil, each guarded on its own. A nil stream or runner yields a **nil
-channel**, which blocks forever, so the handler sends `welcome` and an `idle` snapshot and then
-waits on the context alone. As wired today, `cmd/hump/main.go` builds the first three whenever the
-web port is set, so a served route sees none of them nil — the field comments tying nil to
-"telemetry disabled" do not describe the current wiring — and the runner whenever the process is
+channel**, which blocks forever and silences only that case: the other source's events still
+arrive. The handler always sends `welcome` and the initial snapshot (`idle` with a nil runner);
+with both nil it then waits on the context alone. As wired today, `cmd/hump/main.go` builds the first three whenever the
+web port is set, so a served route sees none of them nil — the `metrics` field comment tying nil
+to "telemetry disabled" does not describe the current wiring (`operations` and `stream` say "web
+UI disabled", the runner says cleanup mode) — and the runner whenever the process is
 not in cleanup mode and the web port is set. The nil paths are real for `cmd/openapi`, which
 constructs the use case with four nils to register the route, and for tests.
 

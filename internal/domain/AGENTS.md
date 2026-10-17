@@ -1,8 +1,9 @@
 # domain — how this package hangs together
 
 The vocabulary every other layer shares: what a change event is made of. Named types and
-constants only — no behaviour, no I/O, no errors. `config`, every port, every adapter, the
-application layer and `cmd/hump` import it; it imports nothing back. The production files have
+constants only — no business logic, no I/O, no errors; the one set of methods is
+`UnavailableValue`'s marker and serializers (see below). `config`, `cmd/hump` and the ports,
+adapters and use cases that handle change data import it; it imports nothing back. The production files have
 no imports at all, and that is the invariant to keep: a type that needs a project or third-party
 import belongs in a port or an adapter. (`unavailable_test.go` imports `pkg/template` and
 `goccy/go-yaml`, which is fine — tests only.)
@@ -20,9 +21,10 @@ import belongs in a port or an adapter. (`unavailable_test.go` imports `pkg/temp
 | `delivery_status.go` | `DeliveryStatus` and its constants |
 | `replica_identity.go` | `ReplicaIdentity` and its constants |
 
-One concept per file, named after it. Together these are the fields of `port/sink.SinkContext`,
-which is what a template sees as `.Operation`, `.Database`, `.Schema`, `.Table`, `.Headers`,
-`.Prev`, `.Next`.
+One concept per file, named after it. `OperationType`, `DbName`, `TableSchema`, `TableName`,
+`Headers` and `DbRecord` are the field types of `port/sink.SinkContext`, which is what a template
+sees as `.Operation`, `.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next`.
+`DeliveryStatus`, `ReplicaIdentity` and `TableIdentifier` are not part of it.
 
 ## The string values are wire formats
 
@@ -39,8 +41,9 @@ Renaming a value is a breaking change to config files, dashboards and templates,
 refactor. The allowed sets are also repeated as struct tags, which nothing derives from the
 constants: `oneof=insert update delete truncate` in `config/sink/config.go`,
 `enum:"insert,update,delete,truncate"` in `webui/get_config/dto.go` and
-`webui/get_operations/dto.go`, and
-`oneof=full unmanaged` in `config/config.go`. Adding a constant means editing those too.
+`webui/get_operations/dto.go`, `enum:"success,failure"` (no `retry`) in
+`webui/get_operations/dto.go`, and `oneof=full unmanaged` in `config/config.go`. Adding a
+constant means editing those too.
 
 `OperationTypes` is both the default (a sink with no `operations:` gets a clone of it) and the
 canonical order (`get_config` sorts a union of operations by it). A new operation type has to
@@ -76,7 +79,8 @@ interface. That method is the whole link between the two — do not rename or re
 `unavailable_test.go` is the lock on user-visible behaviour, through real templates: the value
 is empty for `empty` and `coalesce`, equal to `""` for `eq`/`ne`, detectable only by
 `unavailable` — and `default` does **not** replace it (`{{ .Next.blob | default "n/a" }}`
-renders `""`). README and `docs/template.md` document the same table; change them together.
+renders `""`). README and `docs/template.md` describe the same behaviour in prose; change them
+together.
 
 ## Tables
 

@@ -46,8 +46,9 @@ whatever order the config listed them in — `TestConfigCollapsesSinksAndTargets
 ## Things that will bite
 
 - **Lists are never nil.** `Sinks` and `Tables` are allocated even when empty, and the controller's
-  `configSinks` / `configTargets` do the same: the fields are required in the schema, and a JSON
-  `null` fails the generated client's validation.
+  `configSinks` / `configTargets` do the same, so the client gets `[]`, never `null`. The
+  generated zod schema marks these arrays `.nullable()`, so a `null` would still pass validation;
+  the code does not say why it allocates.
 - **`Config()` is the one use case here that does not guard a nil dependency.** `cmd/openapi`
   builds it with a nil database to register the route and never invokes the handler; calling
   `Config()` on that instance panics on `uc.db.GetDbHost()`.

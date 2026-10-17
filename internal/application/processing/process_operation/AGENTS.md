@@ -74,14 +74,16 @@ WithFailureMode → WithStatus → withOperation ─┬─ plain:  WithRetry →
 The order is the design, and each position has a reason:
 
 - **`WithTimeout` innermost** — the timeout is per attempt (`retry.attemptTimeout`, 10s by
-  default), not per delivery. Its `context.WithTimeout` is the one allocation every attempt pays.
+  default), not per delivery. Its `context.WithTimeout` is the binding's only source of
+  allocations, four per attempt at the time of writing (`BenchmarkBindingProcessWithoutLog`).
 - **`withAttempt` around the timeout** — so a deadline is recorded as that attempt's error and the
   attempt's full duration is measured.
 - **`WithRetry` around both** — up to `retry.maxAttempts` (5 by default), exponential backoff
   1s → 30s with full jitter. It retries on **any** non-nil error; `sink.ErrSinkPermanent` is not
   consulted (see `adapter/sink/AGENTS.md`). Its stop channel is `shutdown.Draining()`: a drain that
   starts mid-backoff cuts the pause short for one immediate last attempt, and a failure after the
-  drain has started ends the loop with `ErrRetryAborted` wrapping the attempt's error.
+  drain has started ends the loop with `ErrRetryAborted` wrapping the attempt's error — if another
+  attempt remains. A failure on the last attempt comes back bare, so `failure: skip` swallows it.
 - **`withOperation` outside the retry loop** — so it sees the terminal error and writes one record
   per delivery rather than one per attempt.
 - **`WithStatus` outside `withOperation`** — so the counters and the log entry describe the same
@@ -124,8 +126,8 @@ both are nil-able:
 
 `main.go` constructs both only when the web UI port is set, and passes them as port-typed
 variables that stay nil otherwise. A nil interface converted to another interface stays nil, which
-is what `b.observer == nil` and `b.log == nil` rely on (`TestBindingSkipsRecordWithoutObserver`).
-Never hand in a typed nil pointer.
+is what `b.observer == nil` and `b.log == nil` rely on. `TestBindingSkipsRecordWithoutObserver`
+pins it for `observer` only; no test covers `log`. Never hand in a typed nil pointer.
 
 ## The operations log path
 
@@ -148,9 +150,11 @@ binding, reused so a logged delivery allocates nothing of its own.
   attempt's status is only knowable once the loop is over: a failed one is `retry` unless it is the
   last attempt of a failed delivery. `Retries` is attempts minus one.
 - `Record` **swaps buffers** with the collector: it keeps `Payload`, `Metadata` and `Attempts` and
-  hands back the ones it held before. `rebind` re-points the capture at what came back. Skip it and
-  the next delivery appends into the record the ring already stored
-  (`TestBindingRebindsCaptureAfterRecord`).
+  hands back the ones it held before. `rebind` re-points the capture's `Payload` and `Metadata` at
+  what came back. Skip it and, with the real collector, the next delivery appends into the record
+  the ring already stored. No test catches a missing rebind: `fakeOperationLog` deep-copies
+  `Payload`, `Attempts` and `Metadata` before storing them, so
+  `TestBindingRebindsCaptureAfterRecord` still passes without the call.
 
 `Target` starts as the configured target and is overwritten by `capture.Target` when the sink
 reports the rendered one; `TargetKey` always stays the configured one, because that is what the
@@ -173,7 +177,8 @@ and normally no batch is open. `Shutdown` takes the pool mutex that `BeginBatch`
 and `accepts`. `operation_log_test.go` drives a whole chain through `newBinding` with a scripted
 sink: no record and no capture while disconnected, one record per delivery whatever the retries,
 the attempt status matrix, the capture filled on a failed delivery, `TargetKey` against the
-rendered `Target`, the terminal error, the rebind, buffer reuse across a hundred deliveries, and
+rendered `Target`, the terminal error, two deliveries in a row (which does not pin the rebind, see
+above), buffer reuse across a hundred deliveries, and
 the counters still firing while logging.
 
 Nothing tests `UseCase.Process` — the fan-out, the pool sizing and the error precedence are
@@ -190,4 +195,6 @@ is not allocation free by design.
 `errBoom`. `fakeOperationLog` copies what it is handed, because the real collector swaps the
 buffers away, and with `recycle` hands buffers back like a ring with populated slots;
 `benchOperationLog` swaps and keeps nothing. Helpers live below the last test function — see the
-`go` skill — except `fakeObserver`, which sits in `binding_test.go` right after the test that uses it.
+`go` skill — except `fakeObserver`, which sits in `binding_test.go` right after
+`TestBindingRecordsEveryOutcome`. `TestBindingKeepsCountersWhileLogging` in `operation_log_test.go`
+uses it too.

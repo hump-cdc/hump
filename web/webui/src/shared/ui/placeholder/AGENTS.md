@@ -33,7 +33,7 @@ content.
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `icon` | `ReactNode` | — | shown in the round badge; an `svg` inside is sized to `size-4`. No badge without it |
-| `title` | `ReactNode` | — | the main line |
+| `title` | `ReactNode` | required | the main line |
 | `description` | `ReactNode` | — | the smaller line under the title |
 
 `NoPayloadPlaceholder` — the `Placeholder` props without `icon`, `title` and `description`.

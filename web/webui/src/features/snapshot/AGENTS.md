@@ -24,7 +24,7 @@ There are no tests or stories in this slice.
 | Path | Role |
 |---|---|
 | `index.ts` | the public contract: `Snapshot` |
-| `model/types.ts` | view types: `SnapshotState` (the union), `Table`/`Sink` of a run, `SnapshotTable`, `TableEstimate` |
+| `model/types.ts` | view types: `SnapshotState` (the union), `Table`/`Sink`/`TableStatus` of a run, `SnapshotTable` with its `SnapshotSink`/`SnapshotColumn`, `TableEstimate`, `SnapshotAggregate`, `SinkBreakdown` |
 | `model/snapshot.ts` | the run stream (`useSnapshotState`) and the `useStartSnapshot` / `useStopSnapshot` mutations |
 | `model/tables.ts` | the start form: `useTables` store, `useAvailableTables`, `useSelectedTables`, `useTablesEstimate` |
 | `model/selectors.ts` | pure helpers: `aggregate` (totals, percent), `snapshotQuery` (SQL text shown in the tooltip) |
@@ -72,9 +72,12 @@ cache. Do not accumulate.
 `ui/snapshot.tsx` keeps two `Record<SnapshotState['state'], ReactNode>` maps, `views` and
 `actionBars`. `Snapshot` renders `null` until the first event arrives.
 
-The views are prop-less module-level elements; they get the state from `SwitchViewValueContext`
+The views and action bars are prop-less module-level elements. `IdleView`, `ProcessingView` and
+`DoneView` only compose their children; the children get the state from `SwitchViewValueContext`
 via `useSwitchViewValue<SnapshotState>()` and start with `if (data?.state !== '<own>') return
-null`. This is what the cross-fade needs: on a state change `useSwitchAnimation` keeps the
+null`. Those are `ProcessingOverall`, `ProcessingStats`, `ProcessingTables`, `DoneInfo`,
+`DoneStats`, `DoneTables`, `DoneSinks`, plus `DoneActionBar`. `ProcessingActionBar` and
+`IdleActionBar` do not read the context. This is what the cross-fade needs: on a state change `useSwitchAnimation` keeps the
 previous view mounted until its exit animation ends, and `SnapshotStates` remembers the last
 state object per state name (`shown`) to feed the leaving view. So a processing view fades out
 over its final numbers rather than over a `done` payload it cannot render. A new component under

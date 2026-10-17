@@ -54,10 +54,11 @@ This is the thing to get right before touching `snapshot.go`.
   since the previous scrape, folded into `Truncate`d buckets, `pointsMax` of them per width. A
   series seen for the first time only records a baseline, so the first scrape after activation
   contributes nothing but gauges.
-- **`Tables`, `Sinks` and `Connections` are lifetime counts.** They report the absolute counter
-  readings of the most recent scrape (`scraper.latest`), so they do not depend on the requested
-  duration. `latest` is rebuilt wholesale on every scrape, which is how a series the registry
-  stopped exposing disappears.
+- **`Tables`, `Sinks` and `Connections` are lifetime counts**, so they do not depend on the
+  requested duration. `Tables` and `Sinks` report the absolute counter readings of the most
+  recent scrape (`scraper.latest`); `latest` is rebuilt wholesale on every scrape, which is how
+  a series the registry stopped exposing disappears. `Connections` is not scraped: `edges()`
+  reads `c.recorded`, which `Record` fills (see below).
 - **`p95` is windowed anyway**, because a lifetime latency quantile says nothing useful. It
   comes from `series.total()` — every retained bucket of the requested width merged into one
   aggregate — and is reported in **milliseconds**, while the histograms observe seconds.
@@ -83,8 +84,10 @@ Four caveats that are properties of the source metrics, not of this package:
 - **Row counts miss failed rows.** `postgres.observeRow` only fires when the handler returned
   `nil`, so a row whose delivery ultimately failed never reaches `Tables`. Partitions also roll
   up into the configured parent, so `Tables` keys are configured tables, not relations.
-- **Table `p95` is end to end.** `observeRow` times decoding plus `UseCase.Process`, which waits
-  for every sink of the row, retries included — not a single sink write.
+- **Table `p95` is end to end.** For WAL rows `observeRow` times decoding plus
+  `UseCase.Process`, which waits for every sink of the row, retries included — not a single
+  sink write. For snapshot rows it times only the `onRow` callback, after the COPY parser has
+  already decoded the row.
 - **Sink `p95` is per attempt.** `OnDuration` is called inside the retry loop
   (`pkg/resilience/retry.go`), once per attempt including the ones that failed — the metric's
   own help text claims otherwise.

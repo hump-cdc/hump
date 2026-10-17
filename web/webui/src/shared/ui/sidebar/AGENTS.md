@@ -31,6 +31,8 @@ Constants, also exported: `SIDEBAR_WIDTH` (`16rem`), `SIDEBAR_WIDTH_MOBILE` (`18
 (`b`).
 
 Every part forwards the props of its HTML element and sets `data-slot` (most also `data-sidebar`).
+The exception is `Sidebar` on mobile: it spreads the rest props onto `Sheet` (a Dialog root that
+renders no element) and drops `className`, so they never reach the DOM.
 
 ## Usage
 
@@ -98,7 +100,7 @@ import {
 | `open` | `boolean` | — | controlled desktop state |
 | `onOpenChange` | `(open: boolean) => void` | — | called instead of the internal setter |
 
-`Sidebar` — `div` attributes plus:
+`Sidebar` — `div` attributes (desktop only; lost on mobile, see above) plus:
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
@@ -161,7 +163,8 @@ Collapsed, every size becomes a `size-9` square with the icon centred.
 | State | Tokens |
 |---|---|
 | rest | `text-ink-muted`; icon `text-ink-subtle` |
-| hover, pressed | `bg-surface-2`, `text-ink` |
+| hover | `bg-surface-2`, `text-ink` |
+| pressed (`:active`) | `bg-surface-2` |
 | active (`data-active=true`) | `bg-primary-soft`, `text-primary`, `font-medium`; icon `text-primary`; hover keeps the same colours |
 | focus-visible | `ring-2 ring-primary` |
 | disabled / `aria-disabled` | `opacity-50`, `pointer-events-none` |

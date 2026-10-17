@@ -32,18 +32,21 @@ Outside the layers:
 
 Principles:
 
-- **Use cases depend on ports, never on adapters.** Nothing outside `cmd/hump` imports
-  `internal/adapter`; `cmd/hump` builds the adapters and injects them as port interfaces.
+- **Use cases depend on ports, never on adapters.** No production code outside `cmd/hump`
+  imports `internal/adapter` (tests may, see below); `cmd/hump` builds the adapters and injects them as port interfaces.
 - **No sideways imports.** A use case does not import another use case, a port does not
   import another port, an adapter does not import another adapter. The one exception is a
   registry over its own subpackages (`adapter/sink` → `adapter/sink/kafka` etc.).
 - **Nothing imports `controller`** except `cmd/hump` and `cmd/openapi` (which builds it only to
   write the OpenAPI spec). Tests in `controller` also import `adapter`, `config` and `domain`.
 - **A use case package is self-contained**: `usecase.go` holds the logic and its own result
-  types, `controller.go` the handler that calls it, `dto.go` the wire types (the last two where
-  the use case has a transport; `processing/cleanup_database` has neither). Transport types stay
-  out of `usecase.go`.
+  types, `controller.go` the handler that calls it, `dto.go` the wire types (`controller.go` where
+  the use case has a transport, `dto.go` where it has wire types; `processing/cleanup_database`
+  has neither, `processing/process_operation` and `webui/stop_snapshot` have no `dto.go`).
+  Transport types stay out of `usecase.go`.
 - **A new external system** means a port in `internal/port` first, then its adapter, then the
   wiring in `cmd/hump`.
 
-Packages under `internal/` carry their own `AGENTS.md` with the details.
+Packages under `internal/` carry their own `AGENTS.md` with the details. The sink packages
+(`internal/adapter/sink/{http,kafka,nats,rabbitmq,rabbitmq_stream}`) have none; they are covered
+by `internal/adapter/sink/AGENTS.md`.

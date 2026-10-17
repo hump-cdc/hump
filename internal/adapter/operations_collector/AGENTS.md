@@ -9,8 +9,8 @@ fixed capacity, so the answer is always about the newest traffic and the memory 
 
 | File | Role |
 |---|---|
-| `operations_collector.go` | the `Collector`: options, lifecycle, `Connected`, `Record`, `Dump` |
-| `ring.go` | the ring itself — `write` with the buffer swap, truncation, `page` |
+| `operations_collector.go` | the `Collector`: defaults and options (`With*`), lifecycle (`New`, `Connect`/`Disconnect`, the gate callbacks `activate`/`stop`, the shutdown hook `onShutdown`/`close`), `Connected`, `Record`, `Dump`, `Search` |
+| `ring.go` | the ring itself: `newRing`, `write` with the buffer swap and truncation, `total`, `page`; search and filter matching (`search`, the newest-first `index`, `matcher` with `newMatcher`/`matches`/`matchesTable`/`matchesText`, the case-folding helpers `containsFold`/`matchesAt`/`lowerASCII`); `clone`, `clamp` |
 | `logger.go` | the package logger scope |
 
 ## Nothing at all until a client connects
@@ -47,8 +47,11 @@ record with `Status: success`, `Retries: 2` and attempts `retry, retry, success`
 
 `Record.Error` is the terminal error of the retry loop, and it is empty whenever the delivery
 ended in a success — including one that took retries to get there, whose failures stay on the
-attempts. It is not always the last attempt's text: an abort mid-backoff wraps it in
-`ErrRetryAborted`, which is the more useful string of the two.
+attempts. It is not always the last attempt's text: a failure followed by a backoff that finds
+the stop already closed is wrapped in `ErrRetryAborted`, which is the more useful string of the
+two. A stop that closes during the wait instead cuts it short and runs one more attempt at once;
+that attempt's error is wrapped only if attempts remain, and comes back bare on the last one
+(`pkg/resilience/retry.go`).
 
 An attempt's status is only knowable once the retry loop is done — a failed attempt is a `retry`
 unless it turns out to be the last — so `process_operation.operation.end` labels them all at the
@@ -66,13 +69,17 @@ those on the next delivery, so `Record` itself allocates nothing at all in stead
 every slot has been written once, the buffers handed back are the zero value's nil ones.
 
 Scope that claim to `Record`. The **delivery** path, while connected, is not allocation free:
-every `Metadata` entry concatenates its `header.` prefix, and HTTP formats its status code.
-Those are the price of the one-map-per-record shape and cannot be avoided under it. The measured
-cost is one allocation per header over the disconnected baseline —
-`BenchmarkBindingProcessLogged` against `BenchmarkBindingProcessWithoutLog` — and none of it is
-paid when nobody is watching.
+the sinks allocate while filling `Metadata`, converting values to strings and adding the `header.`
+prefix. For example, Kafka copies the record key and each header value, RabbitMQ runs every header
+through `fmt.Sprint`, NATS formats a JetStream sequence of 100 or more, and HTTP its status code.
+That is the price of the one-map-per-record shape and cannot be avoided under it, and none of it
+is paid when nobody is watching. No benchmark measures that per-header cost: the `fakeSink` behind
+`BenchmarkBindingProcessLogged` and `BenchmarkBindingProcessWithoutLog` writes no `header.*` entry.
+Logged costs one allocation more than WithoutLog (5 against 4 allocs/op at the time of writing),
+and that one is the fake's own `capture.Target` concatenation.
 
-Two consequences a caller must respect, both stated on `port.Collector.Record`:
+Two consequences a caller must respect, stated on `port.Collector.Record` and `Dump`
+respectively:
 
 - the caller **must not retain** anything it passed in, and must re-point at what came back —
   `process_operation.operation.rebind` is exactly that, and without it the second delivery
@@ -148,9 +155,10 @@ pool's one-delivery-per-binding invariant is ever broken — such a delivery is 
 just not logged.
 
 The sink adapters fill a `sink.Capture` **after publishing, on both the success and the error
-path**: a failed delivery is the one whose request a reader most wants. Headers and everything
-else sink-specific go into the single `Metadata` map under a `header.` prefix, so a new sink type
-never needs the port widened.
+path**: a failed delivery is the one whose request a reader most wants. Everything sink-specific goes
+into the single `Metadata` map, so a new sink type never needs the port widened. Headers are
+keyed `header.<name>`; the other entries are unprefixed: `method` and `status` (HTTP), `key`
+(Kafka), `stream` and `sequence` (NATS JetStream), `routingKey` (RabbitMQ).
 
 ## Tests
 

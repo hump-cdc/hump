@@ -30,7 +30,8 @@ Callers that can be reached from more than one goroutine serialise themselves.
 and snapshot never overlap because a snapshot pauses WAL delivery.
 
 `T` is the payload every task receives. `Submit` takes it by value alongside the function, so the
-hot path passes a method value and a pointer instead of allocating a closure per task.
+hot path (`process_operation`) passes `binding.fn`, a function built once per binding and
+stored in a struct field, plus a `*sink.SinkContext`, instead of allocating a closure per task.
 
 ## `mu` is held across the whole batch
 
@@ -62,8 +63,8 @@ What counts as a task error:
 
 - the function returning one;
 - a **panic**, recovered into `*WorkerPanicError` with the stack — the worker survives;
-- the task's context already being done when a worker picks it up. The function is not called, and
-  the batch fails with the context's error.
+- the task's context already being done when a worker picks it up. The function is not called, the
+  context's error goes to `Errors()`, and `FlushBatch` returns `ErrWorkerFailed`.
 
 ## Backpressure
 
@@ -102,5 +103,6 @@ after changing the locking.
 `worker_pool_bench_test.go` benchmarks the pool, and `worker_pool_baseline_bench_test.go` runs the
 same workload on a bare `WaitGroup`, an `errgroup` and a semaphore for comparison.
 
-Helpers live below the last test function — see the `go` skill. The exception is `benchPayload` in
-`worker_pool_bench_test.go`, a type declared above `BenchmarkWorkerPool`.
+Helpers live below the last test function — see the `go` skill. The exceptions are in
+`worker_pool_bench_test.go`: the `sinkCounts` and `taskDurations` vars and the `benchPayload` type,
+declared above `BenchmarkWorkerPool`.

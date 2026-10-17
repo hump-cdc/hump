@@ -82,9 +82,11 @@ flowRef.current?.animate('t-users', 's-kafka', 'orders')
 - Ghost nodes are not selectable.
 - Edges are drawn above every node (`zIndex` 1001), so they stay visible over the sink card.
 - Edge weight is the caller's: put `opacity` / `strokeWidth` into each edge's `style`.
-- The right column is stacked from height constants in `flow-detailed.consts.ts` (`TABLE_HEIGHT`,
-  `SINK_CHROME_HEIGHT`, `TARGET_ROW_HEIGHT`, `TARGET_GAP`, `GHOST_HEIGHT`, …), not from measured sizes:
-  they must match the markup in `node.sink.tsx`, `node.sink.target.tsx` and `node.ghost.tsx`.
+- Both columns are stacked from height constants in `flow-detailed.consts.ts`, not from measured
+  sizes. `TABLE_HEIGHT` and `TABLE_GAP` lay out the left (tables) column and must match
+  `@/shared/ui/flow`'s `node.table.tsx`. The right column uses `SINK_CHROME_HEIGHT`,
+  `TARGET_ROW_HEIGHT`, `TARGET_GAP`, `GHOST_HEIGHT`, …, which must match the markup in
+  `node.sink.tsx`, `node.sink.target.tsx` and `node.ghost.tsx`.
 - The parent must have a height, and a `TooltipProvider` must sit above (see `@/shared/ui/flow`).
 
 ## Props

@@ -26,7 +26,8 @@ this file is about what the code does around it.
 | `sink/templ/*.tmpl` | embedded default templates |
 
 `decoder` and `errors` exist as packages only to break the cycle: `config` imports `config/sink`,
-and both need the validator and the sentinel.
+and both need the validator; `config/sink` returns the sentinel, `config` reaches it only in
+tests.
 
 ## `Parse` is two passes over two different documents
 
@@ -43,8 +44,10 @@ gone, presets inlined, `sinks` dropped, sequences re-indented. An unknown field 
 is reported at the table that uses it, on a line the user's file does not have. The doc comment
 on `Parse` does not say so.
 
-Any other top-level key is carried through `expand` untouched and then rejected by strict mode
-(`TestExpand_PreservesTopLevelOrderAndExtraKeys`, `TestParse_StrictRejectsUnknownField`).
+Any other top-level key is carried through `expand` untouched and then rejected by strict mode.
+`TestExpand_PreservesTopLevelOrderAndExtraKeys` covers only the first half: `expand` keeps
+`extra: keep-me`. No test passes an unknown top-level key through `Parse`;
+`TestParse_StrictRejectsUnknownField` puts `bogus: 1` inside a table entry.
 
 ## What `expand` does, in order
 
@@ -74,7 +77,12 @@ extra keys are appended. That one rule explains all of the following.
 Two properties of the merge that are easy to get wrong:
 
 - The key is the **literal** `schema` string. `table: x` and `schema: public, table: x` are two
-  tables here, although `adapter/postgres` and `adapter/snapshot` both read `""` as `public`.
+  tables here. Nothing downstream maps `""` to `public` either. In `adapter/postgres` only the
+  `qualifiedTableName` paths (row counts, snapshot reads) leave the name unqualified and let
+  `search_path` resolve it. The table-metadata lookup behind the publication bootstrap and the
+  introspector (`getTablesMetadata`) compares `relnamespace::regnamespace::text` with the schema
+  literally, so an empty schema matches no table and ends in `ErrTablesNotFound`. That is traced in
+  the code, not tested against a server. `adapter/snapshot` prints the name bare in errors.
 - Sinks are deduplicated by their canonical YAML **before defaults are applied**. Two entries
   that differ only by a spelled-out default stay two sinks, and every row is delivered twice.
 
@@ -100,8 +108,12 @@ func (t *T) UnmarshalYAML(node ast.Node) error {
 
 `decoder.Decode` is `yaml.NodeToValue` with `yaml.Strict()` and the validator, which is what
 turns a `validate:"…"` failure into a token-anchored `yaml.Error`. A nested struct **without**
-its own `UnmarshalYAML` (`RabbitMQExchange`, `RabbitMQStreamConfig`, `NatsStream`) is decoded
-and validated by its parent and gets its defaults in the parent's `setDefaults`.
+its own `UnmarshalYAML` (`RabbitMQExchange`, `RabbitMQProperties`, `RabbitMQStreamConfig`,
+`NatsStream`) is decoded and validated by its parent. `RabbitMQExchange`, `RabbitMQProperties`
+(`messageId`, `appId`, `contentType`) and `RabbitMQStreamConfig` get their defaults in the
+parent's `setDefaults`; `NatsStream` gets none (`stream` is required). The inline-embedded
+`NatsCommon` and `RabbitMQCommon` have no `UnmarshalYAML` either; the parent's `UnmarshalYAML`
+calls their `setDefaults` / `SetDefaults` before its own.
 
 Defaults are applied **after** validation, so `omitempty` on every optional field is what lets
 an absent value through; the default itself is never validated. `Config.setDefaults` allocates
@@ -131,8 +143,11 @@ package.
 `*KafkaSink`, `*HTTPSink` and the rest implement `port/sink.Definition`, and `adapter/sink/sink.go`
 type-switches on these exact pointer types and passes the struct by value into the sink
 subpackage. There is no mapping layer: a field added here is immediately what the adapter reads,
-and a field renamed here is an adapter change. `Type`, `DisplayName` and `Metadata` are called on
-typed-nil receivers in tests (`TestSinkMetadataNilReceiver`) and must keep their nil guards.
+and a field renamed here is an adapter change. Tests call all three methods on typed-nil receivers:
+`DisplayName` in `TestSinkTypeAndDisplayName`, `Metadata` (and `Type`, for the subtest name) in
+`TestSinkMetadataNilReceiver`. `DisplayName` and `Metadata` must keep their `s == nil` guards.
+`Type` has no guard and needs none: its receiver is unnamed (`func (*KafkaSink) Type()`), so it
+never dereferences it.
 
 `Metadata(ctx)` returns `(host, target)` and discards render errors. Five callers must produce
 identical strings from it — `topology()` in `main.go`, `process_operation`, `get_config`,
@@ -145,7 +160,8 @@ Nothing derives one list from another; skipping a step compiles.
 
 1. `port/sink/sink_type.go`: the constant **and** `SinkTypes` — the latter is what makes the key
    a discriminator, and what `nodeWithoutSinkTypes` strips.
-2. `sink/config_<type>.go`: struct, `UnmarshalYAML` + `setDefaults`, `Type`, `DisplayName`,
+2. `sink/config_<type>.go`: struct, `UnmarshalYAML` + `setDefaults` (a type with no defaults
+   of its own, like `NatsCoreSink`, calls only the common struct's), `Type`, `DisplayName`,
    `Metadata`, `CrossValidate`.
 3. `sink/config_sinks.go`: a `case` in `unmarshalSink` (missing → falls to the "exactly one of"
    error) and an entry in `crossValidators`.
@@ -166,7 +182,10 @@ divergence wrapped in `ErrCrossValidate`.
   source**. Two templates that render to the same exchange are not compared; one template that
   renders to different exchanges per table is compared as if it were one. JetStream's
   `stream.name` is a plain string, so there the check is exact.
-- Values are compared **after defaults**, so an explicit default and an omitted one agree.
+- Values are compared **after defaults**, so an explicit default and an omitted one agree —
+  except JetStream `retention` and `storage`: `NatsJetStreamSink.setDefaults` does not fill them,
+  so they are compared raw and `retention: limits` next to an omitted `retention` fails as
+  divergent.
 - JetStream compares `subjects` (order-insensitive), `retention`, `storage`. RabbitMQ compares
   exchange `type`, `durable`, `autoDelete`, `arguments` (as sorted JSON). RabbitMQ Streams
   compares `maxAge`, `maxLengthBytes`, `maxSegmentSizeBytes`. `mode` is not compared in any of them.
@@ -225,13 +244,19 @@ trailing newline in a `.tmpl` becomes part of every topic name or header value.
 
 ## Tests
 
-- `parser_test.go`, `config_test.go`, `operations_test.go` drive everything through `Parse` with
-  inline YAML — the behaviour a user sees. A new key or default gets a case there.
+- `parser_test.go`, `config_test.go`, `operations_test.go` drive almost everything through
+  `Parse` with inline YAML — the behaviour a user sees. A new key or default gets a case there.
+  The exceptions build structs directly: `TestSink_TypeAndDisplayName`,
+  `TestSinkConfig_MarshalYAML_EmptyOmitsAll` (`yaml.Marshal(sinkcfg.Config{})`),
+  `TestConfiguration_ResolveAll`.
 - `expand_test.go` tests each pass on `yaml.MapSlice` values and compares the expanded YAML as
   text; `TestCanonicalYAML_StableForEquivalentMaps` is what the sink dedup relies on.
-- `sink/` tests are per concern across all sink types: `config_definition_test.go` (`Type`,
+- `sink/` tests are per concern across all sink types: `config_test.go` (the `Config` entry:
+  unmarshal per type, defaults, rejections, `MarshalYAML`, `CrossValidate`),
+  `config_definition_test.go` (`Type`,
   `DisplayName`, nil receivers), `config_metadata_test.go`, `config_cross_validate_test.go`,
   `config_nats_test.go` (the auth groups).
-- Not covered anywhere: the shallow preset override, duplicate preset names, a later duplicate
-  table entry filling an absent key, `""` vs `public`, the all-or-nothing headers, a
-  mapping-less document.
+- Not covered anywhere: the shallow preset override, duplicate preset names, `""` vs `public`,
+  the all-or-nothing headers, a mapping-less document. A later duplicate table entry filling an
+  absent key is covered only at unit level (`TestMergeTableEntries_NoSinksOnEither`), not
+  through `Parse`.

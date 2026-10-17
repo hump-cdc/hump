@@ -52,10 +52,11 @@ directly through `keys.queries.metrics(duration)` gives a `MetricsResponseBodyMo
 
 - **Counters are `bigint` at runtime.** The generated client parses responses with zod, which
   coerces `int64` fields to `bigint`, while the generated types say `number`. `toNumber` /
-  `toNumbers` exist for that: `bucketSeconds`, `delivered`, `failed`, `sinkDelivery`,
-  `sinkLatencyP95`, every `n`, `operations`, and a connection's `success` / `failure` go through
-  them. Floats (`throughput`, the gauges, the other `p95` fields, the `success` share) pass
-  straight through. A new integer field needs
+  `toNumbers` exist for that: `bucketSeconds`, `delivered`, `failed`, `sinkDelivery`, every `n`,
+  `operations`, and a connection's `success` / `failure` go through them. Floats (`throughput`,
+  the gauges, the other `p95` fields, the `success` share) pass straight through, except
+  `sinkLatencyP95`: a float map (`map[string]float64`, `z.number()`) that `toPoint` still runs
+  through `toNumbers`, a no-op for it. A new integer field needs
   the conversion even though TypeScript will not ask for it.
 - **The wire abbreviations stop here.** `i` / `u` / `d` / `t` become `insert` / `update` /
   `delete` / `truncate`, `n` becomes `count`, and the `tables` map becomes an array with the key
@@ -98,7 +99,7 @@ one per type and host, with their targets.
   schedule is the same for every duration.
 - **On live events**: `shared/state/invalidate.ts` invalidates the `['metrics']` prefix — every
   duration at once — for each live batch, and again with `refetchType: 'all'` after the stream
-  reconnects. `LiveUpdates` (`shared/live`, mounted in `app/providers.tsx`) drives both. That
+  reconnects. `LiveUpdates` (`shared/live`, mounted in `src/app/providers.tsx`) drives both. That
   prefix match is why the query key must stay `keys.queries.metrics(duration)`.
 
 `queryFn` passes the query's `signal` to the client and uses `throwOnError: true`, so a failed
@@ -106,7 +107,7 @@ request surfaces as the query's error. `staleTime` is 10 seconds.
 
 ## Tests
 
-`bun test`. `point` and `response` build wire models with zeros and empty collections, and the
-bigint cases cast `60n as unknown as number` to reproduce what the transformer hands over. `now`
-is a parameter of both `normalizeMetrics` and `refetchInterval` precisely so the tests need no
-clock mocking.
+`bun test`. `point` and `response` build wire models with zeros and empty collections
+(`response` leaves `points: null`), and the bigint cases cast `60n as unknown as number` to
+reproduce what the transformer hands over. `now` is a parameter of both `normalizeMetrics` and
+`refetchInterval` precisely so the tests need no clock mocking.

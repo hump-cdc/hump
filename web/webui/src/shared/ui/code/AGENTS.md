@@ -30,9 +30,9 @@ No HTML attributes pass through; only the props below.
 | `format` | `boolean` | `false` | Pretty-print JSON (2-space indent) and YAML (block style, 2-space indent, comments kept) before highlighting |
 | `className` | `string` | — | Wrapper class; sizing is the caller's job |
 
-Grammar detection, when `lang` is not set: JSON if the text parses as JSON (checked first, since
-JSON is also YAML); YAML if it parses without errors into a map or a list; otherwise plain text,
-bare scalars included. SQL is never detected — pass `lang="sql"`. `format` is ignored when `lang`
+Grammar detection, when `lang` is not set: JSON if the text parses as JSON, scalars such as `42`,
+`true` or `"x"` included (checked first, since JSON is also YAML); YAML if it parses without errors
+into a map or a list, so a bare YAML scalar (`hello`) is not YAML; otherwise plain text. SQL is never detected — pass `lang="sql"`. `format` is ignored when `lang`
 is set.
 
 ## Semantic styles

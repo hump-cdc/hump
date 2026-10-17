@@ -6,12 +6,20 @@ Rules for defining components in the UI kit. Follow them for every new component
 
 - Build on **shadcn/ui + Radix UI** primitives. Pick the Radix primitive that fits the
   component (e.g. `@radix-ui/react-slot`, `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`).
-  **If unsure which primitive is appropriate, ask before implementing.**
+  **If unsure which primitive is appropriate, ask before implementing.** Exceptions: `combobox/`
+  is built on Base UI (`@base-ui/react/combobox`), `where-input/` uses Base UI's popover
+  (`@base-ui/react/popover`) for its suggestion list and `prism-react-editor` for the editor, and
+  `charts/area-chart`, `charts/bar-chart` and `charts/chart` are built on `@tanstack/charts`
+  (`charts/progress-chart` is not). Other components wrap a library of their own: `flow`,
+  `flow-detailed` and `flow-summary` use `@xyflow/react`, `code` uses `@tanstack/highlight`,
+  `number-flow` uses `@number-flow/react`, `toast` uses `sonner`, and `data-table` uses
+  `@tanstack/react-table` with `@tanstack/react-virtual`.
 - Variants are defined with **`cva`** (`class-variance-authority`).
 - Compose class names with **`cn()`** from `@/shared/utils` (clsx + tailwind-merge).
 - Prefer standard Tailwind utilities over arbitrary values (`gap-2`, not `gap-[7px]`).
 - Use design-token utilities from `app/styles.css` (`bg-primary`, `text-ink-muted`,
-  `border-hairline-strong`, …); never raw hex.
+  `border-hairline-strong`, …); never raw hex. The one exception is `error/`: the terminal
+  window keeps fixed hex colours so it stays dark in both themes (see `error/AGENTS.md`).
 
 ## Folder structure
 
@@ -31,17 +39,31 @@ shared/ui/
   each chart lives in a subfolder (`area-chart`, `bar-chart`, `chart`, `progress-chart`) and is
   imported as `@/shared/ui/charts/<name>`. `charts/chart/` has no `chart.tsx`, only `chart-*`
   files. `error/` has no `error.tsx`: its main file is `error-terminal.tsx`.
+- `index.ts` re-exports with `export * from './<file>'`, one line per component or part file.
+  Exceptions: `elapsed-time`, `mark`, `toast`, `where-input` and `charts/chart` use named
+  exports; `multi-combo-box` adds `export type * from './multi-combo-box.types'`; `table` also
+  re-exports `./table.types` and adds `export type { TableVariant } from './table-context'`;
+  `data-table` also re-exports `./data-table.types`; `combobox` also re-exports
+  `./combobox.helpers`; `sidebar` also re-exports `./constants`.
 - Exported component: **PascalCase** (`FilterDropdown`).
 - Keep `cva` variants, the props `type`, and the component in one `.tsx` file. A larger
   component splits into several files, and each file holds the variants, props and component
   of its own part:
   - compound parts: `<component>-<part>.tsx` (`sheet/sheet-content.tsx`,
-    `tabs/tabs-trigger.tsx`; also `dropdown-menu`, `sidebar`, `table`, `tooltip`, `header`);
+    `tabs/tabs-trigger.tsx`; also `card`, `dropdown-menu`, `sidebar`, `table`, `tooltip`, `header`, `error`
+    (`error-line.tsx`, `error-prompt.tsx`) and `charts/chart` (`chart-*`));
   - internal pieces and non-component code: `<component>.<part>.ts(x)`
-    (`data-table/data-table.row.tsx`, `combobox/combobox.item.tsx`, `flow/flow.helpers.ts`,
-    `*.types.ts`, `*.consts.ts`);
-  - a few files use other names (`card/metric-card.tsx`, `flow/node.table.tsx`,
-    `sidebar/constants.ts`).
+    (`data-table/data-table.row.tsx`, `flow/flow.helpers.ts`, `*.types.ts`, `*.consts.ts`).
+    `combobox` is the exception: all its `combobox.<part>` files (`combobox.item.tsx` etc., plus
+    `combobox.helpers.ts`) are public, re-exported from `index.ts`. Most context files use the
+    hyphen form instead (`card/card-context.ts`, `table/table-context.ts`,
+    `sidebar/sidebar-context.tsx`, `charts/chart/chart-context.ts`), and so does the internal
+    `tabs/tabs-list-indicator.tsx`; `flow-detailed/flow-detailed.context.ts` keeps the dot form;
+  - the remaining files use other names: `card/{area-chart,bar-chart,info,metric}-card.tsx`,
+    `flow/{metric-hint,node.label,node.table,sink-icon}.tsx`, `flow/node.ts`,
+    `flow-detailed/node.{ghost,sink,sink.target}.tsx`, `flow-summary/node.sink.tsx`,
+    `number-flow/duration-flow.tsx`, `placeholder/no-payload-placeholder.tsx`,
+    `sidebar/constants.ts`.
 
   Only `data-table` keeps its component props type outside the `.tsx`: `DataTableProps<T>` is in
   `data-table.types.ts`.
@@ -53,8 +75,15 @@ shared/ui/
 ## Component rules
 
 - Component is a **`React.FC`** with a `type` props alias. Generic components cannot be an
-  `FC`: `DataTable` is a generic arrow function returning `ReactElement`, `TableRow` a generic
-  `function` returning `ReactNode`.
+  `FC`: `DataTable` is a generic arrow function returning `ReactElement` (its internal
+  `DataTableHeader`, `HeaderCell` and `ResizeGrip` are generic arrows returning `ReactNode`;
+  `DataTableRow` is a `memo` of a generic arrow, cast to `<T>(props) => ReactNode`),
+  `Table`, `TableRow` and `TableRowHeader` generic `function`s returning `ReactNode`. The flow
+  node configs `TableNode` (`flow/node.table.tsx`), `SinkNode` (`flow-detailed/node.sink.tsx`,
+  `flow-summary/node.sink.tsx`) and `GhostNode` (`flow-detailed/node.ghost.tsx`) are
+  `Object.assign((_props) => null, { flowNodeType })`: declarative elements that render nothing.
+  `Combobox` and `ComboboxValue` are not components of their own: they re-export Base UI's
+  `Combobox.Root` and `Combobox.Value`.
 - **Do not export** the `cva` variants object or the props type — keep them module-private.
   Exceptions: `DataTableProps<T>` (`data-table/data-table.types.ts`, re-exported from
   `index.ts`) and `SelectableProps` (`table/table-row.tsx`) are exported.
@@ -116,8 +145,11 @@ Infer the story shape from `button/button.stories.tsx`:
   real props, plus story-only fields (e.g. `label`, `icon`) when needed.
 - `meta.title` = `'<Group>/<Component>'` (see [Groups](#groups)); drive everything through
   `argTypes` + `args` and a single `render`.
-- Export one story `Default` with `name: '<Component>'` (so a single-story component
-  shows no extra nesting under its title).
+- Export one story `Default` whose `name` repeats the last segment of `meta.title`
+  (`'Actions/Button'` → `'Button'`), so a single-story component shows no extra nesting under its
+  title. Four stories use the PascalCase component name instead: `CopyButton`, `DropdownMenu`,
+  `OperationBadge`, `OperationStatusBadge`. `placeholder/placeholder.stories.tsx` also exports
+  `NoPayload` (`'No Payload'`) for `NoPayloadPlaceholder`.
 
 ### Groups
 
@@ -127,14 +159,14 @@ in `.storybook/preview.tsx`, which fixes the sidebar order of the groups.
 
 | Group | Holds |
 |---|---|
-| `Actions` | Things the user clicks to do something: buttons |
-| `Inputs` | Form controls that take a value |
-| `Content` | Presentation of data: badges, code, tables, cards (`Content/Card/<Kind>`), sink and operation badges |
-| `Charts` | Charts |
-| `Placeholders` | What stands in for content that is absent, failed or still loading: placeholders, errors, progress |
-| `Overlays` | Layers above the page: sheets, tooltips, menus, toasts |
-| `Layout` | Page structure and navigation within it: header, sidebar, tabs, toolbar |
-| `Flows` | The flow diagrams |
+| `Actions` | Things the user clicks to do something: `Button`, `Copy Button` |
+| `Inputs` | Form controls that take a value: `Checkbox`, `Combobox`, `Multi Combo Box`, `Text Input`, `Where Input` |
+| `Content` | Presentation of data: `Badge`, `Card` (plus `Card/Area`, `Card/Bar`, `Card/Info`, `Card/Metric`), `Code`, `Data Table`, `Elapsed Time`, `Mark`, `Number Flow`, `Operation Badge`, `Operation Status Badge`, `Sink`, `Table` |
+| `Charts` | Charts: `Area Chart`, `Bar Chart`, `Progress Chart` |
+| `Placeholders` | What stands in for content that is absent, failed or still loading: `Error Terminal`, `Placeholder`, `Progress Bar` |
+| `Overlays` | Layers above the page: `Dropdown Menu`, `Sheet`, `Toast`, `Tooltip` |
+| `Layout` | Page structure and navigation within it: `Header`, `Sidebar`, `Tabs`, `Toolbar` |
+| `Flows` | The flow diagrams: `Flow Detailed`, `Flow Summary` |
 
 `Colors` (`colors.mdx`) sits at the top level, outside any group. `storySort.order` also lists
 `Widgets` after `Flows`; no story uses it yet.

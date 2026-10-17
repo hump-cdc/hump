@@ -38,8 +38,9 @@ The result follows the port's order, and the port is asked in configuration orde
   is skipped.
 - A nil database answers an **empty list**, not an error. That path exists for `cmd/openapi`,
   which builds the use case with nil to register the route, and for tests.
-- `columns` and `sinks` always allocate: the fields are required, and a JSON `null` fails the
-  generated client's schema.
+- `columns` and `sinks` always allocate, so the client gets `[]`, never `null`. The generated zod
+  schema marks both `.nullable()`, so a `null` would still pass validation; the code does not say
+  why it allocates.
 
 `dto.go` tags are emitted into `web/webui/src/shared/api/openapi.json` by `task openapi`. The
 `type` enum repeats the port's `TableType` values by hand.

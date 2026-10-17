@@ -112,14 +112,15 @@ The title area is rendered only when `header` or `headerAside` is set.
 
 ## Semantic styles
 
-cva variants follow the `Table` `variant`, passed down through context:
+Every part follows the `Table` `variant`, passed down through context. The default title area,
+column header and row are `cva` variants; frame and toolbar are ternaries in `table.tsx`:
 
 | Part | `default` | `bordered` |
 |---|---|---|
 | frame | `div`, `text-ink` | `Card` (`bg-surface-1`, `border-hairline`, `rounded-xl`) with `overflow-visible` |
 | title area | `pb-2` | `CardHeader` |
 | toolbar | `py-4`, `border-hairline` bottom | `p-4`, `border-hairline` bottom |
-| column header | no padding | `bg-surface-2 px-4` |
+| column header | `py-2.5` | `py-2.5`, plus `bg-surface-2 px-4` |
 | row | `py-3` | `py-3 px-4`, last row `rounded-b-xl` |
 
 Column titles are `text-ink-subtle text-xs font-semibold uppercase tracking-wide`. Rows are

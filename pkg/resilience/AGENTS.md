@@ -61,7 +61,8 @@ a drain cuts retries short without cancelling the context that in-flight publish
 - **Closed before a pause would start** — the retries end and the last attempt's error comes back
   wrapped as `ErrRetryAborted: <error>`.
 - **Closes during a pause** — the pause returns at once and **one** more attempt runs. If that fails
-  too, the next pause finds the channel closed and aborts as above.
+  too, the next pause finds the channel closed and aborts as above; if it was the last attempt,
+  there is no next pause and its error comes back raw, not wrapped in `ErrRetryAborted`.
 - **The first attempt always runs**, closed channel or not; stop is only consulted between attempts.
 - A nil channel never closes.
 

@@ -22,7 +22,7 @@ Plus the `div` attributes (except `title`) and `ref`.
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `title` | `ReactNode` | — | label above the bar |
+| `title` | `ReactNode` | required | label above the bar |
 | `value` | `number` | — | share filled green, 0 to 100; the fill width is clamped to that range |
 | `showError` | `boolean` | `false` | paints the unfilled remainder red rather than leaving it grey |
 

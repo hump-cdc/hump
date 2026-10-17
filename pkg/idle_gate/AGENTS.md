@@ -43,8 +43,8 @@ started. `deactivate` returns early on a stale generation, on a non-zero count, 
 ## No goroutine of its own
 
 Between a `Disconnect` and the timeout the only thing alive is the runtime timer; an idle or a
-connected gate holds nothing. `TestGateHasNoBackgroundGoroutines` checks that with goleak, and the
-collectors' own goleak tests depend on it.
+connected gate holds nothing. `TestGateHasNoBackgroundGoroutines` checks that with goleak, and
+`operations_collector`'s goleak test depends on it (`metrics_collector` has none).
 
 ## Tests
 

@@ -2,7 +2,9 @@
 
 The process lifecycle. `app` owns the runner `cmd/hump/main.go` hangs every long-lived function on,
 `app/options` parses the command line into the one `Options` value, and `app/shutdown` is the
-process-global registry of teardown hooks that every adapter registers itself with.
+process-global registry of teardown hooks that long-lived workers, cached sink clients and the
+HTTP servers register with (see the stage table; of the adapters, only the `adapter/sink` registry and
+the HTTP sink register nothing).
 
 ## Layout
 
@@ -37,8 +39,9 @@ in step 5 exists for a server that died or never got as far as registering that 
 
 What ends up in the result:
 
-- Only errors **returned by `Run`/`Serve` functions** are recorded. A function returning `nil` just
-  ends; it does not stop the runner.
+- Two things are recorded: errors **returned by `Run`/`Serve` functions**, and `ErrDrainTimeout`
+  from step 3, which `result` keeps. A function returning `nil` just ends; it does not stop the
+  runner.
 - `result` drops anything that `errors.Is` `context.Canceled` or `ErrShutdown`. Returning
   `app.ErrShutdown` is how a function asks for a clean exit — `--cleanup` in `main.go` does exactly
   that.

@@ -13,7 +13,7 @@ Every slice has the same three files:
 
 | File | Role |
 |---|---|
-| `<slice>/model/use-<slice>.ts` | the hook: reads a query, returns chart-ready `values` (plus `value` or `series`); `useTables` and `useSinks` return a plain `Item[]` of rows |
+| `<slice>/model/use-<slice>.ts` | the hook: reads a query, returns chart-ready `values`, plus `value` (`useDelivered`, `useFailed`, `useHeapInUse`, `useReplicationLag`) or `series` (`useSinkDelivery`, `useSinkLatency`); `useThroughput` returns only `values`; `useTables` and `useSinks` return a plain `Item[]` of rows |
 | `<slice>/ui/<slice>.tsx` | the card: calls the hook, hands the result to a `shared/ui/card` component |
 | `<slice>/index.ts` | `export { <Component> } from './ui/<slice>'` |
 
@@ -57,7 +57,7 @@ const { data } = useMetrics(chartStep)         // entities/metrics/@x/statistics
   request enum that `MetricsDuration` comes from.
 - Sibling entities are reachable only through their `@x/statistics.ts` files. Each of those
   exposes the minimum: `useMetrics` and `MetricsPoint` from `entities/metrics`,
-  `useLiveControlsChartStep` from `entities/config/state`, `useConfig` from
+  `useLiveControlsChartStep` and `ChartStep` from `entities/config/state`, `useConfig` from
   `entities/config/config`. Need more — widen the `@x` file, do not import the entity's
   barrel or its files.
 
@@ -97,7 +97,9 @@ slices see only `MetricsPoint` fields.
 ## Adding a statistic
 
 1. If it needs a new series: add the field to the response in `get_metrics/dto.go`, run
-   `task openapi`, then extend `MetricsPoint` in `entities/metrics/model/types.ts` together with
+   `task openapi` (it only writes `openapi.json`), then `bun run generate:openapi` in `web/webui` to
+   regenerate the TS client (`bun run dev` / `build` do it via `predev` / `prebuild`), then extend
+   `MetricsPoint` in `entities/metrics/model/types.ts` together with
    `toPoint` **and** `emptyPoint` in `use-metrics.ts` — a padded bucket must have the field too.
 2. Create `<slice>/model/use-<slice>.ts` (chart step → `useMetrics` → map `points`),
    `<slice>/ui/<slice>.tsx` (a prop-less `FC` over `MetricCard`, `AreaChartCard` or

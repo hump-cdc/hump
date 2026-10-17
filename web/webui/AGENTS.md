@@ -39,7 +39,7 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | Path | Holds |
 |---|---|
 | `app/` | the entry: `main.tsx`, `router.tsx`, `routes/` (route files), `styles.css` |
-| `src/app` | the FSD app layer: `Providers` (query client, live updates, theme, tooltips, config) |
+| `src/app` | the FSD app layer: `Providers` (query client, live updates, theme, tooltips, config, `<Toaster />`) |
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
 | `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`); the `src/widgets` stories glob is configured, but there are no widget stories yet |
 | `public/` | fonts, logos, favicon |
@@ -75,8 +75,10 @@ Principles — each one is a `noRestrictedImports` override in `biome.json`, per
 `bun run lint` passes on the current tree, so none of these is violated anywhere.
 
 A slice is `index.ts` plus `model/` (hooks, stores, pure logic, tests) and `ui/` (components).
-`widgets/sidebar` keeps its files flat. `entities/metrics` is not grouped, has no `ui/` and no
-`index.ts`: only entities consume it, so its public API is its `@x` files.
+`widgets/sidebar` keeps its files flat. Every page except `pages/operations` has no `model/`,
+and neither do `entities/config/source-viewer` and `entities/flows/toolbar`. `entities/metrics`
+is not grouped, has no `ui/` and no `index.ts`: only entities consume it, so its public API is
+its `@x` files.
 
 Tests that render (`*.test.tsx`) register happy-dom per file and use `@testing-library/react`;
 there is no preload, so the other tests run without a DOM (`src/shared/live/AGENTS.md`, "Tests").

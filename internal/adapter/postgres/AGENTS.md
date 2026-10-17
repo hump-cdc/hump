@@ -23,10 +23,10 @@ application layer keyed by the *configured* table.
 | `table.go` | `tableType` / `tableMetadata`, the param builders (`tableArrayParams`, `tableScalarParams`, `textParam`) and `quoteIdentifier` / `quoteLiteral` / `qualifiedTableName` |
 | `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the catalog query for tables with their partitions |
 | `metrics.go` | the `replication_lag_bytes` gauge and the `processed_rows_duration_seconds` histogram, with its cached per-table observers |
-| `errors.go` | `ErrTableIgnored` and the package-internal sentinels |
+| `errors.go` | `ErrTableIgnored` and the package-internal sentinels `errIntrospectionRequired`, `errEmptyCopyData`, `errEmptyWalRecord`; three more are declared in the file that uses them: `errEmptyRowCount` (`postgres_row_count.go`), `errEmptySnapshotId` (`snapshot.go`), `errCopyRow` (`snapshot_export_parser.go`) |
 | `logger.go` | `log.Scope("postgres")` |
 | `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
-| `tables.go` | `GetTables`: one catalog query per call, on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
+| `tables.go` | `GetTables`: two catalog queries per call (a TimescaleDB probe, then the columns query), on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
 | `snapshot_where_suggester.go` | `snapshotWhereSuggester`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
 | `snapshot_where_parser.go` | lexer + recursive-descent parser for the `GetRowCount`/snapshot filter; re-renders it with every identifier and literal quoted, so the raw string never reaches the server |
 | `wal_gate.go` | `walGate`: pauses delivery to the WAL handler while a snapshot is active |
@@ -36,14 +36,16 @@ application layer keyed by the *configured* table.
 
 ## Conventions
 
-- **SQL lives in `sql/*.sql`, never inline.** Parameterized statements go through
+- **SQL lives in `sql/*.sql`, never inline.** The one inline statement is the holder's
+  `COMMIT` in `snapshot.go` `Finish`; the `ctid` range and the re-rendered filter are fragments
+  spliced into embedded templates, not statements. Parameterized statements go through
   `connection.ExecParams` with `[]param`; use `tableArrayParams` for the `(schemas[], names[])`
   shape most catalog queries filter on, `tableScalarParams` / `textParam` for scalars.
   Statements built by string formatting must quote through `quoteIdentifier` / `quoteLiteral`.
 - **Catalog queries come in two flavours**, TimescaleDB and not, picked by a probe that is
-  cached per `tableMetadataLoader` (`hasTimescaleDB`), not per session: the bootstrapper, the
-  introspector, `GetTables` and `snapshot` each build a loader and probe once — the extension
-  cannot appear or vanish mid-session.
+  cached per `tableMetadataLoader` (`hasTimescaleDB`), not per session: each loader probes once.
+  The bootstrapper and the introspector build one loader each; `GetTables` and `snapshot.Read`
+  build a new one on every call. The extension cannot appear or vanish mid-session.
 - **Tests talk to a real socket** against `fakeServer` (`postgres_test.go`), whose responders
   dispatch on substrings of the SQL. A new query therefore needs a distinctive marker in its
   text — the leading `--` comment is the intended hook — and a case in the shared responders.
@@ -137,8 +139,9 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   and are listed explicitly in the `SELECT`, since a leaf's physical attribute order may differ.
 - **Reads.** Every chunk is one simple-protocol message — `BEGIN; SET TRANSACTION SNAPSHOT; COPY
   (SELECT … FROM ONLY leaf WHERE ctid range AND (filter)) TO STDOUT; COMMIT` — on a raw session, so
-  a reconnect never silently replays a chunk. `COPY` takes no bind parameters, so the id, ranges
-  and filter are rendered through `quoteLiteral` and `snapshotWhereParser`. Chunks are
+  a reconnect never silently replays a chunk. `COPY` takes no bind parameters, so the snapshot id
+  goes through `quoteLiteral`, the filter through `snapshotWhereParser`, and the ctid ranges are
+  concatenated from `strconv.FormatUint` page numbers. Chunks are
   `snapshotChunkPages` pages; the last one is open-ended.
 - **Metrics.** Each processed snapshot row is observed in `processed_rows_duration_seconds` as an
   `insert` of the requested table, so the dashboard's table counts include snapshot rows. WAL and

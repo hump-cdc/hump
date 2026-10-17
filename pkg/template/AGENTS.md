@@ -16,7 +16,7 @@ The user-facing reference — render context, syntax, every function with exampl
 | `template_renderable.go` | the parsed variant; wraps execution errors with `ErrRender` |
 | `errors.go` | `ErrRender` |
 | `funcs/funcs.go` | `Funcs` — the one `template.FuncMap` |
-| `funcs/builtins.go` | the stdlib builtins, re-implemented |
+| `funcs/builtins.go` | the stdlib builtins with logic (`and`, `or`, `not`, `call`, `index`, `slice`, `len`, the comparisons), copied from `text/template` |
 | `funcs/unavailable.go` | the `unavailable` hook into `eq`, `ne` and `empty` |
 | `funcs/args.go` | `strArg` — nil-tolerant string coercion |
 | `funcs/<category>.go` | one file per group: `case`, `strings`, `convert`, `yaml`, `regex`, `encoding`, `crypto`, `time`, `dict`, `list`, `math`, `filepath`, `url`, `uuid`, `flow`, `traceparent` |
@@ -56,8 +56,9 @@ family — are how a template raises one deliberately.
 
 ## Why the builtins are re-implemented
 
-`Funcs` contains `and`, `or`, `eq`, `index`, `len` and the rest of the stdlib set, copied from
-`text/template`. A `FuncMap` entry overrides the builtin of the same name, and the override is needed
+`Funcs` contains `and`, `or`, `eq`, `index`, `len` and the rest of the stdlib set. The ones in
+`builtins.go` are copied from `text/template`; `html`, `js`, `urlquery` and `print*` are the
+stdlib functions themselves. A `FuncMap` entry overrides the builtin of the same name, and the override is needed
 for one reason: **unavailable values**.
 
 A column the WAL stream did not carry is `domain.UnavailableValue`. It renders as `""`, but it is a
@@ -78,12 +79,20 @@ of range`, `should be 1 tmplOr 2`. They are user-visible in render errors.
 
 ## Conventions in `funcs`
 
-- Every implementation is `tmpl<Name>` in the file of its category, and is registered in `Funcs`
-  under a **lowercase, unseparated** name: `kebabcase`, `hasprefix`, `regexreplaceall`. The
-  exceptions are `aes_encrypt`, `aes_decrypt`, `trace_id` and `span_id`.
-- The subject comes **last**, so it can be piped: `{{ .Next.name | trimprefix "x-" }}`. The dict
-  functions accept the dict first or last (`dictArgs`); the classic dict-first form wins when both
-  ends are maps.
+- Every implementation of its own is `tmpl<Name>` in the file of its category, and is registered
+  in `Funcs` under a **lowercase, unseparated** name: `kebabcase`, `hasprefix`, `regexreplaceall`.
+  The name exceptions are `aes_encrypt`, `aes_decrypt`, `trace_id` and `span_id`. A few
+  implementations break `tmpl<Name>`: `len` is `tmplLength`, `lower`/`upper` are
+  `tmplLowerCase`/`tmplUpperCase`, `aes_encrypt`/`aes_decrypt` are `tmplEncryptAES`/`tmplDecryptAES`, `adler32`/`sha1`/`sha256` are
+  `tmplAdler32Sum`/`tmplSHA1Sum`/`tmplSHA256Sum`. Stdlib functions
+  are registered as they are: `html`, `js`, `urlquery` (the `text/template` escapers), `print`,
+  `printf`, `println` (`fmt.Sprint*`), `env` and `hostname` (`os`).
+- The subject comes **last**, so it can be piped: `{{ .Next.name | trimprefix "x-" }}`. `get`, `set`,
+  `unset`, `haskey`, `pick` and `omit` accept the dict first or last (`dictArgs`); the classic
+  dict-first form wins when both ends are maps. The other dict functions have fixed signatures:
+  `pluck` takes the key first, then the dicts; `merge` and `mergeoverwrite` take the `dst` map first;
+  `dig` parses its own args, sprig's way, with the dict last (`dig k1 k2 … fallback dict`); `keys` and
+  `values` take the dict alone.
 - String helpers that should tolerate a missing field take `any` and go through `strArg`, which
   turns nil into `""`.
 - The names follow sprig but the behaviour is not always sprig's. **`lower` and `upper` are case
@@ -115,7 +124,9 @@ logger uses is a different, more lenient one — see `pkg/observability/AGENTS.m
 `funcs/helper_test.go` holds the shared helpers for the whole `funcs` package: `render` and
 `mustRender` run a source through `text/template` with `Funcs`, and `V` wraps a value as `.Value`.
 The per-category tests go through those rather than calling `tmpl*` functions directly, so a broken
-signature surfaces as a parse or execution error.
+signature surfaces as a parse or execution error. The exception is `unavailable_test.go`, which
+also calls `tmplUnavailable`, `tmplEmpty`, `tmplCoalesce`, `tmplRequired`, `tmplEq` and `tmplNe`
+directly on the `undelivered` / `delivered` doubles.
 
 `template_test.go` owns the wiring — static/dynamic dispatch, nil receiver, YAML — and leaves
 function edge cases to `funcs`.

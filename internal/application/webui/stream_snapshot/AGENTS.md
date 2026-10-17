@@ -32,8 +32,8 @@ optional fields:
 | Event | Table status | Carries |
 |---|---|---|
 | `idle` | — | `state` only |
-| `processing` | `wait` / `processing` / `done` | `where`, `completedRows`, `estimatedRows`, per-sink `count` |
-| `done` | `success` / `error` | `error`, `completedRows`, `startedAt` + `finishedAt` |
+| `processing` | `wait` / `processing` / `done` | `startedAt`; per table `where`, `completedRows`, `estimatedRows`, per-sink `count` |
+| `done` | `success` / `error` | `startedAt` + `finishedAt`; per table `error`, `completedRows`, per-sink `count` |
 
 The table status vocabulary changes between the two: a table that failed mid-run is `done` with an
 error while the run is still going, and only becomes `error` once the run finishes — see
@@ -63,7 +63,8 @@ The loop ends three ways, and all of them go through the deferred `release`, whi
 
 With a nil runner `Subscribe` returns an idle state and a **nil channel**, which blocks forever, so
 the stream sends one `idle` and then waits on the context alone. A served route never has a nil
-runner — `cmd/hump/main.go` builds one whenever the web port is set; the path exists for
+runner — `cmd/hump/main.go` builds one whenever it serves the web UI
+(`!opts.Cleanup && opts.WebPort != nil`); the path exists for
 `cmd/openapi`, which constructs the use case with nil to register the route, and for tests.
 
 ## Tests

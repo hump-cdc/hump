@@ -40,8 +40,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 </Sheet>
 ```
 
-Controlled, without a trigger: `<Sheet open={open} onOpenChange={setOpen}>`
-(`toolbar/toolbar.tsx`, `sidebar/sidebar.tsx`).
+Controlled, without a trigger: `<Sheet open={open} onOpenChange={setOpen}>` (`sidebar/sidebar.tsx`).
+`toolbar/toolbar.tsx` is controlled too but keeps its `<SheetTrigger asChild>`.
 
 Docked, non-modal panel that leaves the page usable — the flow inspector
 (`entities/flows/inspector`):
@@ -49,7 +49,7 @@ Docked, non-modal panel that leaves the page usable — the flow inspector
 ```tsx
 <Sheet modal={false} open={Boolean(selected)} onOpenChange={(open) => !open && clear()}>
     <SheetContent
-        side="right"
+        side={isMobile ? 'bottom' : 'right'}
         portal={false}
         showOverlay={false}
         showCloseButton={false}
@@ -61,7 +61,7 @@ Docked, non-modal panel that leaves the page usable — the flow inspector
     >
         <SheetHeader>
             <SheetTitle>…</SheetTitle>
-            <SheetClose asChild>…</SheetClose>
+            <SheetClose aria-label="Close inspector">…</SheetClose>
         </SheetHeader>
     </SheetContent>
 </Sheet>
@@ -72,8 +72,10 @@ Docked, non-modal panel that leaves the page usable — the flow inspector
 - The operation details (`entities/operations/details`) are non-modal the same way but docked on
   desktop only: `portal={isMobile}`, and `absolute z-10` only on desktop, so the mobile bottom
   sheet portals to the viewport and spans it edge to edge.
-- Without `SheetDescription` the callers pass `aria-describedby={undefined}`. A sheet with no
-  visible heading keeps `SheetTitle` inside an `sr-only` `SheetHeader` (`sidebar/sidebar.tsx`).
+- The flow inspector and the operation details have no `SheetDescription` and pass
+  `aria-describedby={undefined}`; `toolbar/toolbar.tsx` has none either and passes nothing. A
+  sheet with no visible heading keeps `SheetTitle` inside an `sr-only` `SheetHeader`
+  (`sidebar/sidebar.tsx`).
 
 ## Props
 

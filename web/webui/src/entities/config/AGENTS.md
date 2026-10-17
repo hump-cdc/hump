@@ -27,7 +27,7 @@ stories.
 
 | Barrel | Exports | Consumed by |
 |---|---|---|
-| `config` | `useConfig`, `ConfigProvider` | `app/providers.tsx`, `widgets/sidebar/connection-info.tsx` |
+| `config` | `useConfig`, `ConfigProvider` | `src/app/providers.tsx`, `widgets/sidebar/connection-info.tsx` |
 | `source-viewer` | `SourceViewer` | `pages/configuration` |
 | `state` | `LiveControls`, type `ChartStep` | `widgets/sidebar/app-header.tsx` (`LiveControls`) |
 
@@ -78,7 +78,7 @@ everything below renders with the config already in the cache. TypeScript does n
 `LiveUpdates` and `Toaster` are mounted **outside** the gate in `providers.tsx`: the live stream
 connects whether or not the config loaded.
 
-`ConfigError` takes the route's `ErrorModelModel` and fills in what is missing: status `500`,
+`ConfigError` takes the `useConfig()` query's error (an `ErrorModelModel`) and fills in what is missing: status `500`,
 title `Something went wrong`, and a fixed sentence for an empty `detail`.
 
 ## `source-viewer`

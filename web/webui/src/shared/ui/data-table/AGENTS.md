@@ -13,9 +13,16 @@ Storybook: `Content/Data Table`.
 
 ```tsx
 import { DataTable, type DataTableColumn, type DataTableRange } from '@/shared/ui/data-table'
+import { formatTime } from '@/shared/utils'
 
 const columns: DataTableColumn<Operation>[] = [
-    { field: 'time', header: 'Time', width: 148, cellClass: 'font-mono text-sm text-ink-subtle' },
+    {
+        field: 'time',
+        header: 'Time',
+        width: 148,
+        cellClass: 'font-mono text-sm text-ink-subtle',
+        render: (r) => formatTime(r.time), // time is a Date; without render the raw field is the cell
+    },
     { field: 'sink', header: 'Sink', flex: 1, minWidth: 120 },
     { header: 'Error', flex: 2, minWidth: 160, render: (r) => r.error ?? null },
 ]

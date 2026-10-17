@@ -24,8 +24,9 @@ import { TextInput } from '@/shared/ui/text-input'
 
 ## Props
 
-Only the props below reach the `<input>`; other HTML attributes (`id`, `onBlur`, `aria-*`, …) are
-not accepted.
+The props type is closed: only the props below are accepted, other HTML attributes (`id`, `onBlur`,
+`aria-*`, …) are not. `className` and `invalid` go to the wrapper `<div>`, `icon` and `suffix` to
+`<span>`s beside the `<input>`; the rest drive the `<input>` itself (`font` as its font class).
 
 | Prop | Type | Default | Description |
 |---|---|---|---|

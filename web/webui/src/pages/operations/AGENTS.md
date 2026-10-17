@@ -81,7 +81,8 @@ param it returns `undefined` and the stored filter is left alone.
 - The only in-app producer of these params is `entities/flows/inspector/model/operations-search.ts`
   ("View in Operations"), which declares its own `OperationsSearch` type with `table`, `sink` and
   `target`. Rename a key here and change it there. The other links to `/operations` (the
-  statistics sinks card, the snapshot action bars) carry no search and so leave the filter alone.
+  sidebar `NavItem`, the statistics sinks card, the snapshot action bars) carry no search and so
+  leave the filter alone.
 - A new facet needs three edits here: the key in `operationsSearchSchema`, the mapping in
   `toFilterValues`, and the `if` that decides whether anything was preset. The URL cleanup needs
   none — it iterates `operationsSearchSchema.keyof()`.

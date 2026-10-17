@@ -8,7 +8,7 @@ import (
 )
 
 func TestBindingSkipsRecordWithoutObserver(_ *testing.T) {
-	// main passes a Collector that is nil when telemetry is disabled; converting
+	// main passes a Collector that is nil when the web UI is disabled; converting
 	// one nil interface to another has to keep it nil.
 	var collector metricscollector.Collector
 	b := &binding{observer: collector}

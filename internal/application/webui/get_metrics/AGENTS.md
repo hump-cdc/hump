@@ -40,9 +40,9 @@ that width as it retains.
 | `ErrDisabled` (nil collector) | 503 |
 | anything else — an unknown duration, a failed `Dump` | 422 |
 
-The comment on `UseCase.collector` says nil means telemetry is disabled. As wired today,
-`cmd/hump/main.go` builds the collector whenever the web port is set, and the web UI is only
-served then — so a served route never sees nil, whatever `--telemetry-port` is. The nil path is
+`UseCase.collector` is nil when the web UI is disabled. `cmd/hump/main.go` builds the collector
+whenever the web port is set, and the web UI is only served then, so a served route never sees
+nil, whatever `--telemetry-port` is. The nil path is
 real for `cmd/openapi`, which constructs the use case with nil purely to register the route, and
 for tests. Keep `NewUseCase(nil)` safe: `task openapi` depends on it.
 

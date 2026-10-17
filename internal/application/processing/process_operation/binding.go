@@ -23,7 +23,7 @@ type binding struct {
 	sinkName              string
 	table                 string
 	operations            map[domain.OperationType]struct{} // operations are the row operations the sink receives.
-	observer              Observer                          // observer is nil when telemetry is disabled.
+	observer              Observer                          // observer is nil when the web UI is disabled.
 	log                   OperationLog                      // log is nil when the operations log is disabled.
 	conn                  metricscollector.Connection
 	op                    operation

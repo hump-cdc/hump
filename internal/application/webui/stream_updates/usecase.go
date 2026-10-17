@@ -17,7 +17,7 @@ type Feed struct {
 // UseCase subscribes clients to the live feed; a connected client is what
 // turns the collectors on.
 type UseCase struct {
-	metrics    metricscollector.Collector    // metrics is nil when telemetry is disabled.
+	metrics    metricscollector.Collector    // metrics is nil when the web UI is disabled.
 	operations operationscollector.Collector // operations is nil when the web UI is disabled.
 	stream     livestream.Streamer           // stream is nil when the web UI is disabled.
 	runner     snapshot.Runner               // runner is nil in cleanup mode.

@@ -26,7 +26,7 @@ type Configuration interface {
 }
 
 // Observer counts the deliveries of one connection for the dashboard. It is the
-// part of the metrics collector this package needs, and is nil when telemetry
+// part of the metrics collector this package needs, and is nil when the web UI
 // is disabled.
 type Observer interface {
 	Record(conn metricscollector.Connection, status domain.DeliveryStatus, n int)

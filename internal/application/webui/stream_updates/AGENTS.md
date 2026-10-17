@@ -94,11 +94,10 @@ handler just sets its channel to nil and leaves ending the stream to the feed.
 Every dependency may be nil, each guarded on its own. A nil stream or runner yields a **nil
 channel**, which blocks forever and silences only that case: the other source's events still
 arrive. The handler always sends `welcome` and the initial snapshot (`idle` with a nil runner);
-with both nil it then waits on the context alone. As wired today, `cmd/hump/main.go` builds the first three whenever the
-web port is set, so a served route sees none of them nil — the `metrics` field comment tying nil
-to "telemetry disabled" does not describe the current wiring (`operations` and `stream` say "web
-UI disabled", the runner says cleanup mode) — and the runner whenever the process is
-not in cleanup mode and the web port is set. The nil paths are real for `cmd/openapi`, which
+with both nil it then waits on the context alone. `cmd/hump/main.go` builds the first three
+whenever the web port is set (their field comments: nil when the web UI is disabled), and the
+runner whenever the process is not in cleanup mode and the web port is set, so a served route
+sees none of them nil. The nil paths are real for `cmd/openapi`, which
 constructs the use case with four nils to register the route, and for tests.
 
 ## Tests

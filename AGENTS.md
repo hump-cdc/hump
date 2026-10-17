@@ -51,12 +51,25 @@ Packages under `internal/` carry their own `AGENTS.md` with the details. The sin
 (`internal/adapter/sink/{http,kafka,nats,rabbitmq,rabbitmq_stream}`) have none; they are covered
 by `internal/adapter/sink/AGENTS.md`.
 
+## Dependencies
+
+Do not add or upgrade a dependency to a version published less than 7 days ago. This matches
+the 7-day Dependabot cooldown in `.github/dependabot.yml`.
+
+- Web UI: enforced by `install.minimumReleaseAge` in `web/webui/bunfig.toml`. When resolving
+  (`bun add`, `bun update`), bun silently skips versions younger than 7 days and fails only when
+  no older version matches (e.g. an exact too-new version). Entries already in `bun.lock` are
+  not re-checked, so do not hand-edit `bun.lock`.
+- Go: no tooling enforces it. Before `go get` of a version, check its publish time with
+  `go list -m -json <module>@<version>` (the `Time` field) and pick one at least 7 days old.
+
 ## Before finishing a task
 
 Every time you finish a task, run both linters and fix everything they report before you call
 the task done:
 
-- Go: `task lint` (golangci-lint with `.golangci.yml`; its `depguard` rules enforce the layer
-  import rules above). `task lint:fix` applies the automatic fixes.
+- Go: `task lint` (golangci-lint with `.golangci.yml`). Its `depguard` rules enforce the layer
+  table's "May import" column and the adapter-only-in-`cmd/hump` rule, but not "no sideways
+  imports": that one stays a review check. `task lint:fix` applies the automatic fixes.
 - Web UI: `bun run check` in `web/webui` (Biome: lint, format, import order).
   `bun run check --write` applies the safe fixes.

@@ -18,12 +18,11 @@ router's `NotFound` handler — so `Static` sees every request the API routes di
 skipped. With at least one origin it returns a go-chi/cors handler allowing credentials, the usual
 methods and `Accept`/`Authorization`/`Content-Type`.
 
-With no usable origin it returns **nil**, and chi does not tolerate that: `Mux.Use` appends the nil
-function and the chain panics with a nil dereference as soon as it is built. `webui.go` passes the
-result to `router.Use` unguarded, inside a function the runner spawned without a `recover`, so
-**hump panics at startup when the web port is set and `CORS` is empty** — the whole process, not
-only the web server. `task run` sets `CORS`, which is why it does not show up there. Guard the call
-site or return a pass-through before relying on `CORS` being optional.
+With no usable origin it returns a **pass-through**, so `CORS` is optional: the server then sends
+no CORS headers and a browser can call the API from the same origin only. It must never return
+nil. chi's `Mux.Use` accepts a nil middleware and panics when it builds the chain, and `webui.go`
+calls it inside a function the runner spawned without a `recover`, so a nil here takes the whole
+process down at startup.
 
 ## Static
 
@@ -53,3 +52,5 @@ that answers `404` to everything rather than failing startup.
 The static tests build `&static{assets: testAssets()}` over an `fstest.MapFS` and call `handler()`
 directly, bypassing `Static` and its `embed.FS` parameter. `TestStaticHandlerStatus` is the table of
 which path gets which status. The CORS tests set the variable with `t.Setenv`.
+`TestCorsInstallsOnChiWhenUnset` mounts `Cors()` on a real chi mux with `CORS` empty and
+registers a route: the regression test for the old nil return.

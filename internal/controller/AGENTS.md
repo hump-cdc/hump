@@ -1,7 +1,7 @@
 # controller — how this package hangs together
 
 The process's entry points: everything `cmd/hump/main.go` hands to the runner lives here, except the
-`--cleanup` worker, an inline closure in `main.go` that calls `db.Cleanup`. There is no
+`--cleanup` worker, an inline closure in `main.go` that runs the `cleanup_database` use case. There is no
 logic of its own — each controller binds a transport (WAL listener, HTTP port) to handlers built
 elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Controller` in
 `internal/application/...`; this package only decides which path and which port they answer on.
@@ -31,7 +31,8 @@ context dies at the start of shutdown. That is what ends the SSE handlers (`/api
 streams until the `StageServers` hook timed out. `ObservabilityController.Serve` takes no context — it has nothing long-lived.
 
 Both servers are optional: `main.go` starts each only when its port option is set, and neither in
-`--cleanup` mode.
+`--cleanup` mode. Both set `ReadHeaderTimeout` to `readHeaderTimeout` (10s, in `observability.go`),
+so a client that never finishes its request headers cannot hold a connection open.
 
 `ProcessController` hands `process_operation.Controller.Process` to the database as the WAL
 handler. `main.go` gives the same function to the snapshot runner; that is safe only because a
@@ -78,10 +79,9 @@ in `web/webui/rsbuild.config.ts` from the TanStack route tree.
 
 ## Things that will bite
 
-- **`Serve` panics when `CORS` is unset.** `middleware.Cors()` returns nil without configured
-  origins (its tests assert that), `router.Use(nil)` accepts it, and chi dereferences it when the
-  first route is registered in `Api`. `task run` always sets `CORS`, and the tests call `Api` on a
-  bare mux, so neither path hits it.
+- **Without `CORS` the UI dev server cannot reach the API.** `middleware.Cors()` is then a
+  pass-through that sends no CORS headers, so only same-origin requests work. `task web:dev` runs on
+  port 3000 against the API on 3200, which is why `task run` sets `CORS=http://localhost:3000`.
 - **`Compress(5)` is router-wide but leaves SSE alone.** chi compresses only its default content
   types, and `text/event-stream` is not one of them — JSON answers and the SPA assets are.
 - **One health handler, three paths.** `/health/startup`, `/health/ready` and `/health/live` are

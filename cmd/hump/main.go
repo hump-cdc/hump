@@ -18,6 +18,7 @@ import (
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
 	snapshotAdapter "hump/internal/adapter/snapshot"
+	cleanupDatabaseFeature "hump/internal/application/processing/cleanup_database"
 	processOperationFeature "hump/internal/application/processing/process_operation"
 	getConfigFeature "hump/internal/application/webui/get_config"
 	getMetricsFeature "hump/internal/application/webui/get_metrics"
@@ -175,7 +176,7 @@ func run() int {
 		r.Run(
 			// Cleanup: drop publication + slot, then stop the runner.
 			func(ctx context.Context) error {
-				if err := db.Cleanup(ctx); err != nil {
+				if err := cleanupDatabaseFeature.NewUseCase(db).Cleanup(ctx); err != nil {
 					return err
 				}
 

@@ -3,13 +3,10 @@
 The use case behind `--cleanup`: drop the publication and the replication slot hump created, so a
 database it no longer reads from stops retaining WAL for it.
 
-## Nothing calls it
+## Who calls it
 
-**No package imports this one.** The `opts.Cleanup` branch of `cmd/hump/main.go` calls
-`db.Cleanup(ctx)` on the database port directly and returns `app.ErrShutdown` to stop the runner.
-`UseCase` is therefore dead code today, and the `"Cleanup complete"` log line it would add is never
-written. Before changing behaviour here, check which of the two is meant to be the entrypoint —
-editing this file alone changes nothing at runtime.
+Only `cmd/hump/main.go`. Its `opts.Cleanup` branch runs `NewUseCase(db).Cleanup(ctx)` as the only
+worker and returns `app.ErrShutdown` on success, which stops the runner with a clean exit.
 
 ## What it is
 
@@ -31,4 +28,6 @@ logger scope follows the directory name in both.
 
 ## Tests
 
-None.
+`TestCleanupCleansTheDatabase` checks that `Cleanup` calls `db.Cleanup` once and returns nil;
+`TestCleanupReturnsTheDatabaseError` checks that the port's error comes back as is. The
+`fakeDatabase` embeds `database.Database`, so any port method it does not override panics.

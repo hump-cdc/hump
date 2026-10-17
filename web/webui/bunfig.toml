@@ -1,0 +1,3 @@
+[install]
+# Skip npm versions published less than 7 days ago (matches the Dependabot cooldown).
+minimumReleaseAge = 604800

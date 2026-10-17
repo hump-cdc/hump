@@ -18,7 +18,7 @@ the only implementation; its mechanics are in `adapter/postgres/AGENTS.md`. This
 
 `Database` is not split per consumer. `cmd/hump/main.go` builds one value and hands the whole
 interface to `controller/process.go`, `get_config`, `get_snapshot_tables`,
-`get_snapshot_estimates` and `adapter/snapshot`, and calls `db.Cleanup` itself in cleanup mode;
+`get_snapshot_estimates` and `adapter/snapshot`, and to `cleanup_database` in cleanup mode;
 each uses the few methods it needs. Nothing
 asserts `var _ Database = (*T)(nil)` — the typed `var db databasePort.Database = …` in `main.go`
 is the only compile-time proof. The test fakes (`fakeDatabase` in `adapter/snapshot` and the

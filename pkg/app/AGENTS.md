@@ -13,7 +13,7 @@ the HTTP sink register nothing).
 | `runner.go` | `Runner`: `New`, `Run`, `Serve`, `Wait` |
 | `signal.go` | `signals` — a context cancelled by SIGINT/SIGTERM, with the signal as its cause |
 | `errors.go` | `ErrShutdown`, `ErrDrainTimeout` |
-| `options/types.go` | the `Options` struct (go-flags tags), `LogFormat` and the errors `Parse` returns |
+| `options/types.go` | the `Options` struct (go-flags tags) and the errors `Parse` returns |
 | `options/parser.go` | `Parse` and the config source resolution |
 | `shutdown/shutdown.go` | the stages and the global API: `OnShutdown`, `Shutdown`, `Drain`, `Draining` |
 | `shutdown/registry.go` | the registry: stage ordering, the per-hook timeout |

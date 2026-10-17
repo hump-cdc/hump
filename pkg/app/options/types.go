@@ -11,15 +11,6 @@ var (
 	ErrHelp = errors.New("help requested")
 )
 
-// LogFormat is the log output format.
-type LogFormat string
-
-// The supported log formats.
-const (
-	LogFormatPretty LogFormat = "pretty"
-	LogFormatJSON   LogFormat = "json"
-)
-
 // Options is the parsed command line, with the configuration source resolved
 // into Config.
 type Options struct {

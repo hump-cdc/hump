@@ -5,7 +5,7 @@ import { Archive, Globe, Plug } from 'lucide-react'
 
 import { cn } from '@/shared/utils'
 
-/** Icon per known sink type (see internal/types/sink/sink.go) plus not-yet-supported ghost types. */
+/** Icon per known sink type (see internal/port/sink/sink_type.go) plus not-yet-supported ghost types. */
 const SINK_ICONS: Record<string, ReactNode> = {
     kafka: <SiApachekafka />,
     'nats-core': <SiNatsdotio />,

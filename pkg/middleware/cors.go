@@ -11,7 +11,7 @@ import (
 )
 
 // Cors builds a CORS middleware from the comma-separated CORS environment
-// variable. It returns nil when no origins are configured.
+// variable. Without configured origins it returns a pass-through.
 func Cors() func(http.Handler) http.Handler {
 	origins := make([]string, 0)
 	for origin := range strings.SplitSeq(strings.TrimSpace(os.Getenv("CORS")), ",") {
@@ -20,15 +20,15 @@ func Cors() func(http.Handler) http.Handler {
 		}
 	}
 
-	if len(origins) > 0 {
-		return chicors.Handler(chicors.Options{
-			AllowedOrigins:   origins,
-			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-			AllowCredentials: true,
-			MaxAge:           300,
-		})
+	if len(origins) == 0 {
+		return func(next http.Handler) http.Handler { return next }
 	}
 
-	return nil
+	return chicors.Handler(chicors.Options{
+		AllowedOrigins:   origins,
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	})
 }

@@ -19,7 +19,7 @@ type Metrics struct {
 
 // UseCase dumps the metrics collector at a chosen bucket width.
 type UseCase struct {
-	collector metricscollector.Collector // collector is nil when telemetry is disabled.
+	collector metricscollector.Collector // collector is nil when the web UI is disabled.
 }
 
 // NewUseCase returns a use case serving the snapshots of collector.

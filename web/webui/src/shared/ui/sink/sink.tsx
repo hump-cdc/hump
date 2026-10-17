@@ -5,7 +5,7 @@ import { Globe, Plug } from 'lucide-react'
 
 import { cn } from '@/shared/utils'
 
-/** Friendly labels for the sink types defined in internal/types/sink/sink.go. */
+/** Friendly labels for the sink types defined in internal/port/sink/sink_type.go. */
 const SINK_LABELS: Record<string, string> = {
     kafka: 'Kafka',
     'nats-core': 'NATS',

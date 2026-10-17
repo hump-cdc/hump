@@ -4,21 +4,67 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
-func TestCorsDisabledWhenUnset(t *testing.T) {
-	t.Setenv("CORS", "")
+func TestCorsPassesThroughWithoutOrigins(t *testing.T) {
+	tests := []struct {
+		name   string
+		cors   string
+		method string
+	}{
+		{"unset", "", http.MethodGet},
+		{"blank", "  ,  ", http.MethodGet},
+		{"unset preflight", "", http.MethodOptions},
+	}
 
-	if Cors() != nil {
-		t.Fatal("Cors() = non-nil, want nil when CORS is unset")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CORS", tt.cors)
+
+			reached := false
+			handler := Cors()(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				reached = true
+			}))
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tt.method, "/", nil)
+			req.Header.Set("Origin", "https://example.com")
+			req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			handler.ServeHTTP(rec, req)
+
+			if !reached {
+				t.Error("request did not reach the next handler")
+			}
+			if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+				t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
+			}
+		})
 	}
 }
 
-func TestCorsDisabledWhenBlank(t *testing.T) {
-	t.Setenv("CORS", "  ,  ")
+func TestCorsInstallsOnChiWhenUnset(t *testing.T) {
+	// chi builds the middleware chain on the first route and panics on a nil
+	// middleware, which used to take the process down at startup.
+	t.Setenv("CORS", "")
 
-	if Cors() != nil {
-		t.Fatal("Cors() = non-nil, want nil when CORS has no usable origins")
+	router := chi.NewMux()
+	router.Use(Cors())
+	router.Get("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://example.com")
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
 	}
 }
 

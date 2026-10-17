@@ -16,6 +16,7 @@ import (
 
 	"hump/internal/domain"
 	"hump/internal/port/database"
+	"hump/pkg/app/shutdown"
 )
 
 // wal owns a single logical replication session: the dedicated pgconn used to
@@ -42,12 +43,26 @@ type wal struct {
 
 	messageContext *postgresMessageContext
 
+	// inTransaction is set between Begin and Commit, where a keepalive's
+	// ServerWALEnd may already lie past rows not yet processed.
+	inTransaction bool
+
 	introspector *introspector
+
+	// gate pauses delivery to the handler while a snapshot runs; nil never pauses.
+	gate *walGate
 
 	// standbyInterval is the wait between standby status updates. It is
 	// standbyTimeout outside tests, which shorten it; a zero value would panic
 	// the keepAlive ticker and spin the receive loop.
 	standbyInterval time.Duration
+
+	// processing is set while the receive loop is inside processMessage, the only
+	// time the keepalive worker writes to session; processingPosition is what it
+	// reports then. processingMu guards both and is held across a worker flush.
+	processingMu       sync.Mutex
+	processing         bool
+	processingPosition pglogrepl.LSN
 
 	// shutdownAt is when Start noticed a shutdown; zero when it ended otherwise.
 	shutdownAt time.Time
@@ -64,13 +79,14 @@ const standbyTimeout = time.Second * 10
 // newWal opens the replication session on conn for the given publication and
 // slot and returns a wal ready to be started. conn must have been created with
 // withReplication(true); wal takes ownership of it and closes it in Stop. m is
-// owned by the caller and shared across sessions.
+// owned by the caller and shared across sessions; a nil gate never pauses.
 func newWal(
 	ctx context.Context,
 	conn *connection,
 	publicationName string,
 	slotName string,
 	introspector *introspector,
+	gate *walGate,
 	health Health,
 	m *metrics,
 ) (*wal, error) {
@@ -90,6 +106,7 @@ func newWal(
 		pluginArguments: []string{"proto_version '2'", fmt.Sprintf("publication_names '%s'", publicationName), "messages 'true'"},
 		messageContext:  &postgresMessageContext{messages: map[string]string{}},
 		introspector:    introspector,
+		gate:            gate,
 		standbyInterval: standbyTimeout,
 		health:          health,
 		metrics:         m,
@@ -97,12 +114,18 @@ func newWal(
 }
 
 // Start begins streaming from the configured slot at LSN 0 and blocks until
-// ctx is cancelled or a fatal protocol error occurs. Cancelling ctx stops the
-// receive only: a change already received is processed to the end on a
-// detached context. The WAL position is flushed on every standby tick and exit.
+// ctx is cancelled or a fatal protocol error occurs. Cancelling ctx between
+// transactions stops at once; inside one, the rest of it is received and
+// processed on a detached context so its commit can be confirmed. The WAL
+// position is flushed on every standby tick, while a change is processed, and
+// on exit.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
 	walPosition := pglogrepl.LSN(0)
 	workCtx := context.WithoutCancel(ctx)
+
+	if w.gate != nil {
+		handler = w.gate.wrap(ctx, handler)
+	}
 
 	err := pglogrepl.StartReplication(ctx, w.session, w.slotName, walPosition, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments})
 	if err != nil {
@@ -118,26 +141,52 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	standbyCtx, cancelStandby := context.WithTimeout(ctx, w.standbyInterval)
 	defer func() { cancelStandby() }()
 
+	// draining is set once ctx is cancelled inside a transaction: receive windows
+	// then open on workCtx until its commit arrives.
+	draining := false
+
 	// resetStandby cancels the previous receive context and opens the next window.
 	// It stays a closure so vet's lostcancel sees one defended assignment.
 	resetStandby := func() {
 		cancelStandby()
-		standbyCtx, cancelStandby = context.WithTimeout(ctx, w.standbyInterval)
+
+		parent := ctx
+		if draining {
+			parent = workCtx
+		}
+
+		standbyCtx, cancelStandby = context.WithTimeout(parent, w.standbyInterval)
 	}
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
 	w.typeMap = pgtype.NewMap()
+	w.inTransaction = false
+
+	stopKeepAlive := w.keepAlive(workCtx)
+	defer stopKeepAlive()
+
+	shutdown.OnShutdown(shutdown.StageWorkers, "wal_position", w.onShutdown)
 
 	for {
 		rawMsg, err := w.session.ReceiveMessage(standbyCtx)
 
 		if err != nil {
+			// A cancelled ctx means "take no new work", and the rest of an open
+			// transaction is not new: its commit, confirmed on exit, is what keeps
+			// the rows already delivered from being replayed after a restart.
+			if !draining && w.inTransaction && ctx.Err() != nil {
+				draining = true
+				resetStandby()
+
+				continue
+			}
+
 			// The receive deadline is the standby tick, so a timeout is the send
 			// window closing, not a broken stream. A finished ctx surfaces either way —
 			// pgx reports a cancelled one as a bare context.Canceled and an expired
 			// deadline as a timeout — and fail tells the two apart from the real faults.
 			if pgconn.Timeout(err) {
-				if ctxErr := ctx.Err(); ctxErr != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil && !draining {
 					return w.fail(ctx, walPosition, ctxErr)
 				}
 
@@ -180,11 +229,11 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			// Keepalives carry the only fresh ServerWALEnd an idle stream gets, but
-			// until the first record is decoded there is no processed position to
-			// measure against and the raw server LSN would be reported as the lag.
-			if walPosition != 0 {
-				w.metrics.updateReplicationLag(walPosition, pkm.ServerWALEnd)
+			// Between transactions everything committed before ServerWALEnd has
+			// already been processed, so confirming it releases the WAL pgoutput
+			// skipped. Inside one the sender may have read past this commit.
+			if !w.inTransaction && pkm.ServerWALEnd > walPosition {
+				walPosition = pkm.ServerWALEnd
 			}
 
 			if pkm.ReplyRequested {
@@ -202,17 +251,21 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 				return w.fail(ctx, walPosition, err)
 			}
 
-			err = w.processMessage(workCtx, xld.WALData, xld.ServerTime, walPosition, handler)
-			if err == nil {
-				recordEnd := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
-				if recordEnd > walPosition {
-					walPosition = recordEnd
-				}
+			w.beginProcessing(walPosition)
+			commitEnd, err := w.processMessage(workCtx, xld.WALData, xld.ServerTime, handler)
+			w.endProcessing()
 
-				w.metrics.updateReplicationLag(walPosition, xld.ServerWALEnd)
+			if err == nil {
+				if commitEnd > walPosition {
+					walPosition = commitEnd
+				}
 			} else {
 				err = fmt.Errorf("processMessage failed: %w", errors.Join(err, database.ErrWal))
 				return w.fail(ctx, walPosition, err)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil && !w.inTransaction {
+				return w.fail(ctx, walPosition, ctxErr)
 			}
 		}
 	}
@@ -255,6 +308,20 @@ func (w *wal) flush(ctx context.Context, position pglogrepl.LSN) error {
 	return err
 }
 
+// onShutdown confirms the last processed position when shutdown finds a change
+// still in flight, as after a drain timeout: Start never flushes on its way out
+// then, since the process exits first. Otherwise Start has flushed already.
+func (w *wal) onShutdown(ctx context.Context) error {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	if !w.processing {
+		return nil
+	}
+
+	return w.flush(ctx, w.processingPosition)
+}
+
 // fail flushes position back to the server on a best-effort basis, marks the
 // sender unhealthy with err and returns it. The flush error is dropped: err is
 // why the stream is ending. A finished ctx is the exception — err then only
@@ -279,28 +346,22 @@ func (w *wal) fail(ctx context.Context, position pglogrepl.LSN, err error) error
 	return err
 }
 
-// resolveTable resolves table to the configured table that owns it. A lookup the
-// registry cannot answer goes to the database, which can block for a long time,
-// so the stream is kept alive for the duration.
-func (w *wal) resolveTable(ctx context.Context, table domain.TableIdentifier, position pglogrepl.LSN) (domain.TableIdentifier, error) {
+// resolveTable resolves table to the configured table that owns it, going to
+// the database only when the registry cannot answer.
+func (w *wal) resolveTable(ctx context.Context, table domain.TableIdentifier) (domain.TableIdentifier, error) {
 	ref, err := w.introspector.ResolveKnownTableConfiguration(table)
 	if !errors.Is(err, errIntrospectionRequired) {
 		return ref, err
 	}
 
-	stop := w.keepAlive(ctx, position)
-	defer stop()
-
 	return w.introspector.ResolveTableConfiguration(ctx, table)
 }
 
-// keepAlive sends standby status updates for position every standbyInterval
-// until the returned stop is called, which waits for the sender to finish. It
-// exists so a blocking introspection — catalog round trips, connection retries,
-// an ALTER waiting on AccessExclusiveLock — cannot let the upstream walsender
-// time the session out. Its caller is parked inside the introspector and touches
-// w.session nowhere else, so the socket keeps a single writer throughout.
-func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func()) {
+// keepAlive starts the worker that sends a standby status update every
+// standbyInterval while a message is being processed, so a slow sink or a
+// blocking introspection cannot let the upstream walsender time the session
+// out. The returned stop waits for the worker to exit.
+func (w *wal) keepAlive(ctx context.Context) (stop func()) {
 	done := make(chan struct{})
 	finished := make(chan struct{})
 
@@ -315,9 +376,13 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 			case <-done:
 				return
 			case <-ticker.C:
-				// A failure here already marks the sender unhealthy; the receive
-				// loop reports it once it regains control.
-				_ = w.flush(ctx, position)
+				w.processingMu.Lock()
+				if w.processing {
+					// A failure here already marks the sender unhealthy; the receive
+					// loop reports it once it regains control.
+					_ = w.flush(ctx, w.processingPosition)
+				}
+				w.processingMu.Unlock()
 			}
 		}
 	}()
@@ -328,58 +393,83 @@ func (w *wal) keepAlive(ctx context.Context, position pglogrepl.LSN) (stop func(
 	}
 }
 
+// beginProcessing hands session to the keepalive worker, which reports position
+// until endProcessing takes it back.
+func (w *wal) beginProcessing(position pglogrepl.LSN) {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	w.processing = true
+	w.processingPosition = position
+}
+
+// endProcessing takes session back from the keepalive worker, waiting out a
+// flush it has in flight, so the receive loop stays its only user.
+func (w *wal) endProcessing() {
+	w.processingMu.Lock()
+	defer w.processingMu.Unlock()
+
+	w.processing = false
+}
+
 // processMessage parses a single pgoutput v2 message and dispatches it: a
 // relation updates the cache, a transactional logical message is buffered as
-// context, a commit drops that buffer, and a row change is decoded and forwarded
-// to handler.
-func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+// context, a row change is decoded and forwarded to handler, and a commit drops
+// the buffer and returns the transaction's end LSN; any other message returns 0.
+func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
 	if len(walData) == 0 {
-		return errEmptyWalRecord
+		return 0, errEmptyWalRecord
 	}
 
 	message, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
-		return fmt.Errorf("Parse logical replication message: %w", err)
+		return 0, fmt.Errorf("Parse logical replication message: %w", err)
 	}
 
 	switch message := message.(type) {
 	case *pglogrepl.RelationMessageV2:
 		w.relations[message.RelationID] = message
 
+	case *pglogrepl.BeginMessage:
+		w.inTransaction = true
+
 	case *pglogrepl.CommitMessage:
 		w.messageContext.reset()
+		w.inTransaction = false
+
+		return message.TransactionEndLSN, nil
 
 	case *pglogrepl.LogicalDecodingMessageV2:
 		if !message.Transactional || len(message.Prefix) == 0 || len(message.Content) == 0 {
-			return nil
+			return 0, nil
 		}
 
 		w.messageContext.append(message.Prefix, string(message.Content))
 
 	case *pglogrepl.InsertMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeInsert,
 			relationID:    message.RelationID,
 			prevTupleType: pglogrepl.UpdateMessageTupleTypeNone,
 			nextTuple:     message.Tuple,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.UpdateMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeUpdate,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
 			nextTuple:     message.NewTuple,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.DeleteMessageV2:
-		return w.processRow(ctx, rowChange{
+		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeDelete,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
-		}, timestamp, position, handler)
+		}, timestamp, handler)
 
 	case *pglogrepl.TruncateMessageV2:
 		resultErrs := make([]error, 0, len(message.RelationIDs))
@@ -388,16 +478,16 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 			start := time.Now()
 			relation, ok := w.relations[relationId]
 			if !ok {
-				return fmt.Errorf("unknown relation ID: %d: %w", relationId, database.ErrWal)
+				return 0, fmt.Errorf("unknown relation ID: %d: %w", relationId, database.ErrWal)
 			}
 
 			table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-			ref, err := w.resolveTable(ctx, table, position)
+			ref, err := w.resolveTable(ctx, table)
 			if errors.Is(err, ErrTableIgnored) {
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
+				return 0, fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 			}
 
 			e := handler(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, ref.Schema, ref.Name, headers, nil, nil)
@@ -410,11 +500,11 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		}
 
 		if len(resultErrs) > 0 {
-			return errors.Join(resultErrs...)
+			return 0, errors.Join(resultErrs...)
 		}
 	}
 
-	return nil
+	return 0, nil
 }
 
 // rowChange is the per-operation part of a decoded row change: the tuples that
@@ -434,7 +524,7 @@ type rowChange struct {
 
 // processRow resolves the relation behind change, decodes its tuples and
 // forwards the result to handler, recording the time the whole path took.
-func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.Time, position pglogrepl.LSN, handler database.ProcessMessageHandler) error {
+func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.Time, handler database.ProcessMessageHandler) error {
 	start := time.Now()
 
 	relation, ok := w.relations[change.relationID]
@@ -443,7 +533,7 @@ func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.T
 	}
 
 	table := domain.TableIdentifier{Schema: domain.TableSchema(relation.Namespace), Name: domain.TableName(relation.RelationName)}
-	ref, err := w.resolveTable(ctx, table, position)
+	ref, err := w.resolveTable(ctx, table)
 	if errors.Is(err, ErrTableIgnored) {
 		return nil
 	}
@@ -499,7 +589,7 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 			case 'u': // unchanged toast: the old value is not in the stream
 				prev[columnName] = domain.Unavailable
 			case 't': // text
-				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)
+				val, err := decodeText(w.typeMap, relation.Columns[index].DataType, column.Data)
 				if err != nil {
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
@@ -531,7 +621,7 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 					next[columnName] = domain.Unavailable
 				}
 			case 't': // text
-				val, err := w.decodeRowText(column.Data, relation.Columns[index].DataType)
+				val, err := decodeText(w.typeMap, relation.Columns[index].DataType, column.Data)
 				if err != nil {
 					return nil, nil, fmt.Errorf("decode column %q (oid %d): %w", columnName, relation.Columns[index].DataType, err)
 				}
@@ -545,21 +635,21 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 	return prev, next, nil
 }
 
-// decodeRowText decodes a text-format column value using the pgtype codec
-// registered for dataType, falling back to the raw string when the OID is
-// unknown to the type map.
-func (w *wal) decodeRowText(data []byte, dataType uint32) (any, error) {
-	dt, ok := w.typeMap.TypeForOID(dataType)
+// decodeText decodes a text-format column value using the pgtype codec
+// registered in m for oid, falling back to the raw string when the OID is
+// unknown to m.
+func decodeText(m *pgtype.Map, oid uint32, data []byte) (any, error) {
+	dt, ok := m.TypeForOID(oid)
 	if !ok {
 		return string(data), nil
 	}
 
-	val, err := dt.Codec.DecodeValue(w.typeMap, dataType, pgtype.TextFormatCode, data)
+	val, err := dt.Codec.DecodeValue(m, oid, pgtype.TextFormatCode, data)
 	if err != nil {
 		return nil, err
 	}
 
-	if b, ok := val.([16]byte); ok && dataType == pgtype.UUIDOID {
+	if b, ok := val.([16]byte); ok && oid == pgtype.UUIDOID {
 		return uuidString(b), nil
 	}
 

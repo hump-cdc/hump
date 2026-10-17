@@ -12,6 +12,8 @@ import (
 //   - merging entries that share the same schema/table after flattening;
 //   - resolving `preset: <name>` references in sinks against the top-level
 //     `sinks` section;
+//   - pushing a table's `operations` down onto each of its sinks, so the
+//     list survives the merge below;
 //   - dropping the top-level `sinks` section from the output.
 func expand(raw string) (string, error) {
 	var root any
@@ -32,6 +34,8 @@ func expand(raw string) (string, error) {
 		return "", err
 	}
 
+	pushDownOperations(flat)
+
 	merged := mergeTablesByKey(flat)
 
 	result := yaml.MapSlice{}
@@ -49,12 +53,7 @@ func expand(raw string) (string, error) {
 	}
 	result = append(result, yaml.MapItem{Key: "tables", Value: tablesResult})
 
-	out, err := yaml.Marshal(result)
-	if err != nil {
-		return "", err
-	}
-
-	return string(out), nil
+	return canonicalYAML(result)
 }
 
 // collectSinkPresets builds a name -> sink config map from the top-level
@@ -163,6 +162,36 @@ func resolveSinkPresets(tables []yaml.MapSlice, presets map[string]yaml.MapSlice
 	return nil
 }
 
+// pushDownOperations moves a table's `operations` onto every one of its sinks,
+// overriding whatever the sink or its preset set, and drops it from the table.
+// A table without `operations` leaves its sinks' own lists untouched. The list
+// has to live on the sinks: merging keeps only the first entry's table keys, so
+// a table-level list would be lost for the sinks of every later entry.
+func pushDownOperations(tables []yaml.MapSlice) {
+	for i, t := range tables {
+		ops, ok := mapGet(t, "operations")
+		if !ok {
+			continue
+		}
+
+		t = mapDelete(t, "operations")
+
+		if sinksRaw, ok := mapGet(t, "sinks"); ok {
+			list, _ := sinksRaw.([]any)
+			sinks := make([]any, 0, len(list))
+			for _, sk := range list {
+				if sm, ok := sk.(yaml.MapSlice); ok {
+					sk = mapSet(sm, "operations", ops)
+				}
+				sinks = append(sinks, sk)
+			}
+			t = mapSet(t, "sinks", sinks)
+		}
+
+		tables[i] = t
+	}
+}
+
 // mergeTablesByKey collapses entries that share the same schema/table pair.
 // Non-sink keys take the first entry's value; sinks are concatenated and
 // deduplicated using a YAML-canonical form of each entry.
@@ -237,7 +266,8 @@ func mergeTableEntries(a, b yaml.MapSlice) (yaml.MapSlice, error) {
 	return mapSet(merged, "sinks", combined), nil
 }
 
-// canonicalYAML marshals v to YAML so it can serve as a deep-equality key.
+// canonicalYAML marshals v to a YAML string; equal values yield equal output,
+// so it also serves as a deep-equality key.
 func canonicalYAML(v any) (string, error) {
 	buf, err := yaml.Marshal(v)
 	if err != nil {

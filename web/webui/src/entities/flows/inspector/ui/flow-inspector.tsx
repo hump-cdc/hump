@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { cn, useIsMobile } from '@/shared/utils'
 
+import { toOperationsSearch } from '../model/operations-search'
 import { useFlowInspectorStore } from '../model/store'
 import type { SelectedItem } from '../model/types'
 import { InspectorDetails } from './inspector-details'
@@ -89,7 +90,7 @@ export const FlowInspector: FC<{ ref?: Ref<HTMLDivElement> }> = ({ ref }) => {
                         {!isMobile && <RecentOperations selected={shown} />}
 
                         <Button className="mt-auto" asChild>
-                            <Link to="/operations">
+                            <Link to="/operations" search={toOperationsSearch(shown)}>
                                 View in Operations
                                 <ArrowUpRight />
                             </Link>

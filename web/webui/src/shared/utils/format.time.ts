@@ -6,5 +6,5 @@ const timeFormatter = new Intl.DateTimeFormat('en-US', {
     hour12: false,
 })
 
-/** Formats a `Date` as `HH:mm:ss.SSS` (UTC). */
+/** Formats a `Date` as local `HH:mm:ss.SSS`. */
 export const formatTime = (d: Date): string => timeFormatter.format(d)

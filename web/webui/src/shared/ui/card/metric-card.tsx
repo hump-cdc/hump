@@ -54,7 +54,7 @@ type MetricCardProps = {
     asideTrend?: AsideTrend | null
     value?: ReactNode
     values?: Array<{ date: string; value: number }>
-    tooltipValueFormatter?: ComponentProps<typeof BarChart>['tooltipValueFormatter']
+    tooltipValue?: ComponentProps<typeof BarChart>['tooltipValue']
     chartSize?: 'sm' | 'md' | 'lg'
     chartClassName?: string
     variant?: MetricVariant
@@ -71,7 +71,7 @@ export const MetricCard: FC<MetricCardProps> = ({
     asideTrend = 'positive',
     value,
     values,
-    tooltipValueFormatter,
+    tooltipValue,
     chartSize = 'sm',
     chartClassName,
     variant = 'primary',
@@ -111,7 +111,7 @@ export const MetricCard: FC<MetricCardProps> = ({
                     series={[{ dataKey: 'value', label: title, variant }]}
                     xAxisKey="date"
                     tooltip
-                    tooltipValueFormatter={tooltipValueFormatter}
+                    tooltipValue={tooltipValue}
                 />
             )}
 

@@ -42,7 +42,7 @@ type StoryArgs = Pick<ComponentProps<typeof FlowSummary>, 'edges'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Flow Summary',
+    title: 'Flows/Flow Summary',
     parameters: { disableSideBySide: true, disablePadding: true },
     argTypes: {
         edges: { table: { disable: true } },
@@ -133,6 +133,7 @@ const meta: Meta<StoryArgs> = {
                         id="s-kafka"
                         name="kafka"
                         type="kafka"
+                        host="localhost:9092"
                         operations={1240000}
                         p95={18}
                         successRate={99.98}
@@ -142,6 +143,7 @@ const meta: Meta<StoryArgs> = {
                         id="s-rabbitmq"
                         name="rabbitmq"
                         type="rabbitmq"
+                        host="localhost:5672"
                         operations={486000}
                         p95={31}
                         successRate={99.7}

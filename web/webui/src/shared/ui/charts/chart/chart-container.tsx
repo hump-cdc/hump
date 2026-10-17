@@ -47,7 +47,11 @@ export const ChartContainer: FC<ChartContainerProps> = ({
             <div
                 data-slot="chart"
                 data-chart={chartId}
-                className={cn('flex aspect-video flex-col text-xs', className)}
+                className={cn(
+                    // The tooltip opens as a native popover, whose UA `overflow: auto` shows a scrollbar while NumberFlow digits roll past its edges.
+                    'flex aspect-video flex-col text-xs [&_.ts-chart-tooltip]:overflow-visible',
+                    className,
+                )}
                 style={{ ...tooltipSurfaceStyle, ...style }}
                 {...props}
             >

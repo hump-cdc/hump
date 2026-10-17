@@ -24,6 +24,26 @@ export const ConfigSinkSchema = z.object({
 
 export type ConfigSink = z.infer<typeof ConfigSinkSchema>;
 
+export const ConfigTargetSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    operations: z.array(z.enum([
+        'insert',
+        'update',
+        'delete',
+        'truncate'
+    ])).nullable(),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target rendered for the table, as the metrics topology reports it'
+    }),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Sink type'
+    })
+});
+
+export type ConfigTarget = z.infer<typeof ConfigTargetSchema>;
+
 export const ConfigTableSchema = z.object({
     name: z.string().register(z.globalRegistry, {
         description: 'Table name'
@@ -34,7 +54,8 @@ export const ConfigTableSchema = z.object({
     schema: z.string().register(z.globalRegistry, {
         description: 'Table schema'
     }),
-    sinks: z.array(ConfigSinkSchema).nullable()
+    sinks: z.array(ConfigSinkSchema).nullable(),
+    targets: z.array(ConfigTargetSchema).nullable()
 });
 
 export type ConfigTable = z.infer<typeof ConfigTableSchema>;
@@ -108,6 +129,61 @@ export const ErrorModelSchema = z.object({
 });
 
 export type ErrorModel = z.infer<typeof ErrorModelSchema>;
+
+export const EstimateErrorEventSchema = z.object({
+    error: z.string().register(z.globalRegistry, {
+        description: 'Why the table could not be counted: an invalid filter, a missing table or a failed query'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table, as requested'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Name of the table, as requested'
+    })
+});
+
+export type EstimateErrorEvent = z.infer<typeof EstimateErrorEventSchema>;
+
+export const EstimateEventSchema = z.object({
+    count: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Number of rows matching the filter'
+    }),
+    rough: z.boolean().register(z.globalRegistry, {
+        description: 'Whether count is the planner\'s estimate rather than an exact count'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table, as requested'
+    }),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Name of the table, as requested'
+    })
+});
+
+export type EstimateEvent = z.infer<typeof EstimateEventSchema>;
+
+export const EstimateTableSchema = z.object({
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table; empty resolves the table through search_path'
+    }).optional(),
+    table: z.string().min(1).register(z.globalRegistry, {
+        description: 'Name of the table'
+    }),
+    where: z.string().register(z.globalRegistry, {
+        description: 'Boolean expression the rows are filtered with, as it would follow WHERE; empty counts every row'
+    }).optional()
+});
+
+export type EstimateTable = z.infer<typeof EstimateTableSchema>;
+
+export const EstimatesDoneEventSchema = z.record(z.string(), z.never());
+
+export type EstimatesDoneEvent = z.infer<typeof EstimatesDoneEventSchema>;
+
+export const EstimatesRequestBodySchema = z.object({
+    tables: z.array(EstimateTableSchema).nullable()
+});
+
+export type EstimatesRequestBody = z.infer<typeof EstimatesRequestBodySchema>;
 
 export const MetricsConnectionSchema = z.object({
     failure: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
@@ -391,6 +467,202 @@ export const OperationsResponseBodySchema = z.object({
 
 export type OperationsResponseBody = z.infer<typeof OperationsResponseBodySchema>;
 
+export const SnapshotColumnSchema = z.object({
+    name: z.string().register(z.globalRegistry, {
+        description: 'Column name'
+    }),
+    nullable: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the column accepts NULL'
+    }),
+    primaryKey: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the column is part of the primary key'
+    }),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Column type as PostgreSQL formats it, e.g. timestamp with time zone'
+    })
+});
+
+export type SnapshotColumn = z.infer<typeof SnapshotColumnSchema>;
+
+export const SnapshotEventSchema = z.object({
+    progress: z.int().gte(0).lte(100).register(z.globalRegistry, {
+        description: 'Rows read across all tables as a whole percent of the estimate; 0 while the estimate is unknown or no snapshot is processing'
+    }),
+    state: z.enum([
+        'idle',
+        'processing',
+        'done'
+    ]).register(z.globalRegistry, {
+        description: 'Snapshot state'
+    })
+});
+
+export type SnapshotEvent = z.infer<typeof SnapshotEventSchema>;
+
+export const SnapshotIdleEventSchema = z.object({
+    state: z.enum(['idle']).register(z.globalRegistry, {
+        description: 'Snapshot state'
+    })
+});
+
+export type SnapshotIdleEvent = z.infer<typeof SnapshotIdleEventSchema>;
+
+export const SnapshotRunSinkSchema = z.object({
+    count: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows delivered to the sink so far'
+    }),
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target the sink renders for the table: topic, subject, exchange, stream or URL'
+    }),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Sink type the rows are delivered to'
+    })
+});
+
+export type SnapshotRunSink = z.infer<typeof SnapshotRunSinkSchema>;
+
+export const SnapshotDoneTableSchema = z.object({
+    completedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows read'
+    }),
+    error: z.string().register(z.globalRegistry, {
+        description: 'Why the table was not read completely'
+    }).optional(),
+    name: z.string().register(z.globalRegistry, {
+        description: 'Name of the table'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table'
+    }),
+    sinks: z.array(SnapshotRunSinkSchema).nullable(),
+    status: z.enum(['success', 'error']).register(z.globalRegistry, {
+        description: 'Whether the table was read completely'
+    })
+});
+
+export type SnapshotDoneTable = z.infer<typeof SnapshotDoneTableSchema>;
+
+export const SnapshotDoneEventSchema = z.object({
+    finishedAt: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'When the snapshot finished, UTC'
+    }),
+    startedAt: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'When the snapshot started, UTC'
+    }),
+    state: z.enum(['done']).register(z.globalRegistry, {
+        description: 'Snapshot state'
+    }),
+    tables: z.array(SnapshotDoneTableSchema).nullable()
+});
+
+export type SnapshotDoneEvent = z.infer<typeof SnapshotDoneEventSchema>;
+
+export const SnapshotProcessingTableSchema = z.object({
+    completedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows read so far'
+    }),
+    estimatedRows: z.coerce.bigint().gte(BigInt(0)).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }).register(z.globalRegistry, {
+        description: 'Rows the snapshot expects to read'
+    }),
+    name: z.string().register(z.globalRegistry, {
+        description: 'Name of the table'
+    }),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table'
+    }),
+    sinks: z.array(SnapshotRunSinkSchema).nullable(),
+    status: z.enum([
+        'wait',
+        'processing',
+        'done'
+    ]).register(z.globalRegistry, {
+        description: 'Phase of the table: waiting for its turn, being read, or read'
+    }),
+    where: z.string().register(z.globalRegistry, {
+        description: 'Boolean expression the rows are filtered with, as it would follow WHERE; empty reads every row'
+    }).optional()
+});
+
+export type SnapshotProcessingTable = z.infer<typeof SnapshotProcessingTableSchema>;
+
+export const SnapshotProcessingEventSchema = z.object({
+    startedAt: z.iso.datetime({ offset: true }).register(z.globalRegistry, {
+        description: 'When the snapshot started, UTC'
+    }),
+    state: z.enum(['processing']).register(z.globalRegistry, {
+        description: 'Snapshot state'
+    }),
+    tables: z.array(SnapshotProcessingTableSchema).nullable()
+});
+
+export type SnapshotProcessingEvent = z.infer<typeof SnapshotProcessingEventSchema>;
+
+export const SnapshotSinkSchema = z.object({
+    host: z.string().register(z.globalRegistry, {
+        description: 'Connection host the sink URL renders to'
+    }),
+    target: z.string().register(z.globalRegistry, {
+        description: 'Target rendered for the table: topic, subject, exchange, stream or URL'
+    }),
+    type: z.string().register(z.globalRegistry, {
+        description: 'Sink type, e.g. kafka or nats'
+    })
+});
+
+export type SnapshotSink = z.infer<typeof SnapshotSinkSchema>;
+
+export const SnapshotStartTableSchema = z.object({
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table; empty resolves the table through search_path'
+    }).optional(),
+    table: z.string().min(1).register(z.globalRegistry, {
+        description: 'Name of the table'
+    }),
+    where: z.string().register(z.globalRegistry, {
+        description: 'Boolean expression the rows are filtered with, as it would follow WHERE; empty reads every row'
+    }).optional()
+});
+
+export type SnapshotStartTable = z.infer<typeof SnapshotStartTableSchema>;
+
+export const SnapshotStartRequestBodySchema = z.object({
+    tables: z.array(SnapshotStartTableSchema).min(1).nullable()
+});
+
+export type SnapshotStartRequestBody = z.infer<typeof SnapshotStartRequestBodySchema>;
+
+export const SnapshotTableSchema = z.object({
+    columns: z.array(SnapshotColumnSchema).nullable(),
+    schema: z.string().register(z.globalRegistry, {
+        description: 'Schema of the table'
+    }),
+    sinks: z.array(SnapshotSinkSchema).nullable(),
+    table: z.string().register(z.globalRegistry, {
+        description: 'Name of the table'
+    }),
+    type: z.enum([
+        'regular',
+        'partitioned',
+        'hypertable'
+    ]).register(z.globalRegistry, {
+        description: 'How the table stores its rows'
+    }),
+    where: z.string().register(z.globalRegistry, {
+        description: 'Suggested filter keeping recent rows, as it would follow WHERE; empty suggests none'
+    })
+});
+
+export type SnapshotTable = z.infer<typeof SnapshotTableSchema>;
+
+export const SnapshotTablesResponseBodySchema = z.object({
+    tables: z.array(SnapshotTableSchema).nullable()
+});
+
+export type SnapshotTablesResponseBody = z.infer<typeof SnapshotTablesResponseBodySchema>;
+
 export const WelcomeEventSchema = z.record(z.string(), z.never());
 
 export type WelcomeEvent = z.infer<typeof WelcomeEventSchema>;
@@ -405,6 +677,7 @@ export const zGetApiConfigResponse = ConfigResponseBodySchema;
  */
 export const zGetApiLiveResponse = z.union([
     OperationsEventSchema,
+    SnapshotEventSchema,
     WelcomeEventSchema
 ]);
 
@@ -421,3 +694,37 @@ export const zPostApiOperationsBody = OperationsRequestBodySchema;
  * OK
  */
 export const zPostApiOperationsResponse = OperationsResponseBodySchema;
+
+/**
+ * OK
+ */
+export const zGetApiSnapshotResponse = z.union([
+    SnapshotIdleEventSchema,
+    SnapshotProcessingEventSchema,
+    SnapshotDoneEventSchema
+]);
+
+export const zPostApiSnapshotEstimateBody = EstimatesRequestBodySchema;
+
+/**
+ * OK
+ */
+export const zPostApiSnapshotEstimateResponse = z.union([
+    EstimateEventSchema,
+    EstimateErrorEventSchema,
+    EstimatesDoneEventSchema
+]);
+
+export const zPostApiSnapshotStartBody = SnapshotStartRequestBodySchema;
+
+/**
+ * No Content
+ */
+export const zPostApiSnapshotStopResponse = z.void().register(z.globalRegistry, {
+    description: 'No Content'
+});
+
+/**
+ * OK
+ */
+export const zPostApiSnapshotTablesResponse = SnapshotTablesResponseBodySchema;

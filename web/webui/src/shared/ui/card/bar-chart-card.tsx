@@ -27,6 +27,49 @@ const swatchVariants = cva('size-2.5 rounded-xs', {
     },
 })
 
+const INLINE_LEGEND_LIMIT = 2
+const TRIGGER_SWATCH_LIMIT = 5
+
+const LegendItem: FC<{ item: BarSeries }> = ({ item: { dataKey, label, variant } }) => (
+    <span className="flex items-center gap-1.5 font-medium text-xs">
+        <span className={swatchVariants({ variant })} />
+        {label ?? dataKey}
+    </span>
+)
+
+// Up to INLINE_LEGEND_LIMIT series fit inline; more collapse into swatches + count with the full list on hover.
+const Legend: FC<{ series: BarSeries[] }> = ({ series }) => {
+    if (series.length <= INLINE_LEGEND_LIMIT) {
+        return (
+            <div className="flex items-center gap-3.5 text-ink-subtle">
+                {series.map((item) => (
+                    <LegendItem key={item.dataKey} item={item} />
+                ))}
+            </div>
+        )
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="flex cursor-default items-center gap-1.5 font-medium text-ink-subtle text-xs">
+                    <span className="flex items-center gap-0.5">
+                        {series.slice(0, TRIGGER_SWATCH_LIMIT).map(({ dataKey, variant }) => (
+                            <span key={dataKey} className={swatchVariants({ variant })} />
+                        ))}
+                    </span>
+                    {series.length} series
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end" className="flex flex-col gap-1.5 py-2">
+                {series.map((item) => (
+                    <LegendItem key={item.dataKey} item={item} />
+                ))}
+            </TooltipContent>
+        </Tooltip>
+    )
+}
+
 type BarChartCardProps = {
     title: string
     subtitle?: string
@@ -37,7 +80,7 @@ type BarChartCardProps = {
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
-    tooltipValueFormatter?: ComponentProps<typeof BarChart>['tooltipValueFormatter']
+    tooltipValue?: ComponentProps<typeof BarChart>['tooltipValue']
     chartClassName?: string
     className?: string
     ref?: Ref<HTMLDivElement>
@@ -53,29 +96,13 @@ export const BarChartCard: FC<BarChartCardProps> = ({
     xAxisKey,
     stacked = true,
     tooltip = true,
-    tooltipValueFormatter,
+    tooltipValue,
     chartClassName = 'h-56',
     className,
     ...props
 }) => (
     <Card className={cn('overflow-visible', className)} {...props}>
-        <CardHeader
-            aside={
-                legend ? (
-                    <div className="flex items-center gap-3.5">
-                        {series.map(({ dataKey, label, variant }) => (
-                            <span
-                                key={dataKey}
-                                className="flex items-center gap-1.5 font-medium text-ink-subtle text-xs"
-                            >
-                                <span className={swatchVariants({ variant })} />
-                                {label ?? dataKey}
-                            </span>
-                        ))}
-                    </div>
-                ) : undefined
-            }
-        >
+        <CardHeader aside={legend ? <Legend series={series} /> : undefined}>
             <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5">
                     <span className="font-semibold text-ink text-sm tracking-tight">{title}</span>
@@ -102,7 +129,7 @@ export const BarChartCard: FC<BarChartCardProps> = ({
                 xAxisKey={xAxisKey}
                 stacked={stacked}
                 tooltip={tooltip}
-                tooltipValueFormatter={tooltipValueFormatter}
+                tooltipValue={tooltipValue}
             />
         </CardContent>
     </Card>

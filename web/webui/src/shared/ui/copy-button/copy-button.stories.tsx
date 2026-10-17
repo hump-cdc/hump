@@ -7,7 +7,7 @@ import { CopyButton } from './copy-button'
 type StoryArgs = Pick<ComponentProps<typeof CopyButton>, 'value' | 'label'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Copy Button',
+    title: 'Actions/Copy Button',
     argTypes: {
         value: { name: 'Value', control: 'text', table: { category: 'Content' } },
         label: { name: 'Label', control: 'text', table: { category: 'Content' } },

@@ -2,9 +2,9 @@ package postgres
 
 import (
 	"hump/internal/domain"
+	"sync"
 	"time"
 
-	"github.com/jackc/pglogrepl"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -12,6 +12,7 @@ import (
 type metrics struct {
 	replicationLag prometheus.Gauge
 	rowDurations   *prometheus.HistogramVec
+	rowObserversMu sync.Mutex // rowObserversMu guards rowObservers: WAL and snapshot reads observe rows concurrently.
 	rowObservers   map[rowObserverKey]prometheus.Observer
 }
 
@@ -26,7 +27,7 @@ func newMetrics(dbName string, factory promauto.Factory) *metrics {
 	return &metrics{
 		replicationLag: factory.NewGauge(prometheus.GaugeOpts{
 			Name:        "replication_lag_bytes",
-			Help:        "Replication lag in bytes between the current WAL write position on the source database and the WAL position the pipeline has already processed. Higher values indicate the pipeline is falling behind and the source is retaining WAL for the replication slot.",
+			Help:        "Replication lag in bytes: the current WAL position on the source database minus the confirmed_flush_lsn of the replication slot, i.e. the WAL the slot retains. Higher values indicate the pipeline is falling behind or has not confirmed its position yet.",
 			ConstLabels: prometheus.Labels{"db": dbName},
 		}),
 		rowDurations: factory.NewHistogramVec(prometheus.HistogramOpts{
@@ -51,16 +52,10 @@ func newMetrics(dbName string, factory promauto.Factory) *metrics {
 	}
 }
 
-// updateReplicationLag updates the replication lag metric with the difference between
-// the last processed WAL position and the server's reported WAL end position.
-func (m *metrics) updateReplicationLag(processed pglogrepl.LSN, server pglogrepl.LSN) {
-	// LSN is unsigned, so the positions are compared before subtracting: a
-	// processed position at or past the server's means no lag, not a wrapped one.
-	if server > processed {
-		m.replicationLag.Set(float64(server - processed))
-	} else {
-		m.replicationLag.Set(0)
-	}
+// setReplicationLag sets the replication lag metric to bytes, clamping a
+// negative value to zero.
+func (m *metrics) setReplicationLag(bytes float64) {
+	m.replicationLag.Set(max(bytes, 0))
 }
 
 // observeRow records the duration of operation on table, caching the observer
@@ -68,11 +63,13 @@ func (m *metrics) updateReplicationLag(processed pglogrepl.LSN, server pglogrepl
 func (m *metrics) observeRow(operation domain.OperationType, table domain.TableIdentifier, duration time.Duration) {
 	key := rowObserverKey{operation: operation, table: table}
 
+	m.rowObserversMu.Lock()
 	observer, ok := m.rowObservers[key]
 	if !ok {
 		observer = m.rowDurations.WithLabelValues(string(operation), string(table.Schema), string(table.Name))
 		m.rowObservers[key] = observer
 	}
+	m.rowObserversMu.Unlock()
 
 	observer.Observe(duration.Seconds())
 }

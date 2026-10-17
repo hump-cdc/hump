@@ -374,7 +374,7 @@ const useFakeRows = ({ rowCount, blockSize, latency }: Pick<StoryArgs, 'rowCount
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Data Table',
+    title: 'Content/Data Table',
     parameters: { disableSideBySide: true, disablePadding: true },
     argTypes: {
         rowCount: { name: 'Rows', control: { type: 'number', min: 0, step: 1000 }, table: { category: 'Content' } },

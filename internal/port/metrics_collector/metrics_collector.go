@@ -138,8 +138,10 @@ type Collector interface {
 	Connect()
 	// Disconnect unregisters a client previously registered with Connect.
 	Disconnect()
-	// Scrape requests an extra scrape out of schedule; it does nothing while idle.
-	Scrape()
+	// Scrape requests an extra scrape out of schedule and returns a channel
+	// closed once a scrape started after the call is folded, or the collector
+	// stops; while idle the channel is already closed.
+	Scrape() <-chan struct{}
 	// Record counts n deliveries over conn that ended with status. Unlike the
 	// scraped counts, it is reported by the pipeline rather than read from the
 	// registry, and it is safe to call while the collector is idle.

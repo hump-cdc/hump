@@ -43,7 +43,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Combobox',
+    title: 'Inputs/Combobox',
     argTypes: {
         placeholder: { name: 'Placeholder', control: 'text', table: { category: 'Content' } },
         emptyText: { name: 'Empty text', control: 'text', table: { category: 'Content' } },
@@ -96,7 +96,7 @@ const meta: Meta<StoryArgs> = {
                                     <span className="shrink-0 font-mono text-ink-tertiary text-sm tabular-nums">
                                         {item.aside}
                                     </span>
-                                    <Check className="size-4 shrink-0 text-primary opacity-0 group-data-[selected]/combobox-item:opacity-100" />
+                                    <Check className="size-4 shrink-0 text-primary opacity-0 group-data-selected/combobox-item:opacity-100" />
                                 </ComboboxItem>
                             )}
                         </ComboboxList>

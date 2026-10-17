@@ -38,7 +38,7 @@ type AreaChartCardProps = {
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
-    tooltipValueFormatter?: ComponentProps<typeof AreaChart>['tooltipValueFormatter']
+    tooltipValue?: ComponentProps<typeof AreaChart>['tooltipValue']
     chartClassName?: string
     className?: string
     ref?: Ref<HTMLDivElement>
@@ -55,7 +55,7 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
     xAxisKey,
     stacked = false,
     tooltip = true,
-    tooltipValueFormatter,
+    tooltipValue,
     chartClassName = 'h-56',
     className,
     ...props
@@ -110,7 +110,7 @@ export const AreaChartCard: FC<AreaChartCardProps> = ({
                 xAxisKey={xAxisKey}
                 stacked={stacked}
                 tooltip={tooltip}
-                tooltipValueFormatter={tooltipValueFormatter}
+                tooltipValue={tooltipValue}
             />
         </CardContent>
     </Card>

@@ -7,7 +7,7 @@ import { OperationStatusBadge } from './operation-status-badge'
 type StoryArgs = Pick<ComponentProps<typeof OperationStatusBadge>, 'status' | 'attempts' | 'variant' | 'withAttempts'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Operation Status Badge',
+    title: 'Content/Operation Status Badge',
     argTypes: {
         status: {
             name: 'Status',

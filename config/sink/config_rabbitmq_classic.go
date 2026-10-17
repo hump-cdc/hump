@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"hump/config/decoder"
-	"hump/config/errs"
+	"hump/config/errors"
 	sinkport "hump/internal/port/sink"
 	"hump/pkg/metadata"
 	"hump/pkg/template"
@@ -194,7 +194,7 @@ func (*RabbitMQSink) CrossValidate(groups [][]sinkport.Definition) error {
 				// across runs and deterministic across processes.
 				b, err := json.Marshal(rmqSink.Exchange.Arguments)
 				if err != nil {
-					return fmt.Errorf("%w: exchange %q: encode arguments: %w", errs.ErrCrossValidate, exchangeName, err)
+					return fmt.Errorf("%w: exchange %q: encode arguments: %w", errors.ErrCrossValidate, exchangeName, err)
 				}
 				argsJSON = string(b)
 			}
@@ -217,7 +217,7 @@ func (*RabbitMQSink) CrossValidate(groups [][]sinkport.Definition) error {
 			}
 
 			if prev != e {
-				return fmt.Errorf("%w: exchange %q: divergent type/durable/autoDelete/arguments", errs.ErrCrossValidate, exchangeName)
+				return fmt.Errorf("%w: exchange %q: divergent type/durable/autoDelete/arguments", errors.ErrCrossValidate, exchangeName)
 			}
 		}
 	}

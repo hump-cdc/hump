@@ -13,6 +13,7 @@ import {
     ComboboxList,
     ComboboxValue,
 } from '@/shared/ui/combobox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 import { MultiComboBoxFooter } from './multi-combo-box.footer'
 import { useChipOverflow, useChipsRef, useMultiComboBoxSelection } from './multi-combo-box.helpers'
@@ -26,8 +27,12 @@ type MultiComboBoxProps = {
     placeholder?: string
     emptyText?: string
     icon?: ReactNode
+    /** Tooltip shown on hovering the icon; ignored without `icon`. */
+    hint?: ReactNode
     invalid?: boolean
     disabled?: boolean
+    /** Makes the clear button select every item instead of none, for a filter where "All" is the reset state. */
+    clearToAll?: boolean
     className?: string
     ref?: Ref<HTMLDivElement>
 }
@@ -39,14 +44,18 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
     placeholder,
     emptyText = 'No items found.',
     icon,
+    hint,
     invalid,
     disabled,
+    clearToAll,
     className,
     ref,
 }) => {
     const { selectedItems, commit } = useMultiComboBoxSelection(items, value, onValueChange)
     const { anchor, setChipsRef } = useChipsRef(ref)
     const { containerRef, measureRef, visibleCount } = useChipOverflow(selectedItems.length)
+    const isAllSelected = items.length > 0 && selectedItems.length === items.length
+    const canClear = clearToAll ? !isAllSelected : selectedItems.length > 0
 
     return (
         <Combobox
@@ -54,13 +63,27 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
             autoHighlight
             items={items}
             value={selectedItems}
-            onValueChange={commit}
+            onValueChange={(next: MultiComboBoxItem[], details) =>
+                commit(clearToAll && details.reason === 'clear-press' ? items : next)
+            }
             itemToStringLabel={(item: MultiComboBoxItem) => item.label}
             isItemEqualToValue={(a: MultiComboBoxItem, b: MultiComboBoxItem) => a.value === b.value}
             disabled={disabled}
         >
             <ComboboxChips ref={setChipsRef} aria-invalid={invalid || undefined} className={className}>
-                {icon && <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">{icon}</span>}
+                {icon &&
+                    (hint ? (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">
+                                    {icon}
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-56 text-pretty">{hint}</TooltipContent>
+                        </Tooltip>
+                    ) : (
+                        <span className="flex shrink-0 items-center text-ink-subtle [&_svg]:size-4">{icon}</span>
+                    ))}
 
                 <div ref={containerRef} className="relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                     {/* Invisible measurement row: all chips at natural width, read by useChipOverflow. */}
@@ -111,7 +134,7 @@ export const MultiComboBox: FC<MultiComboBoxProps> = ({
                     </ComboboxValue>
                 </div>
 
-                {selectedItems.length > 0 && <ComboboxClear disabled={disabled} />}
+                {canClear && <ComboboxClear keepMounted={clearToAll} disabled={disabled} />}
                 <ChevronsUpDown className="pointer-events-none size-4 shrink-0 text-ink-subtle" />
             </ComboboxChips>
 

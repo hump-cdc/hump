@@ -16,16 +16,20 @@ export const FlowsToolbar: FC = () => {
     return (
         <Toolbar>
             <MultiComboBox
+                clearToAll
                 items={tableOptions}
                 {...bindSelection(tableOptions, selectedTables, setTables)}
                 placeholder="Tables"
+                hint="Tables to show on the flow, with their connections"
                 icon={<Table2 />}
                 className="w-1/2"
             />
             <MultiComboBox
+                clearToAll
                 items={sinkOptions}
                 {...bindSelection(sinkOptions, selectedSinks, setSinks)}
                 placeholder="Sinks"
+                hint="Sink endpoints to show on the flow, with their connections"
                 icon={<Workflow />}
                 className="w-1/2"
             />

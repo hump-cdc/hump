@@ -1,13 +1,14 @@
 import { Meta } from '@storybook/addon-docs/blocks'
 
-<Meta title="UI Kit/Colors" />
+<Meta title="Colors" />
 
 export const TOKENS = [
     {
         group: 'Canvas & surfaces',
         note: 'Elevation ramp — each step sits visually above the previous one.',
         items: [
-            { token: 'canvas', light: '#ffffff', dark: '#010102', use: 'Base page background — the lowest layer everything else sits on.' },
+            { token: 'canvas', light: '#fbfbfc', dark: '#010102', use: 'Base page background — the lowest layer everything else sits on.' },
+            { token: 'sidebar', light: '#f3f4f6', dark: '#08090a', use: 'App sidebar background — a step darker than canvas (light), a step lighter (dark).' },
             { token: 'surface-1', light: '#f7f8f9', dark: '#0f1011', use: 'First raised layer: cards, panels, sidebars.' },
             { token: 'surface-2', light: '#eef0f2', dark: '#141516', use: 'Second layer: inputs, controls, nested blocks.' },
             { token: 'surface-3', light: '#e7e9ec', dark: '#18191a', use: 'Deepest fill: hover/active states, wells, code blocks.' },

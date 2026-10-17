@@ -50,6 +50,11 @@ it is built.
 therefore implies whoever bumped it already emptied the window, so an early return can never orphan
 a non-empty `pending` with no timer armed.
 
+`flush` checks the generation **twice**: once when the timer fires, and again after it has waited
+for the scrape off the lock (see "The scrape belongs to `flush`"). The last subscriber leaving or
+`close` during that wait bumps the generation, and the batch `flush` already took is dropped with
+the window — `TestStreamerDropsAWindowWhoseSubscribersLeftDuringAScrape` pins it.
+
 ## Fanning out under the lock is load-bearing
 
 `flush` sends while holding `s.mu`, and `Unsubscribe` closes a subscriber's channel under the same
@@ -57,8 +62,9 @@ lock. Snapshotting the map and sending outside the lock — the instinctive "don
 sending" move — reintroduces a send on a closed channel. The sends are `select`/`default` and never
 block, so the lock is held for microseconds twice a second.
 
-`subscriberBuffer` is 8, not 64: at two windows a second that is four seconds of backlog, which
-brackets huma's five-second `sse.WriteTimeout`. A bigger buffer only means a client that unsticks
+`subscriberBuffer` is 8, not 64: at two windows a second that is four seconds of backlog — at
+least, since a window that waits on a scrape goes out later — which brackets huma's five-second
+`sse.WriteTimeout`. A bigger buffer only means a client that unsticks
 has to replay half a minute of stale windows. A subscriber whose buffer is full loses the window and
 is warned about **once**, with the total reported when it leaves.
 
@@ -68,10 +74,10 @@ Three regimes, and only the third costs anything:
 
 1. **Nobody connected.** `binding.withOperation` sees `!Connected()` and takes the plain chain, so
    `Record` is never called. The decorator adds one interface hop to `Connected()`.
-2. **Ring on, no SSE subscriber** — the idle tail after a dashboard closes, or a client that only
-   hit `/api/operations`. `Record` is one delegation plus `watched.Load()`, one atomic load, no
-   lock, no allocation. `TestStreamerRecordDoesNotAllocateWithoutSubscribers` pins the zero.
-3. **Subscribed.** One uncontended mutex and a five-word struct copy per delivery.
+2. **Ring on, no SSE subscriber** — the idle tail after a dashboard closes. Only `stream_updates`
+   turns the ring on; `/api/operations` only searches it. `Record` is one delegation plus
+   `watched.Load()`, one atomic load, no lock, no allocation. `TestStreamerRecordDoesNotAllocateWithoutSubscribers` pins the zero.
+3. **Subscribed.** One uncontended mutex and a five-string struct copy per delivery.
 
 `watched` is a **hint**, exactly like `Connected()`: a subscriber that appears mid-window misses the
 deliveries recorded before the store is visible. Do not try to close that gap.
@@ -81,15 +87,29 @@ buffer swap leaves behind — see `adapter/operations_collector/AGENTS.md`, "The
 
 ## The scrape belongs to `flush`, not to `Record`
 
-A closing window asks the metrics collector for an out-of-schedule `Scrape`, so the dashboard's
-numbers are fresh when the live event lands next to them. It happens in `flush` rather than per
-delivery because `Scrape` takes the metrics collector's `mu` — the one `Dump` holds for as long as
-it takes to merge a snapshot — and that has no business on the delivery path. The collector debounces
-requests to one a second anyway, so a per-delivery call would throw away all but one in a couple of
-thousand.
+A closing window asks the metrics collector for an out-of-schedule `Scrape` and **waits for it**:
+`Scrape` returns a channel closed once a scrape started after the call is folded, and the batch
+goes out only then, so a client refetching the metrics on the event reads counts that include it.
+It happens in `flush` rather than per delivery because `Scrape` takes the metrics collector's `mu`
+— the one `Dump` holds for as long as it takes to merge a snapshot — and that has no business on
+the delivery path. The collector debounces requests to one a second anyway, so a per-delivery call
+would throw away all but one in a couple of thousand.
+
+The wait is what shapes `flush`:
+
+- It takes `pending` under `s.mu`, **releases the lock**, waits on the scrape, then re-locks,
+  re-checks the generation and fans out. The wait never sits on the delivery path.
+- `s.timer` stays set for the whole wait, so `append` arms nothing: deliveries that arrive
+  meanwhile collect in a fresh `pending` and `flush` re-arms for them once it has sent — they go
+  out as the next batch, in order (`TestStreamerSendsDeliveriesDuringAScrapeAsTheNextWindow`).
+- `done` is closed by `close` and is the other arm of the wait, so a shutdown never leaves a
+  `flush` parked on a scrape that will not come (`TestStreamerCloseReleasesAFlushWaitingOnAScrape`).
+- The cost is latency: an event can trail its first delivery by the interval plus the collector's
+  debounce.
 
 `Scraper` is declared here rather than imported so this package depends on the one method it uses.
-It is nil when telemetry is disabled.
+It is nil only when the caller passes none (tests); `cmd/hump/main.go` builds the metrics collector
+and the streamer under the same `opts.WebPort != nil` condition, so a running streamer always has one.
 
 ## Shutdown
 
@@ -114,6 +134,10 @@ millisecond window and `t.Cleanup(s.close)` to bypass the global shutdown hook, 
 `newTestCollector` next door. `fakeCollector` counts what was delegated to it; its `records` counter
 is atomic only because `TestStreamerSurvivesConcurrentRecordsAndSubscribers` writes it from four
 goroutines.
+
+`fakeScraper` counts `Scrape` calls and answers its `scraped` channel, or a closed one when that is
+nil; a test holds a window back by leaving `scraped` open and uses `waitForScrapes` to know `flush`
+has reached the wait.
 
 `TestStreamerIgnoresAStaleTimer` drives `flush(generation-1)` directly, since the real race is not
 reproducible on demand. `TestStreamerOpensANewWindowAfterAFlush` is what fails if anyone

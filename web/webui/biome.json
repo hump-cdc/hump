@@ -56,7 +56,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -66,7 +65,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]
@@ -116,7 +115,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -126,7 +124,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]
@@ -174,7 +172,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -184,7 +181,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]
@@ -225,7 +222,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -235,7 +231,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]
@@ -276,7 +272,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -286,7 +281,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]
@@ -319,7 +314,6 @@
                                             "!@/pages/*/@x/*",
                                             "@/shared/api/**",
                                             "@/shared/live/**",
-                                            "@/shared/prometheus/**",
                                             "@/shared/state/**",
                                             "@/shared/theme/**",
                                             "@/shared/utils/**",
@@ -329,7 +323,7 @@
                                         "message": "FSD public API: import a slice through its barrel ('@/entities/statistics/delivered', '@/shared/ui/button'), never a file inside it. Cross-slice imports on the same layer go through '@x'."
                                     },
                                     {
-                                        "group": ["../../*", "../../**"],
+                                        "group": ["../../../*", "../../../**"],
                                         "message": "FSD: a relative import may not leave its own slice. Use the '@/<layer>/<slice>' barrel instead."
                                     }
                                 ]

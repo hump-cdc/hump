@@ -25,7 +25,7 @@ type StoryArgs = Pick<ComponentProps<typeof MetricCard>, 'title' | 'hint' | 'var
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Card/Metric',
+    title: 'Content/Card/Metric',
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         value: { name: 'Value', control: 'text', table: { category: 'Content' } },

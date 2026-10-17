@@ -5,6 +5,7 @@ import type { FC, PropsWithChildren } from 'react'
 import { ConfigProvider } from '@/entities/config/config'
 import { LiveUpdates } from '@/shared/live'
 import { ThemeProvider } from '@/shared/theme'
+import { Toaster } from '@/shared/ui/toast'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 
 const queryClient = new QueryClient()
@@ -17,6 +18,7 @@ export const Providers: FC<ProvidersProps> = ({ children }) => (
         <ThemeProvider>
             <TooltipProvider>
                 <ConfigProvider>{children}</ConfigProvider>
+                <Toaster />
             </TooltipProvider>
         </ThemeProvider>
     </QueryClientProvider>

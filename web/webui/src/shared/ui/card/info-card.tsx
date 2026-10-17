@@ -32,7 +32,7 @@ type InfoCardProps = Omit<HTMLAttributes<HTMLDivElement>, 'title'> &
 /** Bordered card naming one thing: a small title, monospace content tinted by `variant`, and an optional footer line. */
 export const InfoCard: FC<InfoCardProps> = ({ title, footer, variant, className, children, ...props }) => (
     <div
-        className={cn('flex flex-col gap-2.5 rounded-lg border border-hairline bg-surface-2 p-3.5', className)}
+        className={cn('flex flex-col gap-2.5 rounded-lg border border-hairline bg-surface-2/70 p-3.5', className)}
         {...props}
     >
         <span className="font-semibold text-2xs text-ink-tertiary uppercase tracking-widest">{title}</span>

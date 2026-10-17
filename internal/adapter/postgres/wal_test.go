@@ -15,8 +15,6 @@ import (
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/prometheus/client_golang/prometheus/testutil"
-	"go.uber.org/goleak"
 
 	"hump/config"
 	"hump/internal/domain"
@@ -49,7 +47,7 @@ func TestNewWalFailsWhenSessionCannotBeAcquired(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 
-	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, newFakeHealth(), newTestMetrics())
+	_, err = newWal(context.Background(), conn, "hump_pub", "hump_slot", nil, nil, newFakeHealth(), newTestMetrics())
 	if err == nil || !errors.Is(err, database.ErrWal) {
 		t.Fatalf("newWal() error = %v, want it to wrap ErrWal", err)
 	}
@@ -122,9 +120,8 @@ func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 
 	errs := runStart(ctx, w, handler)
 
-	insert := insertMessage(1, textColumn("7"))
 	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
-	server.stream(xLogData(0x100, 0x1000, insert))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
 
 	<-entered
 	cancel()
@@ -147,7 +144,11 @@ func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
 	}
 
-	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(insert)))
+	for _, update := range server.waitForStandbyUpdates(t, 1) {
+		if update.WALWritePosition != 0 {
+			t.Errorf("standby update reports %s, want 0/0: a change without its commit must not be confirmed", update.WALWritePosition)
+		}
+	}
 }
 
 func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
@@ -198,6 +199,89 @@ func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
 	}
 }
 
+func TestStartConfirmsInFlightTransactionOnShutdown(t *testing.T) {
+	server := usersServer(t)
+	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-release
+
+		return nil
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+
+	<-entered
+	cancel()
+	close(release)
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() error = %v, want context.Canceled", err)
+	}
+
+	if errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error = %v, want a shutdown rather than a WAL failure", err)
+	}
+
+	if failures := health.failures(); len(failures) != 0 {
+		t.Errorf("MarkUnhealthy() called %d times, want 0", len(failures))
+	}
+
+	server.waitForStandbyPosition(t, 0x180)
+}
+
+func TestStartDoesNotConfirmTransactionWhenHandlerFailsOnShutdown(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wantErr := errors.New("sink unavailable")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-release
+
+		return wantErr
+	}
+
+	errs := runStart(ctx, w, handler)
+
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+
+	<-entered
+	cancel()
+	close(release)
+
+	err := awaitStart(t, errs)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Start() error = %v, want %v", err, wantErr)
+	}
+
+	for _, update := range server.waitForStandbyUpdates(t, 1) {
+		if update.WALWritePosition >= 0x180 {
+			t.Errorf("standby update reports %s, want below %s: a transaction with a failed change must not be confirmed", update.WALWritePosition, pglogrepl.LSN(0x180))
+		}
+	}
+}
+
 func TestStartKeepsWaitingAfterReceiveTimeout(t *testing.T) {
 	server := usersServer(t)
 	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
@@ -217,7 +301,7 @@ func TestStartKeepsWaitingAfterReceiveTimeout(t *testing.T) {
 	server.waitForStandbyUpdates(t, 1)
 }
 
-func TestStartAdvancesWalPositionAcrossChanges(t *testing.T) {
+func TestStartConfirmsCommitEnd(t *testing.T) {
 	server := usersServer(t)
 	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
 
@@ -227,21 +311,20 @@ func TestStartAdvancesWalPositionAcrossChanges(t *testing.T) {
 	recorder := newHandlerRecorder(nil)
 	errs := runStart(ctx, w, recorder.handle)
 
-	insert := insertMessage(1, textColumn("7"))
-
-	server.stream(keepalive(0x1000, false))
+	server.stream(keepalive(0x8, false))
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
 	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
-	server.stream(xLogData(0x100, 0x1000, insert))
-	server.stream(keepalive(0x1000, true))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+	server.stream(keepalive(0x100, true))
 
 	updates := server.waitForStandbyUpdates(t, 1)
 	if len(updates) != 1 {
 		t.Fatalf("standby updates = %d, want 1: a keepalive that asks for no reply must not flush", len(updates))
 	}
 
-	want := pglogrepl.LSN(0x100 + len(insert))
-	if updates[0].WALWritePosition != want || updates[0].WALFlushPosition != want {
-		t.Errorf("standby update = write %s, flush %s, want %s for both", updates[0].WALWritePosition, updates[0].WALFlushPosition, want)
+	if updates[0].WALWritePosition != 0x180 || updates[0].WALFlushPosition != 0x180 {
+		t.Errorf("standby update = write %s, flush %s, want 0/180 for both", updates[0].WALWritePosition, updates[0].WALFlushPosition)
 	}
 
 	cancel()
@@ -254,6 +337,35 @@ func TestStartAdvancesWalPositionAcrossChanges(t *testing.T) {
 	if got := health.healthyCount(); got != 1 {
 		t.Errorf("MarkHealthy() called %d times, want 1", got)
 	}
+}
+
+func TestStartIgnoresKeepaliveInsideTransaction(t *testing.T) {
+	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	recorder := newHandlerRecorder(nil)
+	errs := runStart(ctx, w, recorder.handle)
+
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(keepalive(0x5000, true))
+
+	updates := server.waitForStandbyUpdates(t, 1)
+	if updates[0].WALWritePosition != 0 {
+		t.Errorf("standby update reports %s, want 0/0: the sender may have read past a commit not yet processed", updates[0].WALWritePosition)
+	}
+
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+	server.stream(keepalive(0x5000, true))
+
+	server.waitForStandbyPosition(t, 0x5000)
+
+	cancel()
+	awaitStart(t, errs)
 }
 
 func TestStartKeepsReceivingAfterReplyRequestedFlush(t *testing.T) {
@@ -269,16 +381,20 @@ func TestStartKeepsReceivingAfterReplyRequestedFlush(t *testing.T) {
 	first := insertMessage(1, textColumn("7"))
 	second := insertMessage(1, textColumn("8"))
 
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
 	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
 	server.stream(xLogData(0x100, 0x1000, first))
-	server.stream(keepalive(0x1000, true))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+	server.stream(keepalive(0x100, true))
 
-	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(first)))
+	server.waitForStandbyPosition(t, 0x180)
 
+	server.stream(xLogData(0x200, 0x1000, beginMessage()))
 	server.stream(xLogData(0x200, 0x1000, second))
-	server.stream(keepalive(0x1000, true))
+	server.stream(xLogData(0x250, 0x1000, commitMessage(0x280)))
+	server.stream(keepalive(0x100, true))
 
-	server.waitForStandbyPosition(t, pglogrepl.LSN(0x200+len(second)))
+	server.waitForStandbyPosition(t, 0x280)
 
 	cancel()
 	awaitStart(t, errs)
@@ -301,12 +417,12 @@ func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
 
 	server.waitForStandbyUpdates(t, 3)
 
-	insert := insertMessage(1, textColumn("7"))
-
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
 	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
-	server.stream(xLogData(0x100, 0x1000, insert))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
 
-	server.waitForStandbyPosition(t, pglogrepl.LSN(0x100+len(insert)))
+	server.waitForStandbyPosition(t, 0x180)
 
 	cancel()
 	awaitStart(t, errs)
@@ -316,30 +432,7 @@ func TestStartKeepsReceivingAcrossStandbyTicks(t *testing.T) {
 	}
 }
 
-func TestStartUpdatesReplicationLagOnKeepalive(t *testing.T) {
-	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errs := runStart(ctx, w, failingHandler(t))
-
-	relation := relationMessage(1, "public", "users", idColumn())
-	server.stream(xLogData(0x10, 0x1000, relation))
-	server.stream(keepalive(0x2000, true))
-	server.waitForStandbyUpdates(t, 1)
-
-	cancel()
-	awaitStart(t, errs)
-
-	want := float64(0x2000 - (0x10 + len(relation)))
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != want {
-		t.Errorf("replicationLag = %v, want %v: a keepalive is the only lag update an idle stream gets", got, want)
-	}
-}
-
-func TestStartLeavesReplicationLagUnsetBeforeFirstRecord(t *testing.T) {
+func TestStartConfirmsKeepaliveOutsideTransaction(t *testing.T) {
 	server := usersServer(t)
 	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
 
@@ -354,39 +447,8 @@ func TestStartLeavesReplicationLagUnsetBeforeFirstRecord(t *testing.T) {
 	cancel()
 	awaitStart(t, errs)
 
-	// The reply is what wal_sender_timeout waits for, so it goes out even with
-	// nothing to confirm; only the lag it cannot compute yet is withheld.
-	if updates[0].WALFlushPosition != 0 {
-		t.Errorf("standby update flush = %s, want 0/0 until the first record is decoded", updates[0].WALFlushPosition)
-	}
-
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != 0 {
-		t.Errorf("replicationLag = %v, want 0: the server LSN alone is not a lag", got)
-	}
-}
-
-func TestStartKeepsReplicationLagOnStreamFailure(t *testing.T) {
-	server := usersServer(t)
-	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errs := runStart(ctx, w, failingHandler(t))
-
-	relation := relationMessage(1, "public", "users", idColumn())
-	server.stream(xLogData(0x10, 0x1000, relation))
-	server.stream(keepalive(0x2000, true))
-	server.waitForStandbyUpdates(t, 1)
-
-	server.stream(copyFrame(pglogrepl.PrimaryKeepaliveMessageByteID, 0, 0))
-	if err := awaitStart(t, errs); err == nil {
-		t.Fatal("Start() error = nil, want the malformed keepalive to stop the stream")
-	}
-
-	want := float64(0x2000 - (0x10 + len(relation)))
-	if got := testutil.ToFloat64(w.metrics.replicationLag); got != want {
-		t.Errorf("replicationLag = %v, want %v: an unparseable message carries no WAL position to report", got, want)
+	if updates[0].WALWritePosition != 0x1000 || updates[0].WALFlushPosition != 0x1000 {
+		t.Errorf("standby update = write %s, flush %s, want 0/1000 for both: WAL pgoutput skipped must be released", updates[0].WALWritePosition, updates[0].WALFlushPosition)
 	}
 }
 
@@ -482,6 +544,29 @@ func TestStartStopsWhenStandbyUpdateFails(t *testing.T) {
 	}
 }
 
+func TestStartStopsWhenStandbyTickCannotBeSent(t *testing.T) {
+	server := usersServer(t)
+
+	conn := newTestConnection(t, server, withReplication(true))
+	conn.connectionConfig.DialFunc = brokenWriteDialer(2)
+
+	w, health := newReplicationWal(t, server, conn)
+	w.standbyInterval = testStandbyInterval
+
+	err := awaitStart(t, runStart(context.Background(), w, failingHandler(t)))
+	if err == nil || !strings.Contains(err.Error(), "send status failed") {
+		t.Fatalf("Start() error = %v, want it to mention a failed status update", err)
+	}
+
+	if !errors.Is(err, database.ErrWal) {
+		t.Errorf("Start() error does not wrap ErrWal: %v", err)
+	}
+
+	if failures := health.failures(); len(failures) != 1 {
+		t.Errorf("MarkUnhealthy() called %d times, want 1", len(failures))
+	}
+}
+
 func TestFlushReportsUnhealthyWhenStatusCannotBeSent(t *testing.T) {
 	server := usersServer(t)
 	w, health := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)))
@@ -524,10 +609,32 @@ func TestStopClosesConnectionAndReportsUnhealthy(t *testing.T) {
 	}
 }
 
+func TestStopReportsCloseFailure(t *testing.T) {
+	server := usersServer(t)
+
+	conn := newTestConnection(t, server, withReplication(true))
+	conn.connectionConfig.DialFunc = brokenCloseDialer
+
+	w, health := newReplicationWal(t, server, conn)
+
+	if err := w.Stop(context.Background()); !errors.Is(err, errBrokenClose) {
+		t.Fatalf("Stop() error = %v, want the close failure", err)
+	}
+
+	if session := heldSession(conn); session != nil {
+		t.Error("Stop() left a session cached, want it dropped")
+	}
+
+	failures := health.failures()
+	if len(failures) != 1 || !errors.Is(failures[0], database.ErrWalClosed) {
+		t.Errorf("MarkUnhealthy() got %v, want a single ErrWalClosed", failures)
+	}
+}
+
 func TestProcessMessageRejectsUnparseableMessage(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 
-	err := w.processMessage(context.Background(), []byte{'z'}, time.Now(), 0, failingHandler(t))
+	_, err := w.processMessage(context.Background(), []byte{'z'}, time.Now(), failingHandler(t))
 	if err == nil || !strings.Contains(err.Error(), "Parse logical replication message") {
 		t.Fatalf("processMessage() error = %v, want it to mention a failed parse", err)
 	}
@@ -536,7 +643,7 @@ func TestProcessMessageRejectsUnparseableMessage(t *testing.T) {
 func TestProcessMessageRejectsEmptyMessage(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 
-	err := w.processMessage(context.Background(), nil, time.Now(), 0, failingHandler(t))
+	_, err := w.processMessage(context.Background(), nil, time.Now(), failingHandler(t))
 	if !errors.Is(err, errEmptyWalRecord) {
 		t.Fatalf("processMessage() error = %v, want errEmptyWalRecord", err)
 	}
@@ -560,7 +667,7 @@ func TestProcessMessageCachesRelation(t *testing.T) {
 func TestProcessMessageIgnoresTransactionStart(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 
-	if err := w.processMessage(context.Background(), beginMessage(), time.Now(), 0, failingHandler(t)); err != nil {
+	if _, err := w.processMessage(context.Background(), beginMessage(), time.Now(), failingHandler(t)); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 }
@@ -568,7 +675,7 @@ func TestProcessMessageIgnoresTransactionStart(t *testing.T) {
 func TestProcessMessageBuffersEmittedMessage(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 
-	if err := w.processMessage(context.Background(), logicalDecodingMessage(true, "trace", "abc"), time.Now(), 0, failingHandler(t)); err != nil {
+	if _, err := w.processMessage(context.Background(), logicalDecodingMessage(true, "trace", "abc"), time.Now(), failingHandler(t)); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 
@@ -591,7 +698,7 @@ func TestProcessMessageSkipsUnusableEmittedMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t))
 
-			if err := w.processMessage(context.Background(), tt.message, time.Now(), 0, failingHandler(t)); err != nil {
+			if _, err := w.processMessage(context.Background(), tt.message, time.Now(), failingHandler(t)); err != nil {
 				t.Fatalf("processMessage() error = %v", err)
 			}
 
@@ -605,11 +712,11 @@ func TestProcessMessageSkipsUnusableEmittedMessage(t *testing.T) {
 func TestProcessMessageClearsEmittedMessagesOnCommit(t *testing.T) {
 	w, _ := newTestWal(t, usersServer(t))
 
-	if err := w.processMessage(context.Background(), logicalDecodingMessage(true, "trace", "abc"), time.Now(), 0, failingHandler(t)); err != nil {
+	if _, err := w.processMessage(context.Background(), logicalDecodingMessage(true, "trace", "abc"), time.Now(), failingHandler(t)); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 
-	if err := w.processMessage(context.Background(), commitMessage(), time.Now(), 0, failingHandler(t)); err != nil {
+	if _, err := w.processMessage(context.Background(), commitMessage(0), time.Now(), failingHandler(t)); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 
@@ -656,7 +763,7 @@ func TestProcessMessageDispatchesRowChanges(t *testing.T) {
 			recorder := newHandlerRecorder(nil)
 
 			timestamp := time.Unix(1700000000, 0).UTC()
-			if err := w.processMessage(context.Background(), tt.message, timestamp, 0, recorder.handle); err != nil {
+			if _, err := w.processMessage(context.Background(), tt.message, timestamp, recorder.handle); err != nil {
 				t.Fatalf("processMessage() error = %v", err)
 			}
 
@@ -703,7 +810,7 @@ func TestProcessMessageReportsKeyOnlyOldTupleAsUnavailable(t *testing.T) {
 		[]tupleColumn{textColumn("7"), toastColumn()},
 	)
 
-	if err := w.processMessage(context.Background(), message, time.Now(), 0, recorder.handle); err != nil {
+	if _, err := w.processMessage(context.Background(), message, time.Now(), recorder.handle); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 
@@ -732,7 +839,7 @@ func TestProcessMessageDispatchesTruncateForEveryRelation(t *testing.T) {
 
 	recorder := newHandlerRecorder(nil)
 
-	if err := w.processMessage(context.Background(), truncateMessage(1, 2), time.Now(), 0, recorder.handle); err != nil {
+	if _, err := w.processMessage(context.Background(), truncateMessage(1, 2), time.Now(), recorder.handle); err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
 
@@ -765,7 +872,7 @@ func TestProcessMessageJoinsTruncateFailures(t *testing.T) {
 	failure := errors.New("sink unavailable")
 	recorder := newHandlerRecorder(failure)
 
-	err := w.processMessage(context.Background(), truncateMessage(1, 2), time.Now(), 0, recorder.handle)
+	_, err := w.processMessage(context.Background(), truncateMessage(1, 2), time.Now(), recorder.handle)
 	if !errors.Is(err, failure) {
 		t.Fatalf("processMessage() error = %v, want it to wrap %v", err, failure)
 	}
@@ -791,7 +898,7 @@ func TestProcessMessageRejectsUnknownRelation(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t), configuredTable("public", "users"))
 			registerRelation(t, w, 1, "public", "users", idColumn())
 
-			err := w.processMessage(context.Background(), tt.message, time.Now(), 0, failingHandler(t))
+			_, err := w.processMessage(context.Background(), tt.message, time.Now(), failingHandler(t))
 			if err == nil || !strings.Contains(err.Error(), "unknown relation ID: 9") {
 				t.Fatalf("processMessage() error = %v, want it to mention the unknown relation", err)
 			}
@@ -820,7 +927,7 @@ func TestProcessMessageReportsDecodeFailures(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t), configuredTable("public", "users"))
 			registerRelation(t, w, 1, "public", "users", idColumn())
 
-			err := w.processMessage(context.Background(), tt.message, time.Now(), 0, failingHandler(t))
+			_, err := w.processMessage(context.Background(), tt.message, time.Now(), failingHandler(t))
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("processMessage() error = %v, want it to mention %q", err, tt.wantErr)
 			}
@@ -851,7 +958,7 @@ func TestProcessMessageReportsResolveFailures(t *testing.T) {
 			w, _ := newTestWal(t, server, configuredTable("public", "users"))
 			registerRelation(t, w, 1, "public", "users", idColumn())
 
-			err := w.processMessage(context.Background(), tt.message, time.Now(), 0, failingHandler(t))
+			_, err := w.processMessage(context.Background(), tt.message, time.Now(), failingHandler(t))
 			if err == nil || !strings.Contains(err.Error(), "failed to resolve table configuration for public.users") {
 				t.Fatalf("processMessage() error = %v, want it to mention the unresolved table", err)
 			}
@@ -875,7 +982,7 @@ func TestProcessMessageSkipsIgnoredTables(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t), configuredTable("public", "users"))
 			registerRelation(t, w, 2, "public", "audit", idColumn())
 
-			if err := w.processMessage(context.Background(), tt.message, time.Now(), 0, failingHandler(t)); err != nil {
+			if _, err := w.processMessage(context.Background(), tt.message, time.Now(), failingHandler(t)); err != nil {
 				t.Fatalf("processMessage() error = %v, want an unconfigured table to be skipped", err)
 			}
 		})
@@ -900,43 +1007,66 @@ func TestProcessMessageReturnsHandlerFailure(t *testing.T) {
 			failure := errors.New("sink unavailable")
 			recorder := newHandlerRecorder(failure)
 
-			if err := w.processMessage(context.Background(), tt.message, time.Now(), 0, recorder.handle); !errors.Is(err, failure) {
+			if _, err := w.processMessage(context.Background(), tt.message, time.Now(), recorder.handle); !errors.Is(err, failure) {
 				t.Fatalf("processMessage() error = %v, want %v", err, failure)
 			}
 		})
 	}
 }
 
-func TestResolveTableAnswersCachedLookupsWithoutGoroutines(t *testing.T) {
+func TestStartKeepsTheStreamAliveWhileTheHandlerBlocks(t *testing.T) {
 	server := usersServer(t)
-	w, _ := newTestWal(t, server, configuredTable("public", "users"))
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
+	w.standbyInterval = testStandbyInterval
 
-	table := domain.TableIdentifier{Schema: "public", Name: "users"}
-	if _, err := w.resolveTable(context.Background(), table, 0); err != nil {
-		t.Fatalf("resolveTable() error = %v", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
+	released := make(chan struct{})
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
+		<-released
+
+		return nil
 	}
 
-	leaks := goleak.IgnoreCurrent()
+	errs := runStart(ctx, w, handler)
 
-	for range 100 {
-		if _, err := w.resolveTable(context.Background(), table, 0); err != nil {
-			t.Fatalf("resolveTable() error = %v", err)
+	server.stream(keepalive(0x100, true))
+	server.waitForStandbyPosition(t, 0x100)
+
+	server.stream(xLogData(0x200, 0x1000, beginMessage()))
+	server.stream(xLogData(0x200, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x200, 0x1000, insertMessage(1, textColumn("7"))))
+	<-entered
+
+	before := len(server.standbyUpdates())
+	updates := server.waitForStandbyUpdates(t, before+2)
+	for i, update := range updates[before:] {
+		if update.WALWritePosition != 0x100 {
+			t.Errorf("standby update %d position = %s, want the last confirmed %s", i, update.WALWritePosition, pglogrepl.LSN(0x100))
 		}
 	}
 
-	if err := goleak.Find(leaks); err != nil {
-		t.Errorf("resolveTable() leaked goroutines on the cached path: %v", err)
-	}
+	close(released)
+	server.stream(xLogData(0x250, 0x1000, commitMessage(0x280)))
+	server.waitForStandbyPosition(t, 0x280)
+
+	cancel()
+	awaitStart(t, errs)
 }
 
-func TestResolveTableKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
+func TestStartKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
 	server := usersServer(t)
 
 	// Blocking the responder would deadlock the fake server, which holds its
 	// mutex across the script; a slow ensureReplicaIdentity stalls introspection
 	// the same way an ALTER waiting on a lock does.
+	entered := make(chan struct{})
 	released := make(chan struct{})
 	ensure := func(context.Context, *connection, []domain.TableIdentifier) error {
+		close(entered)
 		<-released
 
 		return nil
@@ -950,71 +1080,76 @@ func TestResolveTableKeepsTheStreamAliveDuringIntrospection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := pglogrepl.StartReplication(ctx, w.session, w.slotName, 0, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments}); err != nil {
-		t.Fatalf("StartReplication() error = %v", err)
-	}
+	recorder := newHandlerRecorder(nil)
+	errs := runStart(ctx, w, recorder.handle)
 
-	position := pglogrepl.LSN(4242)
-	done := make(chan error, 1)
-	go func() {
-		_, err := w.resolveTable(ctx, domain.TableIdentifier{Schema: "public", Name: "users"}, position)
-		done <- err
-	}()
+	server.stream(xLogData(0x10, 0x1000, beginMessage()))
+	server.stream(xLogData(0x10, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x100, 0x1000, insertMessage(1, textColumn("7"))))
+	<-entered
 
-	updates := server.waitForStandbyUpdates(t, 2)
-	for i, update := range updates {
-		if update.WALWritePosition != position {
-			t.Errorf("standby update %d position = %s, want the last processed %s", i, update.WALWritePosition, position)
-		}
-	}
+	before := len(server.standbyUpdates())
+	server.waitForStandbyUpdates(t, before+2)
 
 	close(released)
-	if err := <-done; err != nil {
-		t.Fatalf("resolveTable() error = %v", err)
+	server.stream(xLogData(0x150, 0x1000, commitMessage(0x180)))
+	server.waitForStandbyPosition(t, 0x180)
+
+	cancel()
+	awaitStart(t, errs)
+
+	if got := len(recorder.recorded()); got != 1 {
+		t.Errorf("handler called %d times, want 1", got)
 	}
 }
 
-func TestResolveTableStopsTheKeepaliveBeforeReturning(t *testing.T) {
+func TestOnShutdownConfirmsPositionOfInFlightChange(t *testing.T) {
 	server := usersServer(t)
+	w, _ := newReplicationWal(t, server, newTestConnection(t, server, withReplication(true)), configuredTable("public", "users"))
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	entered := make(chan struct{})
 	released := make(chan struct{})
-	ensure := func(context.Context, *connection, []domain.TableIdentifier) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+		close(entered)
 		<-released
 
 		return nil
 	}
 
-	conn := newTestConnection(t, server, withReplication(true))
-	w, _ := newReplicationWal(t, server, conn, configuredTable("public", "users"))
-	w.introspector = newTestIntrospector(t, server, []config.Table{configuredTable("public", "users")}, ensure)
-	w.standbyInterval = testStandbyInterval
+	errs := runStart(ctx, w, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	server.stream(keepalive(0x100, true))
+	server.waitForStandbyPosition(t, 0x100)
 
-	if err := pglogrepl.StartReplication(ctx, w.session, w.slotName, 0, pglogrepl.StartReplicationOptions{PluginArgs: w.pluginArguments}); err != nil {
-		t.Fatalf("StartReplication() error = %v", err)
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		_, err := w.resolveTable(ctx, domain.TableIdentifier{Schema: "public", Name: "users"}, 0)
-		done <- err
-	}()
-
-	// Release only once the keepalive is demonstrably running, so the assertion
-	// below is about stop() waiting for it rather than about it never starting.
-	server.waitForStandbyUpdates(t, 1)
-	close(released)
-
-	if err := <-done; err != nil {
-		t.Fatalf("resolveTable() error = %v", err)
-	}
+	server.stream(xLogData(0x200, 0x1000, beginMessage()))
+	server.stream(xLogData(0x200, 0x1000, relationMessage(1, "public", "users", idColumn())))
+	server.stream(xLogData(0x200, 0x1000, insertMessage(1, textColumn("7"))))
+	<-entered
 
 	before := len(server.standbyUpdates())
-	time.Sleep(5 * testStandbyInterval)
-	if after := len(server.standbyUpdates()); after != before {
-		t.Errorf("standby updates grew from %d to %d after resolveTable returned", before, after)
+	if err := w.onShutdown(context.Background()); err != nil {
+		t.Fatalf("onShutdown() error = %v", err)
+	}
+
+	updates := server.waitForStandbyUpdates(t, before+1)
+	if got := updates[before].WALWritePosition; got != 0x100 {
+		t.Errorf("standby update position = %s, want the last confirmed %s", got, pglogrepl.LSN(0x100))
+	}
+
+	close(released)
+	server.stream(xLogData(0x250, 0x1000, commitMessage(0x280)))
+	cancel()
+	awaitStart(t, errs)
+}
+
+func TestOnShutdownLeavesIdleSessionAlone(t *testing.T) {
+	w, _ := newTestWal(t, usersServer(t))
+
+	if err := w.onShutdown(context.Background()); err != nil {
+		t.Fatalf("onShutdown() error = %v", err)
 	}
 }
 
@@ -1229,7 +1364,7 @@ func TestDecodeRowRejectsColumnCountMismatch(t *testing.T) {
 	}
 }
 
-func TestDecodeRowText(t *testing.T) {
+func TestDecodeText(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     string
@@ -1245,23 +1380,21 @@ func TestDecodeRowText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w, _ := newTestWal(t, usersServer(t))
-
-			got, err := w.decodeRowText([]byte(tt.data), tt.dataType)
+			got, err := decodeText(pgtype.NewMap(), tt.dataType, []byte(tt.data))
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("decodeRowText() = %#v, want an error", got)
+					t.Fatalf("decodeText() = %#v, want an error", got)
 				}
 
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("decodeRowText() error = %v", err)
+				t.Fatalf("decodeText() error = %v", err)
 			}
 
 			if got != tt.want {
-				t.Errorf("decodeRowText() = %#v, want %#v", got, tt.want)
+				t.Errorf("decodeText() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
@@ -1457,7 +1590,7 @@ func newReplicationWal(t testing.TB, s *fakeServer, conn *connection, tables ...
 
 	health := newFakeHealth()
 
-	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), health, newTestMetrics())
+	w, err := newWal(context.Background(), conn, "hump_pub", "hump_slot", newTestIntrospector(t, s, tables, nil), nil, health, newTestMetrics())
 	if err != nil {
 		t.Fatalf("newWal() error = %v", err)
 	}
@@ -1471,7 +1604,7 @@ func registerRelation(t *testing.T, w *wal, relationId uint32, schemaName, name 
 	t.Helper()
 
 	message := relationMessage(relationId, schemaName, name, columns...)
-	if err := w.processMessage(context.Background(), message, time.Now(), 0, failingHandler(t)); err != nil {
+	if _, err := w.processMessage(context.Background(), message, time.Now(), failingHandler(t)); err != nil {
 		t.Fatalf("processMessage(relation) error = %v", err)
 	}
 }

@@ -36,6 +36,8 @@ type Postgres struct {
 	cfg             config.Configuration
 	publicationName string
 	slotName        string
+	gate            *walGate
+	snapshot        *snapshot
 	healthPostgres  Health
 	healthWal       Health
 	metrics         *metrics
@@ -51,6 +53,7 @@ func New(databaseUrl string, cfg config.Configuration, publicationName string, s
 		slotName:        slotName,
 		healthPostgres:  healthPostgres,
 		healthWal:       healthWal,
+		gate:            newWalGate(),
 	}
 
 	// Parsed once here rather than per getter: the getters serve a web UI
@@ -64,93 +67,9 @@ func New(databaseUrl string, cfg config.Configuration, publicationName string, s
 	// The collectors register on the factory, which panics on a duplicate, so
 	// they are built once here rather than per Listen.
 	p.metrics = newMetrics(p.GetDbName(), metricsFactory)
+	p.snapshot = newSnapshot(databaseUrl, p.gate, p.metrics)
 
 	return p
-}
-
-// GetDbName returns the database name parsed from the connection string, or an
-// empty string when the string is unusable.
-func (p *Postgres) GetDbName() string {
-	return p.dbName
-}
-
-// GetDbHost returns the host parsed from the connection string, or an empty
-// string when the string is unusable.
-func (p *Postgres) GetDbHost() string {
-	return p.dbHost
-}
-
-// GetDbPort returns the port parsed from the connection string, or zero when
-// the string is unusable.
-func (p *Postgres) GetDbPort() uint16 {
-	return p.dbPort
-}
-
-// GetPublicationName returns the publication this adapter replicates through.
-func (p *Postgres) GetPublicationName() string {
-	return p.publicationName
-}
-
-// GetSlotName returns the replication slot this adapter streams from.
-func (p *Postgres) GetSlotName() string {
-	return p.slotName
-}
-
-// Listen bootstraps the database over a control connection, then streams WAL
-// over a second, replication-enabled one, dispatching decoded rows to handler.
-// It blocks until ctx is cancelled or the stream fails.
-func (p *Postgres) Listen(ctx context.Context, handler database.ProcessMessageHandler) error {
-	conn, err := newConnection(p.databaseUrl)
-	if err != nil {
-		return fmt.Errorf("unable to connect to database: %w", err)
-	}
-	defer closeDetached(conn.Close)
-
-	introspector, err := p.configure(ctx, conn)
-	if err != nil {
-		return fmt.Errorf("unable to configure to database: %w", err)
-	}
-
-	p.healthPostgres.MarkHealthy()
-
-	replicationConnection, err := newConnection(p.databaseUrl, withReplication(true))
-	if err != nil {
-		return fmt.Errorf("unable to connect to database: %w", err)
-	}
-	defer closeDetached(replicationConnection.Close)
-
-	w, err := newWal(ctx, replicationConnection, p.publicationName, p.slotName, introspector, p.healthWal, p.metrics)
-	if err != nil {
-		return fmt.Errorf("failed to initialize WAL processing: %w", err)
-	}
-
-	err = w.Start(ctx, handler)
-	defer closeDetached(w.Stop)
-
-	return err
-}
-
-// Cleanup removes the publication and replication slot, leaving replica identity
-// untouched. The slot is only dropped when inactive; an active one errors so a
-// live consumer keeps its retained WAL.
-func (p *Postgres) Cleanup(ctx context.Context) error {
-	conn, err := newConnection(p.databaseUrl)
-	if err != nil {
-		return err
-	}
-	defer conn.Close(ctx)
-
-	bs := newBootstrapper(conn)
-
-	if err := bs.EnsurePublicationRemoved(ctx, p.publicationName); err != nil {
-		return fmt.Errorf("remove publication: %w", err)
-	}
-
-	if err := bs.EnsureReplicationSlotRemoved(ctx, p.slotName); err != nil {
-		return fmt.Errorf("remove replication slot: %w", err)
-	}
-
-	return nil
 }
 
 // configure validates the database, introspects the schema, and ensures the

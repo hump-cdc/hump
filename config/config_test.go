@@ -1,12 +1,12 @@
 package config
 
 import (
-	"errors"
+	errs "errors"
 	"strings"
 	"testing"
 	"time"
 
-	"hump/config/errs"
+	"hump/config/errors"
 	sinkcfg "hump/config/sink"
 	"hump/internal/port/sink"
 	"hump/pkg/template"
@@ -582,7 +582,7 @@ func TestParse_RabbitMQ_CrossValidate_Divergent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected cross-validation error")
 	}
-	if !errors.Is(err, errs.ErrCrossValidate) {
+	if !errs.Is(err, errors.ErrCrossValidate) {
 		t.Fatalf("want ErrCrossValidate, got %v", err)
 	}
 }
@@ -605,7 +605,7 @@ func TestParse_RabbitMQ_CrossValidate_UnmarshalableArguments(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for unmarshalable exchange arguments")
 	}
-	if !errors.Is(err, errs.ErrCrossValidate) {
+	if !errs.Is(err, errors.ErrCrossValidate) {
 		t.Fatalf("want ErrCrossValidate, got %v", err)
 	}
 }
@@ -659,7 +659,7 @@ func TestParse_RabbitMQStream_CrossValidate_Divergent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected cross-validation error")
 	}
-	if !errors.Is(err, errs.ErrCrossValidate) {
+	if !errs.Is(err, errors.ErrCrossValidate) {
 		t.Fatalf("want ErrCrossValidate, got %v", err)
 	}
 }

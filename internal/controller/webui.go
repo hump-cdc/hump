@@ -5,13 +5,18 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	getwebuiconfig "hump/internal/application/webui/get_webui_config"
-	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
-	getwebuioperations "hump/internal/application/webui/get_webui_operations"
-	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
+	getconfig "hump/internal/application/webui/get_config"
+	getmetrics "hump/internal/application/webui/get_metrics"
+	getoperations "hump/internal/application/webui/get_operations"
+	getsnapshotestimates "hump/internal/application/webui/get_snapshot_estimates"
+	getsnapshottables "hump/internal/application/webui/get_snapshot_tables"
+	startsnapshot "hump/internal/application/webui/start_snapshot"
+	stopsnapshot "hump/internal/application/webui/stop_snapshot"
+	streamsnapshot "hump/internal/application/webui/stream_snapshot"
+	streamupdates "hump/internal/application/webui/stream_updates"
 	"hump/pkg/app/shutdown"
 	"hump/pkg/middleware"
-	"hump/pkg/telemetry/log"
+	"hump/pkg/observability/log"
 	"hump/pkg/version"
 	"net"
 	"net/http"
@@ -27,23 +32,38 @@ import (
 var webuiFS embed.FS
 
 type WebUIController struct {
-	configController     *getwebuiconfig.Controller
-	metricsController    *getwebuimetrics.Controller
-	operationsController *getwebuioperations.Controller
-	liveController       *streamwebuiupdates.Controller
+	configController     *getconfig.Controller
+	metricsController    *getmetrics.Controller
+	operationsController *getoperations.Controller
+	liveController       *streamupdates.Controller
+	estimatesController  *getsnapshotestimates.Controller
+	tablesController     *getsnapshottables.Controller
+	snapshotController   *streamsnapshot.Controller
+	startController      *startsnapshot.Controller
+	stopController       *stopsnapshot.Controller
 }
 
 func NewWebUIController(
-	configController *getwebuiconfig.Controller,
-	metricsController *getwebuimetrics.Controller,
-	operationsController *getwebuioperations.Controller,
-	liveController *streamwebuiupdates.Controller,
+	configController *getconfig.Controller,
+	metricsController *getmetrics.Controller,
+	operationsController *getoperations.Controller,
+	liveController *streamupdates.Controller,
+	estimatesController *getsnapshotestimates.Controller,
+	tablesController *getsnapshottables.Controller,
+	snapshotController *streamsnapshot.Controller,
+	startController *startsnapshot.Controller,
+	stopController *stopsnapshot.Controller,
 ) *WebUIController {
 	return &WebUIController{
 		configController:     configController,
 		metricsController:    metricsController,
 		operationsController: operationsController,
 		liveController:       liveController,
+		estimatesController:  estimatesController,
+		tablesController:     tablesController,
+		snapshotController:   snapshotController,
+		startController:      startController,
+		stopController:       stopController,
 	}
 }
 
@@ -129,4 +149,46 @@ func (c *WebUIController) routes(api huma.API) {
 		Summary:     "Stream live updates",
 		Tags:        []string{"Live"},
 	}, c.liveController.Events(), c.liveController.Handler())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "snapshot.tables",
+		Method:      http.MethodPost,
+		Path:        "/api/snapshot/tables",
+		Summary:     "Describe configured tables with a suggested snapshot filter",
+		Tags:        []string{"Snapshot"},
+	}, c.tablesController.Handler())
+
+	sse.Register(api, huma.Operation{
+		OperationID: "snapshot.estimate",
+		Method:      http.MethodPost,
+		Path:        "/api/snapshot/estimate",
+		Summary:     "Stream row count estimates of tables",
+		Tags:        []string{"Snapshot"},
+	}, c.estimatesController.Events(), c.estimatesController.Handler())
+
+	sse.Register(api, huma.Operation{
+		OperationID: "snapshot.stream",
+		Method:      http.MethodGet,
+		Path:        "/api/snapshot",
+		Summary:     "Stream the state of the snapshot run",
+		Tags:        []string{"Snapshot"},
+	}, c.snapshotController.Events(), c.snapshotController.Handler())
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "snapshot.start",
+		Method:        http.MethodPost,
+		Path:          "/api/snapshot/start",
+		Summary:       "Start a snapshot of tables",
+		Tags:          []string{"Snapshot"},
+		DefaultStatus: http.StatusAccepted,
+	}, c.startController.Handler())
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "snapshot.stop",
+		Method:        http.MethodPost,
+		Path:          "/api/snapshot/stop",
+		Summary:       "Stop the snapshot in progress, or clear a finished one",
+		Tags:          []string{"Snapshot"},
+		DefaultStatus: http.StatusNoContent,
+	}, c.stopController.Handler())
 }

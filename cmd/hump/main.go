@@ -15,11 +15,17 @@ import (
 	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
 	postgresAdapter "hump/internal/adapter/postgres"
 	sinkAdapter "hump/internal/adapter/sink"
+	snapshotAdapter "hump/internal/adapter/snapshot"
 	processOperationFeature "hump/internal/application/processing/process_operation"
-	getWebuiConfigFeature "hump/internal/application/webui/get_webui_config"
-	getWebUIMetricsFeature "hump/internal/application/webui/get_webui_metrics"
-	getWebUIOperationsFeature "hump/internal/application/webui/get_webui_operations"
-	streamWebuiUpdatesFeature "hump/internal/application/webui/stream_webui_updates"
+	getConfigFeature "hump/internal/application/webui/get_config"
+	getMetricsFeature "hump/internal/application/webui/get_metrics"
+	getOperationsFeature "hump/internal/application/webui/get_operations"
+	getSnapshotEstimatesFeature "hump/internal/application/webui/get_snapshot_estimates"
+	getSnapshotTablesFeature "hump/internal/application/webui/get_snapshot_tables"
+	startSnapshotFeature "hump/internal/application/webui/start_snapshot"
+	stopSnapshotFeature "hump/internal/application/webui/stop_snapshot"
+	streamSnapshotFeature "hump/internal/application/webui/stream_snapshot"
+	streamUpdatesFeature "hump/internal/application/webui/stream_updates"
 	"hump/internal/controller"
 	"hump/internal/domain"
 	databasePort "hump/internal/port/database"
@@ -27,11 +33,12 @@ import (
 	metricsCollectorPort "hump/internal/port/metrics_collector"
 	operationsCollectorPort "hump/internal/port/operations_collector"
 	sinkPort "hump/internal/port/sink"
+	snapshotPort "hump/internal/port/snapshot"
 	"hump/pkg/app"
 	"hump/pkg/app/options"
-	"hump/pkg/telemetry/health"
-	"hump/pkg/telemetry/log"
-	"hump/pkg/telemetry/metric"
+	"hump/pkg/observability/health"
+	"hump/pkg/observability/log"
+	"hump/pkg/observability/metric"
 
 	"github.com/goccy/go-yaml"
 )
@@ -60,7 +67,7 @@ func main() {
 		return
 	}
 
-	// Telemetry
+	// Observability
 	health, err := health.New("hump")
 	if err != nil {
 		logger.Error("Unable to init health probes", "error", err)
@@ -73,7 +80,7 @@ func main() {
 	var db databasePort.Database = postgresAdapter.New(opts.DatabaseUrl, configuration, opts.PublicationName, opts.ReplicationSlotName, health.Postgres, health.WalSender, metrics)
 	var sink sinkPort.Sink = sinkAdapter.New()
 	var collector metricsCollectorPort.Collector
-	if opts.TelemetryPort != nil {
+	if opts.WebPort != nil {
 		collector = metricsCollectorAdapter.New(metricGatherer,
 			metricsCollectorAdapter.WithTopology(topology(configuration)))
 	}
@@ -93,6 +100,18 @@ func main() {
 		operations, live = streamer, streamer
 	}
 
+	// One processing use case serves both WAL and snapshot runs: the snapshot
+	// pauses WAL delivery, so the two never call it at once.
+	var processOperation *processOperationFeature.Controller
+	var snapshot snapshotPort.Runner
+	if !opts.Cleanup {
+		processOperation = processOperationFeature.NewController(processOperationFeature.NewUseCase(&configuration, db.GetDbName(), sink, metrics, collector, operations))
+
+		if opts.WebPort != nil {
+			snapshot = snapshotAdapter.New(db, configuration, processOperation.Process, metrics)
+		}
+	}
+
 	// Application
 	if !opts.Cleanup {
 		cfgResult, _ := yaml.Marshal(&configuration)
@@ -109,9 +128,9 @@ func main() {
 		// Run
 		if opts.TelemetryPort != nil {
 			r.Serve(
-				// Telemetry
+				// Observability
 				func(ctx context.Context) error {
-					t := controller.NewTelemetryController(health.Handler(), metricHandler)
+					t := controller.NewObservabilityController(health.Handler(), metricHandler)
 					return t.Serve(*opts.TelemetryPort)
 				})
 		}
@@ -122,10 +141,15 @@ func main() {
 				// Web UI
 				func(ctx context.Context) error {
 					server := controller.NewWebUIController(
-						getWebuiConfigFeature.NewController(opts, configuration, db),
-						getWebUIMetricsFeature.NewController(collector),
-						getWebUIOperationsFeature.NewController(operations),
-						streamWebuiUpdatesFeature.NewController(collector, operations, live),
+						getConfigFeature.NewController(getConfigFeature.NewUseCase(opts, configuration, db)),
+						getMetricsFeature.NewController(getMetricsFeature.NewUseCase(collector)),
+						getOperationsFeature.NewController(getOperationsFeature.NewUseCase(operations)),
+						streamUpdatesFeature.NewController(streamUpdatesFeature.NewUseCase(collector, operations, live, snapshot)),
+						getSnapshotEstimatesFeature.NewController(getSnapshotEstimatesFeature.NewUseCase(db)),
+						getSnapshotTablesFeature.NewController(getSnapshotTablesFeature.NewUseCase(configuration, db)),
+						streamSnapshotFeature.NewController(streamSnapshotFeature.NewUseCase(snapshot)),
+						startSnapshotFeature.NewController(startSnapshotFeature.NewUseCase(snapshot)),
+						stopSnapshotFeature.NewController(stopSnapshotFeature.NewUseCase(snapshot)),
 					)
 					return server.Serve(ctx, *opts.WebPort)
 				})
@@ -134,8 +158,7 @@ func main() {
 		// WAL
 		r.Run(
 			func(ctx context.Context) error {
-				processOperationUseCase := processOperationFeature.NewUseCase(&configuration, sink, metrics, collector, operations)
-				controller := controller.NewProcessController(db, processOperationFeature.NewController(processOperationUseCase))
+				controller := controller.NewProcessController(db, processOperation)
 
 				return controller.Listen(ctx)
 			},

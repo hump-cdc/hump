@@ -92,7 +92,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Charts/Area Chart',
+    title: 'Charts/Area Chart',
     argTypes: {
         dataset: {
             name: 'Data source',

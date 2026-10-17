@@ -251,12 +251,12 @@ func (b *bootstrapper) getStaleReplicaIdentityTables(ctx context.Context, tables
 // quoteLiteral wraps s as a SQL string literal, doubling embedded single quotes.
 // Assumes standard_conforming_strings is on (PostgreSQL default since 9.1).
 func (b *bootstrapper) quoteLiteral(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+	return quoteLiteral(s)
 }
 
 // quoteIdentifier wraps s as a SQL identifier, doubling embedded double quotes.
 func (b *bootstrapper) quoteIdentifier(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	return quoteIdentifier(s)
 }
 
 // summarizeTables renders tables as qualified names, keeping at most limit of

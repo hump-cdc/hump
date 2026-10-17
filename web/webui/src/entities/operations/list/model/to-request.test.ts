@@ -4,22 +4,13 @@ import { type OperationsFilterInput, toOperationsFilter } from './to-request'
 
 describe('toOperationsFilter', () => {
     test('leaves out every facet that allows everything', () => {
-        expect(toOperationsFilter(state(), '')).toEqual({ sinks: ['kafka', 'nats'], tables: ['public.users'] })
+        expect(toOperationsFilter(state(), '')).toEqual({})
     })
 
     test('matches nothing when any facet is empty', () => {
-        for (const facet of ['sinks', 'tables', 'operations', 'statuses'] as const) {
+        for (const facet of ['sinks', 'targets', 'tables', 'operations', 'statuses'] as const) {
             expect(toOperationsFilter(state({ [facet]: [] }), '')).toBeUndefined()
         }
-    })
-
-    test('leaves out sinks and tables until config seeded them, rather than matching nothing', () => {
-        const filter = toOperationsFilter(
-            state({ sinks: [], tables: [], sinksHydrated: false, tablesHydrated: false }),
-            '',
-        )
-
-        expect(filter).toEqual({})
     })
 
     test('sends narrowed operations sorted, and statuses in the API vocabulary', () => {
@@ -29,10 +20,14 @@ describe('toOperationsFilter', () => {
         expect(filter?.statuses).toEqual(['failure'])
     })
 
-    test('sorts sinks and tables so the query key is stable', () => {
-        const filter = toOperationsFilter(state({ sinks: ['nats', 'kafka'], tables: ['b.t', 'a.t'] }), '')
+    test('sorts sinks, targets and tables so the query key is stable', () => {
+        const filter = toOperationsFilter(
+            state({ sinks: ['nats', 'kafka'], targets: ['users', 'orders'], tables: ['b.t', 'a.t'] }),
+            '',
+        )
 
         expect(filter?.sinks).toEqual(['kafka', 'nats'])
+        expect(filter?.targets).toEqual(['orders', 'users'])
         expect(filter?.tables).toEqual(['a.t', 'b.t'])
     })
 
@@ -43,11 +38,10 @@ describe('toOperationsFilter', () => {
 })
 
 const state = (overrides: Partial<OperationsFilterInput> = {}): OperationsFilterInput => ({
-    sinks: ['nats', 'kafka'],
-    tables: ['public.users'],
+    sinks: null,
+    targets: null,
+    tables: null,
     operations: ['insert', 'update', 'delete', 'truncate'],
     statuses: ['delivered', 'failed'],
-    sinksHydrated: true,
-    tablesHydrated: true,
     ...overrides,
 })

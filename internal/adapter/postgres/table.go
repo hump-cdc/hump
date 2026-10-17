@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -88,4 +89,25 @@ func tableScalarParams(table domain.TableIdentifier) []param {
 // textParam encodes value as a text-format bind parameter.
 func textParam(value string) param {
 	return param{Value: []byte(value), OID: pgtype.TextOID, Format: pgtype.TextFormatCode}
+}
+
+// qualifiedTableName renders table as a quoted identifier, schema-qualified
+// unless the schema is empty, which leaves resolution to search_path.
+func qualifiedTableName(table domain.TableIdentifier) string {
+	if table.Schema == "" {
+		return quoteIdentifier(string(table.Name))
+	}
+
+	return quoteIdentifier(string(table.Schema)) + "." + quoteIdentifier(string(table.Name))
+}
+
+// quoteLiteral wraps s as a SQL string literal, doubling embedded single quotes.
+// Assumes standard_conforming_strings is on (PostgreSQL default since 9.1).
+func quoteLiteral(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+// quoteIdentifier wraps s as a SQL identifier, doubling embedded double quotes.
+func quoteIdentifier(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }

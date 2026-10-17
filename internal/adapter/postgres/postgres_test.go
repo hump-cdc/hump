@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -361,6 +362,12 @@ type queryResult struct {
 	err *pgproto3.ErrorResponse
 	// empty replies with EmptyQueryResponse, so the caller sees no result.
 	empty bool
+	// copyOut, when set, answers with a COPY TO STDOUT stream of these CopyData
+	// payloads instead of rows.
+	copyOut [][]byte
+	// statements, when set, answers a multi-statement query with one result
+	// per entry, in order, instead of this one.
+	statements []queryResult
 }
 
 // fakeServer is an in-process PostgreSQL server that answers every statement
@@ -557,10 +564,19 @@ func (s *fakeServer) serve(conn net.Conn) {
 			}
 
 			result := s.record(m.String)
-			if result.columns > 0 {
-				backend.Send(rowDescription(result.columns))
+			parts := result.statements
+			if parts == nil {
+				parts = []queryResult{result}
 			}
-			sendRows(backend, result)
+			for _, part := range parts {
+				if part.columns > 0 {
+					backend.Send(rowDescription(part.columns))
+				}
+				sendRows(backend, part)
+				if part.err != nil {
+					break
+				}
+			}
 			backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 		case *pgproto3.Parse:
 			pending = s.record(m.Query)
@@ -626,12 +642,18 @@ func (s *fakeServer) record(sql string) queryResult {
 	return s.respond(sql)
 }
 
-// recordParams stores the parameters of one Bind.
+// recordParams stores a copy of the parameters of one Bind, whose values alias
+// the backend's read buffer and are overwritten by the next message.
 func (s *fakeServer) recordParams(params [][]byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.params = append(s.params, append([][]byte(nil), params...))
+	copied := make([][]byte, len(params))
+	for i, value := range params {
+		copied[i] = bytes.Clone(value)
+	}
+
+	s.params = append(s.params, copied)
 }
 
 // recordStandby stores the standby status update a client copy frame carries,
@@ -704,6 +726,13 @@ func sendRows(backend *pgproto3.Backend, result queryResult) {
 		backend.Send(result.err)
 	case result.empty:
 		backend.Send(&pgproto3.EmptyQueryResponse{})
+	case result.copyOut != nil:
+		backend.Send(&pgproto3.CopyOutResponse{})
+		for _, data := range result.copyOut {
+			backend.Send(&pgproto3.CopyData{Data: data})
+		}
+		backend.Send(&pgproto3.CopyDone{})
+		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("COPY " + fmt.Sprint(len(result.copyOut)))})
 	default:
 		for _, row := range result.rows {
 			backend.Send(&pgproto3.DataRow{Values: row})
@@ -1430,6 +1459,34 @@ func brokenWriteDialer(afterWrites int32) func(context.Context, string, string) 
 	}
 }
 
+// errBrokenClose is the error a brokenCloseConn reports from Close.
+var errBrokenClose = errors.New("close: broken pipe")
+
+// brokenCloseConn is a net.Conn that closes its socket but reports the close as
+// failed.
+type brokenCloseConn struct {
+	net.Conn
+}
+
+// Close closes the socket and returns errBrokenClose.
+func (c *brokenCloseConn) Close() error {
+	_ = c.Conn.Close()
+
+	return errBrokenClose
+}
+
+// brokenCloseDialer is a DialFunc whose sessions fail to close.
+func brokenCloseDialer(ctx context.Context, network, address string) (net.Conn, error) {
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+
+	return &brokenCloseConn{Conn: conn}, nil
+}
+
 // keepalive builds the primary keepalive frame a WAL sender emits to ask the
 // standby where it is.
 func keepalive(serverWalEnd uint64, replyRequested bool) *pgproto3.CopyData {
@@ -1585,11 +1642,12 @@ func beginMessage() []byte {
 	return binary.BigEndian.AppendUint32(data, 1)
 }
 
-// commitMessage encodes the pgoutput message closing a transaction.
-func commitMessage() []byte {
+// commitMessage encodes the pgoutput message closing a transaction whose WAL
+// ends at end.
+func commitMessage(end uint64) []byte {
 	data := []byte{'C', 0}
 	data = binary.BigEndian.AppendUint64(data, 0)
-	data = binary.BigEndian.AppendUint64(data, 0)
+	data = binary.BigEndian.AppendUint64(data, end)
 
 	return binary.BigEndian.AppendUint64(data, 0)
 }

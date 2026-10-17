@@ -11,7 +11,7 @@ import {
     type ChartDataRow,
     type ChartSeries,
     ChartTooltipContent,
-    type ChartValueFormatter,
+    type ChartTooltipValue,
     chartCursorSpring,
     chartTooltipOptions,
     createChartConfig,
@@ -25,7 +25,7 @@ import { cn } from '@/shared/utils'
 const BAR_RADIUS = 2
 /** Share of each x step left empty between bars. */
 const BAR_GAP = 0.1
-/** Height in pixels of the stand-in bar drawn where a stack sums to zero. */
+/** Height in pixels of the stand-in bar drawn where a step is empty or too small to see. */
 const MIN_BAR_SIZE = 1
 
 /** Paint of the stand-in bars when there is no series to take a color from. */
@@ -37,8 +37,8 @@ type BarChartProps = HTMLAttributes<HTMLDivElement> & {
     xAxisKey?: string
     stacked?: boolean
     tooltip?: boolean
-    /** Formats each value shown in the tooltip, e.g. `(value) => `${value}s``. */
-    tooltipValueFormatter?: ChartValueFormatter
+    /** How each tooltip value is rendered; the kind defaults to integer or decimal by value. */
+    tooltipValue?: ChartTooltipValue
     legend?: boolean
     ref?: Ref<HTMLDivElement>
 }
@@ -50,7 +50,7 @@ export const BarChart: FC<BarChartProps> = ({
     xAxisKey,
     stacked = true,
     tooltip = false,
-    tooltipValueFormatter,
+    tooltipValue,
     legend = false,
     ...props
 }) => {
@@ -76,11 +76,7 @@ export const BarChart: FC<BarChartProps> = ({
                     ariaLabel={seriesOrder.map((key) => config[key]?.label ?? key).join(', ') || 'Bar chart'}
                     style={{ height: '100%' }}
                     renderTooltipBody={({ points }) => (
-                        <ChartTooltipContent
-                            points={points}
-                            seriesOrder={seriesOrder}
-                            valueFormatter={tooltipValueFormatter}
-                        />
+                        <ChartTooltipContent points={points} seriesOrder={seriesOrder} valueProps={tooltipValue} />
                     )}
                 />
             )}
@@ -90,8 +86,8 @@ export const BarChart: FC<BarChartProps> = ({
 
 /**
  * Stacked (or grouped) bars per x step with only the outer end rounded, a band cursor behind
- * the hovered step, and a one-pixel stand-in bar wherever a step sums to zero so empty steps
- * stay visible.
+ * the hovered step, and a one-pixel stand-in bar wherever a step is empty or shorter than a pixel
+ * so such steps stay visible.
  */
 const createBarDefinition = ({
     data,
@@ -109,50 +105,58 @@ const createBarDefinition = ({
     const rows = toChartRows({ data, series, xAxisKey, stacked })
     const maximum = getChartMaximum(rows)
     const indices = data.map((_, index) => index)
-    const emptyIndices = indices.filter((index) => rows.every((row) => row.index !== index || row.value === 0))
+    const stepSizes = indices.map((index) => {
+        const values = rows.filter((row) => row.index === index).map((row) => row.value)
+        return stacked ? values.reduce((sum, value) => sum + value, 0) : Math.max(0, ...values)
+    })
     const baselineColor = series.length ? getSeriesColor(series[0].dataKey) : BASELINE_COLOR
 
     return defineChart(
-        ({ height }) => ({
-            marks: [
-                crosshair<number, number>({
-                    x: { band: { fill: 'var(--surface-2)', fillOpacity: 1, radius: BAR_RADIUS } },
-                    y: false,
-                    motion: { transition: chartCursorSpring },
-                }),
-                decorative(
-                    barY(emptyIndices, {
-                        id: 'baseline',
-                        x: (index) => index,
-                        y1: 0,
-                        y2: (maximum * MIN_BAR_SIZE) / Math.max(height, 1),
-                        key: (index) => String(index),
-                        fill: baselineColor,
+        ({ height }) => {
+            const minBarValue = (maximum * MIN_BAR_SIZE) / Math.max(height, 1)
+            const baselineIndices = indices.filter((index) => stepSizes[index] < minBarValue)
+
+            return {
+                marks: [
+                    crosshair<number, number>({
+                        x: { band: { fill: 'var(--surface-2)', fillOpacity: 1, radius: BAR_RADIUS } },
+                        y: false,
+                        motion: { transition: chartCursorSpring },
                     }),
-                ),
-                barY(rows, {
-                    id: 'bars',
-                    x: 'index',
-                    y: 'value',
-                    z: 'series',
-                    key: 'key',
-                    fill: (row) => getSeriesColor(row.series),
-                    layout: stacked ? stack({ order: series.map(({ dataKey }) => dataKey) }) : group(),
-                    radius: { end: BAR_RADIUS },
-                }),
-            ],
-            scales: {
-                x: {
-                    scale: scaleBand<number>()
-                        .domain(indices)
-                        .paddingInner(BAR_GAP)
-                        .paddingOuter(BAR_GAP / 2),
-                    axis: false,
+                    decorative(
+                        barY(baselineIndices, {
+                            id: 'baseline',
+                            x: (index) => index,
+                            y1: 0,
+                            y2: minBarValue,
+                            key: (index) => String(index),
+                            fill: baselineColor,
+                        }),
+                    ),
+                    barY(rows, {
+                        id: 'bars',
+                        x: 'index',
+                        y: 'value',
+                        z: 'series',
+                        key: 'key',
+                        fill: (row) => getSeriesColor(row.series),
+                        layout: stacked ? stack({ order: series.map(({ dataKey }) => dataKey) }) : group(),
+                        radius: { end: BAR_RADIUS },
+                    }),
+                ],
+                scales: {
+                    x: {
+                        scale: scaleBand<number>()
+                            .domain(indices)
+                            .paddingInner(BAR_GAP)
+                            .paddingOuter(BAR_GAP / 2),
+                        axis: false,
+                    },
+                    y: { scale: scaleLinear().domain([0, maximum]), axis: false },
                 },
-                y: { scale: scaleLinear().domain([0, maximum]), axis: false },
-            },
-            margin: 0,
-        }),
+                margin: 0,
+            }
+        },
         {
             focus: 'group-x',
             focusRing: false,

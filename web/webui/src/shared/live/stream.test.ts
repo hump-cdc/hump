@@ -4,7 +4,7 @@ import type { GetApiLiveResponse } from '@/shared/api'
 
 import { STABLE_ATTEMPT_MS } from './backoff'
 import { createLiveStream, type LiveStream } from './stream'
-import type { LiveOperationsBatch, LiveStatus } from './types'
+import type { LiveOperationsBatch, LiveSnapshot, LiveStatus } from './types'
 
 const OPERATION = { schema: 'public', table: 'users', sink: 'kafka', host: 'localhost', target: 'users' }
 
@@ -326,6 +326,96 @@ describe('createLiveStream status', () => {
         expect(stream.getStatus()).toBe('live')
 
         stream.stop()
+    })
+})
+
+describe('createLiveStream snapshot', () => {
+    test('stores a snapshot event and notifies once', async () => {
+        const { stream, attempts } = setup()
+        const seen: (LiveSnapshot | undefined)[] = []
+
+        stream.subscribeSnapshot(() => seen.push(stream.getSnapshot()))
+        expect(stream.getSnapshot()).toBeUndefined()
+
+        stream.retain()
+        await tick()
+
+        attempts[0].push({ state: 'processing', progress: 42 })
+        await tick()
+
+        expect(seen).toEqual([{ state: 'processing', progress: 42 }])
+        expect(stream.getStatus()).toBe('live')
+
+        stream.stop()
+    })
+
+    test('a repeated snapshot does not notify', async () => {
+        const { stream, attempts } = setup()
+        let calls = 0
+
+        stream.subscribeSnapshot(() => {
+            calls += 1
+        })
+        stream.retain()
+        await tick()
+
+        attempts[0].push({ state: 'processing', progress: 42 })
+        attempts[0].push({ state: 'processing', progress: 42 })
+        attempts[0].push({ state: 'processing', progress: 43 })
+        await tick()
+
+        expect(calls).toBe(2)
+
+        stream.stop()
+    })
+
+    test('a snapshot event never reaches operations listeners', async () => {
+        const { stream, attempts } = setup()
+        const seen: LiveOperationsBatch[] = []
+
+        stream.retain()
+        stream.subscribe((batch) => seen.push(batch))
+        await tick()
+
+        attempts[0].push({ state: 'idle', progress: 0 })
+        await tick()
+
+        expect(seen).toHaveLength(0)
+
+        stream.stop()
+    })
+
+    test('drops the value when the attempt ends', async () => {
+        const { stream, attempts } = setup()
+        const seen: (LiveSnapshot | undefined)[] = []
+
+        stream.subscribeSnapshot(() => seen.push(stream.getSnapshot()))
+        stream.retain()
+        await tick()
+
+        attempts[0].push({ state: 'processing', progress: 42 })
+        await tick()
+
+        attempts[0].end()
+        await tick()
+
+        expect(seen).toEqual([{ state: 'processing', progress: 42 }, undefined])
+
+        stream.stop()
+    })
+
+    test('drops the value on stop', async () => {
+        const { stream, attempts } = setup()
+
+        stream.retain()
+        await tick()
+
+        attempts[0].push({ state: 'processing', progress: 42 })
+        await tick()
+
+        stream.stop()
+
+        expect(stream.getSnapshot()).toBeUndefined()
     })
 })
 

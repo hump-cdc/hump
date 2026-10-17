@@ -12,7 +12,7 @@ type StoryArgs = Pick<ComponentProps<typeof ErrorTerminal>, 'status' | 'title' |
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Error Terminal',
+    title: 'Placeholders/Error Terminal',
     parameters: { disablePadding: true },
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },

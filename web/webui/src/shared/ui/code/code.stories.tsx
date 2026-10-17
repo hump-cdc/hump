@@ -20,7 +20,7 @@ type StoryArgs = Pick<ComponentProps<typeof Code>, 'lineNumbers' | 'format'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Code',
+    title: 'Content/Code',
     argTypes: {
         value: {
             name: 'Source',

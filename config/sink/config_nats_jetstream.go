@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"hump/config/decoder"
-	"hump/config/errs"
+	"hump/config/errors"
 	sinkport "hump/internal/port/sink"
 	"hump/pkg/metadata"
 	"hump/pkg/template"
@@ -125,7 +125,7 @@ func (*NatsJetStreamSink) CrossValidate(groups [][]sinkport.Definition) error {
 			if !slices.Equal(prev.subjects, e.subjects) ||
 				prev.retention != e.retention ||
 				prev.storage != e.storage {
-				return fmt.Errorf("%w: stream %q: divergent subjects/retention/storage", errs.ErrCrossValidate, jsSink.Stream.Name)
+				return fmt.Errorf("%w: stream %q: divergent subjects/retention/storage", errors.ErrCrossValidate, jsSink.Stream.Name)
 			}
 		}
 	}

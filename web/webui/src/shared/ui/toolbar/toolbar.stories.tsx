@@ -17,7 +17,7 @@ const statusItems = [
 type StoryArgs = Pick<ComponentProps<typeof Toolbar>, 'label'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Toolbar',
+    title: 'Layout/Toolbar',
     argTypes: {
         label: { name: 'Mobile label', control: 'text', table: { category: 'Content' } },
     },

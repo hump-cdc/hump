@@ -7,7 +7,7 @@ import { Sink } from './sink'
 type StoryArgs = Pick<ComponentProps<typeof Sink>, 'type' | 'host'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Sink',
+    title: 'Content/Sink',
     argTypes: {
         type: {
             name: 'Type',

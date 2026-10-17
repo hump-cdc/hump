@@ -24,7 +24,7 @@ export type TableNodeData = {
 type TableNodeModel = Node<TableNodeData, 'table'>
 
 const tableNodeVariants = cva(
-    'flex w-70 flex-col gap-2.5 rounded-xl border bg-surface-2 px-4 py-2.5 shadow-lg transition',
+    'flex w-70 flex-col gap-2.5 rounded-xl border bg-surface-1 px-4 py-2.5 shadow-lg transition',
     {
         variants: {
             selected: {
@@ -70,11 +70,20 @@ const OP_CELLS = [
     },
 ] as const
 
+/** Sum of counts across all operation kinds. */
+const totalCount = (ops: TableNodeData['ops']): number =>
+    ops.insert.count + ops.update.count + ops.delete.count + ops.truncate.count
+
 export const TableNodeView: FC<NodeProps<TableNodeModel>> = ({ data, selected }) => (
     <div className={cn(tableNodeVariants({ selected: Boolean(selected) }))}>
         <div className="flex items-center gap-2.5">
             <Table2 className={cn('size-4', selected ? 'text-primary' : 'text-ink-subtle')} />
-            <span className="font-medium font-mono text-ink text-sm leading-tight">{data.name}</span>
+            <span className="min-w-0 truncate font-medium font-mono text-ink text-sm leading-tight">{data.name}</span>
+            <MetricHint hint="Total rows processed">
+                <span className="ml-auto shrink-0 font-mono text-ink-subtle text-xs leading-tight">
+                    <NumberFlow value={totalCount(data.ops)} kind="compact" />
+                </span>
+            </MetricHint>
         </div>
 
         <div className="h-px bg-hairline-strong" />

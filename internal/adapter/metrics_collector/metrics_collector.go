@@ -44,10 +44,19 @@ type Collector struct {
 	mu         sync.Mutex
 	cancel     context.CancelFunc // cancel stops the scrape loop; it is nil while the collector is idle.
 	requests   chan struct{}      // requests carries Scrape calls to the scrape loop; it is nil while the collector is idle.
+	waiting    chan struct{}      // waiting is closed by the next tick to start; every Scrape until then shares it.
 	scraper    *scraper
 	series     map[port.Duration]*series
 	lastTick   time.Time
 }
+
+// closedCh is the channel Scrape answers when there is nothing to wait for.
+var closedCh = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+
+	return ch
+}()
 
 // Option configures a [Collector].
 type Option func(*Collector)
@@ -113,20 +122,27 @@ func (c *Collector) Disconnect() {
 	c.gate.Disconnect()
 }
 
-// Scrape asks the scrape loop for an extra scrape. It does nothing while the
-// collector is idle, and never blocks.
-func (c *Collector) Scrape() {
+// Scrape asks the scrape loop for an extra scrape and returns a channel closed
+// once a scrape started after the call is folded, or the collector stops. It
+// never blocks, and answers an already closed channel while idle.
+func (c *Collector) Scrape() <-chan struct{} {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.requests == nil {
-		return
+		return closedCh
+	}
+
+	if c.waiting == nil {
+		c.waiting = make(chan struct{})
 	}
 
 	select {
 	case c.requests <- struct{}{}:
 	default:
 	}
+
+	return c.waiting
 }
 
 // Record counts n deliveries over conn that ended with status. Unlike the
@@ -205,6 +221,11 @@ func (c *Collector) stop() {
 
 	logger.Info("Metrics collector stopped")
 
+	if c.waiting != nil {
+		close(c.waiting)
+		c.waiting = nil
+	}
+
 	c.requests = nil
 	c.scraper = nil
 	c.series = nil
@@ -262,9 +283,21 @@ func (c *Collector) run(ctx context.Context, requests <-chan struct{}) {
 	}
 }
 
-// tick gathers the registry and folds the result into every series. The first
-// tick after activation only records baselines and gauges.
+// tick gathers the registry and folds the result into every series, then
+// releases the Scrape callers waiting on it, whether or not the fold happened.
+// The first tick after activation only records baselines and gauges.
 func (c *Collector) tick(ctx context.Context) {
+	// Waiters are taken before gathering: a Scrape arriving mid-gather may have
+	// recorded after the registry was read, so it waits for the next tick.
+	c.mu.Lock()
+	done := c.waiting
+	c.waiting = nil
+	c.mu.Unlock()
+
+	if done != nil {
+		defer close(done)
+	}
+
 	families, err := c.gatherer.Gather()
 	if err != nil {
 		logger.Warn("Unable to gather metrics", "error", err)

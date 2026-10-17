@@ -2,7 +2,9 @@ import type { ChartPoint, ChartTooltipOptions } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
 import { portal } from '@tanstack/charts/tooltip/portal'
 
-import type { FC, ReactNode } from 'react'
+import type { ComponentProps, FC } from 'react'
+
+import { NumberFlow } from '@/shared/ui/number-flow'
 
 import { useChart } from './chart-context'
 import type { ChartRow } from './chart-series'
@@ -10,8 +12,8 @@ import type { ChartRow } from './chart-series'
 /** Gap between the tooltip and the value it floats above. */
 const TOOLTIP_OFFSET = 8
 
-/** Renders a data point's value, e.g. `(1.2) => '1.2s'`. */
-export type ChartValueFormatter = (value: number, name: string) => ReactNode
+/** NumberFlow props applied to every value in the tooltip, e.g. `{ kind: 'decimal', suffix: 'ms' }`. */
+export type ChartTooltipValue = Pick<ComponentProps<typeof NumberFlow>, 'kind' | 'suffix'>
 
 /**
  * Tooltip behavior shared by every chart: the popover floats centered above the highest focused
@@ -37,11 +39,11 @@ type ChartTooltipContentProps = {
     points: readonly ChartPoint<ChartRow, number, number>[]
     /** Ordered series keys; rows follow this order regardless of stacking. */
     seriesOrder: string[]
-    valueFormatter?: ChartValueFormatter
+    valueProps?: ChartTooltipValue
 }
 
 /** Card with the focused x label and one row per series: color dot, label and formatted value. */
-export const ChartTooltipContent: FC<ChartTooltipContentProps> = ({ points, seriesOrder, valueFormatter }) => {
+export const ChartTooltipContent: FC<ChartTooltipContentProps> = ({ points, seriesOrder, valueProps }) => {
     const { config } = useChart()
 
     if (!points.length) {
@@ -57,12 +59,13 @@ export const ChartTooltipContent: FC<ChartTooltipContentProps> = ({ points, seri
         <div className="grid min-w-32 items-start gap-1.5 rounded-lg border border-hairline bg-surface-1 px-2.5 py-1.5 font-normal font-sans text-ink text-xs shadow-xl">
             {label && <div className="font-medium">{label}</div>}
             <div className="grid gap-1.5">
-                {rows.map(({ key, series, value }) => {
+                {rows.map(({ series, value }) => {
                     const itemConfig = config[series]
 
                     return (
                         <div
-                            key={key}
+                            // Keyed by series so a row survives moving to another x step and NumberFlow animates the new value.
+                            key={series}
                             className="flex w-full flex-wrap items-center gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-ink-subtle"
                         >
                             {itemConfig?.icon ? (
@@ -78,7 +81,11 @@ export const ChartTooltipContent: FC<ChartTooltipContentProps> = ({ points, seri
                                     {itemConfig?.label ?? series}
                                 </span>
                                 <span className="shrink-0 font-medium font-mono text-ink tabular-nums">
-                                    {valueFormatter ? valueFormatter(value, series) : value.toLocaleString()}
+                                    <NumberFlow
+                                        value={value}
+                                        kind={valueProps?.kind ?? (Number.isInteger(value) ? 'integer' : 'decimal')}
+                                        suffix={valueProps?.suffix}
+                                    />
                                 </span>
                             </div>
                         </div>

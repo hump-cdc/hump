@@ -3,7 +3,7 @@ const decimal2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maxi
 /** `undefined` in, `undefined` out; any number in, `string` out. */
 type Formatted<T extends number | undefined> = T extends undefined ? undefined : string
 
-/** Non-breaking space. */
+/** Thousands separator: a plain ASCII space replaces the comma. */
 const GROUP_SEPARATOR = ' '
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const

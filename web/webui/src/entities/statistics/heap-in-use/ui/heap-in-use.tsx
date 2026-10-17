@@ -2,11 +2,8 @@ import type { FC } from 'react'
 
 import { AreaChartCard } from '@/shared/ui/card'
 import { NumberFlow } from '@/shared/ui/number-flow'
-import { formatNumber2 } from '@/shared/utils'
 
 import { useHeapInUse } from '../model/use-heap-in-use'
-
-const formatMegabytes = (value: number): string => formatNumber2(value, ' MB')
 
 export const HeapInUse: FC = () => {
     const { value, values } = useHeapInUse()
@@ -26,7 +23,7 @@ export const HeapInUse: FC = () => {
             data={values}
             series={[{ dataKey: 'heapInUse', label: 'heap in use', variant: 'primary' }]}
             xAxisKey="time"
-            tooltipValueFormatter={formatMegabytes}
+            tooltipValue={{ kind: 'decimal', suffix: ' MB' }}
             chartClassName="h-24"
         />
     )

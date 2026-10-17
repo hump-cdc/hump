@@ -1,20 +1,25 @@
 import type { FC } from 'react'
 
+import { useConfig } from '@/entities/config/config/@x/inspector'
 import { InfoCard } from '@/shared/ui/card'
 import { ProgressChart } from '@/shared/ui/charts/progress-chart'
 import { NumberFlow } from '@/shared/ui/number-flow'
+import { OperationBadge } from '@/shared/ui/operation-badge'
 
-import { resolveDelivery } from '../model/resolve'
+import { resolveDelivery, resolveEdgeOperations } from '../model/resolve'
 import type { SelectedItem } from '../model/types'
 import { useInspectorTopology } from '../model/use-inspector-topology'
 
 /**
  * Inspector details for a selected edge: its source table, its target with the owning sink, and the
- * deliveries along it. A summary edge has no single target, so it names the sink instead.
+ * deliveries along it. A summary edge has no single target, so it names the sink instead. The
+ * operations the edge receives are listed only when its sinks filter some out.
  */
 export const EdgeDetails: FC<{ selected: Extract<SelectedItem, { kind: 'edge' }> }> = ({ selected }) => {
     const topology = useInspectorTopology()
     const stats = topology && resolveDelivery(topology, selected)
+    const { data: config } = useConfig()
+    const operations = config?.tables && resolveEdgeOperations(config.tables, selected)
 
     return (
         <>
@@ -22,6 +27,15 @@ export const EdgeDetails: FC<{ selected: Extract<SelectedItem, { kind: 'edge' }>
             <InfoCard title="Target" footer={[selected.type, selected.host].filter(Boolean).join(' · ')}>
                 {selected.target ?? selected.targetLabel}
             </InfoCard>
+            {operations && (
+                <InfoCard title="Operations">
+                    <div className="flex flex-wrap gap-1">
+                        {operations.map((op) => (
+                            <OperationBadge key={op} op={op} />
+                        ))}
+                    </div>
+                </InfoCard>
+            )}
             <div className="grid grid-cols-2 gap-2">
                 <InfoCard title="Total events" className="col-span-2">
                     <NumberFlow value={stats?.operations} kind="compact" />

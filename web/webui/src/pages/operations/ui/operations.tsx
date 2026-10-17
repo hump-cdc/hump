@@ -6,9 +6,12 @@ import { OperationsList } from '@/entities/operations/list'
 import { Toolbar } from '@/shared/ui/toolbar'
 import { cn, useIsMobile } from '@/shared/utils'
 
+import { useSearchFilter } from '../model/use-search-filter'
+
 export const Operations: FC = () => {
     const isDetailsOpen = useOperationDetailsStore((state) => state.selected !== null)
     const isMobile = useIsMobile()
+    useSearchFilter()
 
     // On desktop the grid yields the drawer's width (380px) plus a gap, in step with the sheet's
     // open (300ms) and close (200ms) animations. On mobile the drawer overlays from the bottom.

@@ -8,23 +8,44 @@ application layer keyed by the *configured* table.
 
 | File | Role |
 |---|---|
-| `postgres.go` | entry points — `Listen`, `Cleanup`, and `configure`, which orders the whole bootstrap |
+| `postgres.go` | `New` and `configure`, which orders the whole bootstrap |
+| `postgres_streaming.go` | `Listen`: bootstrap, then the lag poller and the WAL stream, each on a session of its own |
+| `postgres_cleanup.go` | `Cleanup`: drops the publication and the replication slot |
+| `postgres_snapshot.go` | `ValidateWhere`, `StartSnapshot`, `FinishSnapshot`, `ReadSnapshot`: one-line entry points into `snapshot` |
+| `postgres_metadata.go` | getters for what `New` was given: database name, host and port, publication, slot |
 | `bootstrapper.go` | server-side DDL: publication, replication slot, `REPLICA IDENTITY FULL` |
 | `introspector.go` | catalog reads; resolves an incoming relation to the configured table that owns it |
 | `introspector_registry.go` | in-memory config: configured tables plus the partition→parent index |
 | `wal.go` | pgoutput stream: relation cache, row decoding, standby keepalive |
+| `replication_lag.go` | polls `pg_replication_slots` on its own session for the `replication_lag_bytes` gauge |
 | `connection.go` | self-healing `pgconn` session with retry/backoff |
+| `connection_config.go` | `connectionOptions`: connection string parsing, the replication flag, the retry policy and its options |
+| `table.go` | `tableType` / `tableMetadata`, the param builders (`tableArrayParams`, `tableScalarParams`, `textParam`) and `quoteIdentifier` / `quoteLiteral` / `qualifiedTableName` |
+| `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the catalog query for tables with their partitions |
+| `metrics.go` | the `replication_lag_bytes` gauge and the `processed_rows_duration_seconds` histogram, with its cached per-table observers |
+| `errors.go` | `ErrTableIgnored` and the package-internal sentinels `errIntrospectionRequired`, `errEmptyCopyData`, `errEmptyWalRecord`; three more are declared in the file that uses them: `errEmptyRowCount` (`postgres_row_count.go`), `errEmptySnapshotId` (`snapshot.go`), `errCopyRow` (`snapshot_export_parser.go`) |
+| `logger.go` | `log.Scope("postgres")` |
+| `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
+| `tables.go` | `GetTables`: two catalog queries per call (a TimescaleDB probe, then the columns query), on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
+| `snapshot_where_suggester.go` | `snapshotWhereSuggester`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
+| `snapshot_where_parser.go` | lexer + recursive-descent parser for the `GetRowCount`/snapshot filter; re-renders it with every identifier and literal quoted, so the raw string never reaches the server |
+| `wal_gate.go` | `walGate`: pauses delivery to the WAL handler while a snapshot is active |
+| `snapshot.go` | `snapshot`, built once in `New`: `ValidateWhere`; `Start` / `Finish` and the holder session that keeps an exported snapshot alive; `Read`: leaves + columns inside the snapshot, then `COPY` chunks by `ctid` page range |
+| `snapshot_export_parser.go` | `snapshotExportParser`: parser for the `COPY … TO STDOUT` text format, decoding fields with the same `decodeText` WAL uses |
 | `sql/` | every statement, one file each, pulled in with `//go:embed` |
 
 ## Conventions
 
-- **SQL lives in `sql/*.sql`, never inline.** Parameterized statements go through
+- **SQL lives in `sql/*.sql`, never inline.** The one inline statement is the holder's
+  `COMMIT` in `snapshot.go` `Finish`; the `ctid` range and the re-rendered filter are fragments
+  spliced into embedded templates, not statements. Parameterized statements go through
   `connection.ExecParams` with `[]param`; use `tableArrayParams` for the `(schemas[], names[])`
   shape most catalog queries filter on, `tableScalarParams` / `textParam` for scalars.
   Statements built by string formatting must quote through `quoteIdentifier` / `quoteLiteral`.
 - **Catalog queries come in two flavours**, TimescaleDB and not, picked by a probe that is
-  cached per session (`tableMetadataLoader.hasTimescaleDB`) — the extension cannot appear or vanish
-  mid-session.
+  cached per `tableMetadataLoader` (`hasTimescaleDB`), not per session: each loader probes once.
+  The bootstrapper and the introspector build one loader each; `GetTables` and `snapshot.Read`
+  build a new one on every call. The extension cannot appear or vanish mid-session.
 - **Tests talk to a real socket** against `fakeServer` (`postgres_test.go`), whose responders
   dispatch on substrings of the SQL. A new query therefore needs a distinctive marker in its
   text — the leading `--` comment is the intended hook — and a case in the shared responders.
@@ -90,13 +111,60 @@ renders as `""`); only the `unavailable` template func exposes it.
 key": under FULL pgoutput sets it on every column. It only discriminates while
 `OldTupleType == 'K'`, which is the one place `decodeRow` reads it.
 
+## Snapshots
+
+- **Pause.** `StartSnapshot` closes `walGate` first and waits until no handler call is in flight,
+  so the snapshot runner is the only caller of the (non-reentrant) processing use case. The gate
+  sits inside `processMessage`, i.e. between `beginProcessing`/`endProcessing`, so the keepalive
+  worker keeps the walsender session alive while WAL waits. The wait ends on `Listen`'s own
+  context (handlers get a detached one), so a shutdown is not held up by a paused gate. The slot
+  keeps WAL for the whole pause. Pause is a flag: repeated `StartSnapshot` returns the same id,
+  one `FinishSnapshot` resumes. `pause` has no timeout of its own: a WAL row stuck in sink
+  retries keeps `StartSnapshot` waiting until the run is stopped.
+- **Holder.** One session runs `BEGIN REPEATABLE READ READ ONLY; LOCK TABLE … IN ACCESS SHARE MODE;
+  SELECT pg_export_snapshot()` and stays idle in that transaction (`idle_in_transaction_session_timeout`
+  is zeroed for it) until `FinishSnapshot` commits. The `LOCK` waits at most `snapshotLockTimeout`
+  (5s, set as `lock_timeout`), so `StartSnapshot` fails rather than queue behind DDL holding those
+  tables. The lock recurses to partitions and chunks and
+  is what keeps `ctid`s stable: without it `VACUUM FULL`/`CLUSTER`/`TRUNCATE` could rewrite a table
+  between chunks. It also holds back DDL on those tables, and the snapshot holds `xmin`.
+- **Not aligned with the slot.** The slot is created by `pg_create_logical_replication_slot`, so
+  there is no snapshot exported at its LSN. WAL resumed after a snapshot replays changes the
+  snapshot already saw; consumers converge, but may briefly see older values. Accepted.
+- **Leaves.** `pg_inherits` recursion from the table, `relkind = 'r'` only: a regular table is its
+  own leaf, a partitioned table's parent has no storage and drops out, a hypertable keeps its
+  (usually empty) parent plus its chunks. Compressed chunks are skipped (TimescaleDB flavour of
+  the query) — their rows live in `compress_hyper_*` and are deliberately not read.
+- **Columns** come from the parent's `pg_attribute` (generated columns excluded, matching pgoutput)
+  and are listed explicitly in the `SELECT`, since a leaf's physical attribute order may differ.
+- **Reads.** Every chunk is one simple-protocol message — `BEGIN; SET TRANSACTION SNAPSHOT; COPY
+  (SELECT … FROM ONLY leaf WHERE ctid range AND (filter)) TO STDOUT; COMMIT` — on a raw session, so
+  a reconnect never silently replays a chunk. `COPY` takes no bind parameters, so the snapshot id
+  goes through `quoteLiteral`, the filter through `snapshotWhereParser`, and the ctid ranges are
+  concatenated from `strconv.FormatUint` page numbers. Chunks are
+  `snapshotChunkPages` pages; the last one is open-ended.
+- **Metrics.** Each processed snapshot row is observed in `processed_rows_duration_seconds` as an
+  `insert` of the requested table, so the dashboard's table counts include snapshot rows. WAL and
+  snapshot reads observe concurrently, hence the mutex around the `rowObservers` cache.
+
 ## Stream mechanics worth knowing
 
 - pgoutput runs with `proto_version '2'`, streaming **off**, so only committed transactions
   arrive, in commit order. A chunk's catalog rows are therefore visible by the time the INSERT
   that created it is decoded — which is what makes the parent lookup safe.
-- A registry miss can block on the database for a long time (catalog round trips, reconnects,
-  an `ALTER` waiting on a lock), so `wal.resolveTable` starts a standby-keepalive goroutine for
-  the duration; otherwise the upstream walsender times the session out.
-- See `docs/TRACE_ID.md` before enabling streaming — `pendingTrace` is keyed by xid and would
-  need `StreamAbortMessageV2` handling.
+- **The confirmed position moves on two events only**: a Commit sets it to the transaction's
+  `TransactionEndLSN`, and a keepalive *outside* a transaction sets it to `ServerWALEnd`, which
+  releases the WAL pgoutput skipped (unpublished tables, internal records). Row messages never
+  move it, so a restart re-sends an unfinished transaction whole. A keepalive between Begin and
+  Commit is ignored: the sender reads a transaction's commit record before replaying it, so its
+  `ServerWALEnd` can already lie past rows not yet processed, and confirming it would make the
+  server skip that transaction on restart.
+- Processing one message can block for a long time — a registry miss (catalog round trips,
+  reconnects, an `ALTER` waiting on a lock), a sink stuck in retries, a paused `walGate` — so
+  `Start` runs one `keepAlive` worker for the whole stream. It sends a standby status update
+  every `standbyInterval`, but only while the receive loop is inside `processMessage`
+  (`beginProcessing`/`endProcessing`), reporting the position the loop held on entry; otherwise
+  the upstream walsender times the session out. Outside `processMessage` the receive loop is the
+  session's only user, and `endProcessing` waits out a flush the worker has in flight.
+- See `docs/TRACE_ID.md` before enabling streaming — the `pendingTrace` map it proposes (not
+  implemented) is keyed by xid and would need `StreamAbortMessageV2` handling.

@@ -13,6 +13,7 @@ const toMonthly = (values: number[]): Array<Record<string, number | string>> =>
 const trendData = toMonthly([46, 62, 55, 78, 70, 90, 84, 108, 96, 120, 112, 134, 150, 128])
 const volatileData = toMonthly([80, 40, 95, 50, 110, 35, 90, 60, 120, 45, 100, 70])
 const seasonalData = toMonthly([30, 45, 70, 110, 140, 150, 130, 95, 60, 40, 35, 50])
+const wideRangeData = toMonthly([1, 3, 12_000, 5, 15_000, 2, 10_000, 7, 4, 13_500, 1, 11_000])
 const zerosData = toMonthly([0, 64, 0, 96, 40, 0, 72, 0, 110, 0, 56, 0])
 const allZerosData = toMonthly([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 const noSeriesData: Array<Record<string, number | string>> = Array.from({ length: 12 }, (_, index) => ({
@@ -93,6 +94,10 @@ const datasets = {
         data: seasonalData,
         series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
     },
+    '1 series — wide range': {
+        data: wideRangeData,
+        series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
+    },
     '1 series — with zeros': {
         data: zerosData,
         series: (variant: BarVariant): BarSeries => [{ dataKey: 'value', label: 'Total processed amount', variant }],
@@ -136,7 +141,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Charts/Bar Chart',
+    title: 'Charts/Bar Chart',
     argTypes: {
         dataset: {
             name: 'Data source',

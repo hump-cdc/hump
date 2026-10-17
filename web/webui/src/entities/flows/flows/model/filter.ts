@@ -27,10 +27,23 @@ export const useFlowsFilterStore = create<FlowsFilterState>()(
         }),
         {
             name: 'hump.flows-filter',
+            version: 1,
+            migrate: (persisted) => migrateFlowsFilter(persisted),
             partialize: (state) => ({ tables: state.tables, sinks: state.sinks }),
         },
     ),
 )
+
+/** Carries a stored selection over from an older version; a facet that is not a selection becomes `all`. */
+export const migrateFlowsFilter = (persisted: unknown): Pick<FlowsFilterState, 'tables' | 'sinks'> => {
+    const stored = persisted as { tables?: unknown; sinks?: unknown } | null
+
+    return { tables: toSelection(stored?.tables), sinks: toSelection(stored?.sinks) }
+}
+
+/** A stored value as a selection, or `all` when it is not a list of ids. */
+const toSelection = (value: unknown): FlowsFilterSelection =>
+    Array.isArray(value) && value.every((id) => typeof id === 'string') ? value : 'all'
 
 /** Whether an item passes the selection; `all` passes everything. */
 const isSelected = (selection: FlowsFilterSelection, id: string): boolean =>

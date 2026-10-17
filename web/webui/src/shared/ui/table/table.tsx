@@ -57,7 +57,7 @@ export function Table<T>({
     return (
         <TableContext.Provider value={{ variant }}>
             {variant === 'bordered' ? (
-                <Card className={className}>
+                <Card className={cn('overflow-visible', className)}>
                     {hasHeader && <CardHeader aside={headerAside}>{header}</CardHeader>}
                     {body}
                 </Card>

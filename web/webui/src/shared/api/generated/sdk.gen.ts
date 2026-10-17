@@ -2,8 +2,8 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetApiConfigData, GetApiConfigErrors, GetApiConfigResponses, GetApiLiveData, GetApiLiveErrors, GetApiLiveResponse, GetApiLiveResponses, PostApiMetricsData, PostApiMetricsErrors, PostApiMetricsResponses, PostApiOperationsData, PostApiOperationsErrors, PostApiOperationsResponses } from './types.gen';
-import { zGetApiConfigResponse, zGetApiLiveResponse, zPostApiMetricsResponse, zPostApiOperationsResponse } from './zod.gen';
+import type { GetApiConfigData, GetApiConfigErrors, GetApiConfigResponses, GetApiLiveData, GetApiLiveErrors, GetApiLiveResponse, GetApiLiveResponses, GetApiSnapshotData, GetApiSnapshotErrors, GetApiSnapshotResponse, GetApiSnapshotResponses, PostApiMetricsData, PostApiMetricsErrors, PostApiMetricsResponses, PostApiOperationsData, PostApiOperationsErrors, PostApiOperationsResponses, PostApiSnapshotEstimateData, PostApiSnapshotEstimateErrors, PostApiSnapshotEstimateResponse, PostApiSnapshotEstimateResponses, PostApiSnapshotStartData, PostApiSnapshotStartErrors, PostApiSnapshotStartResponses, PostApiSnapshotStopData, PostApiSnapshotStopErrors, PostApiSnapshotStopResponses, PostApiSnapshotTablesData, PostApiSnapshotTablesErrors, PostApiSnapshotTablesResponses } from './types.gen';
+import { zGetApiConfigResponse, zGetApiLiveResponse, zGetApiSnapshotResponse, zPostApiMetricsResponse, zPostApiOperationsResponse, zPostApiSnapshotEstimateResponse, zPostApiSnapshotStopResponse, zPostApiSnapshotTablesResponse } from './zod.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -75,6 +75,70 @@ export class Operations {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+}
+
+export class Snapshot {
+    /**
+     * Stream the state of the snapshot run
+     */
+    public static stream<ThrowOnError extends boolean = false>(options?: Options<GetApiSnapshotData, ThrowOnError, GetApiSnapshotResponse>): Promise<ServerSentEventsResult<GetApiSnapshotResponses>> {
+        return (options?.client ?? client).sse.get<GetApiSnapshotResponses, GetApiSnapshotErrors, ThrowOnError>({
+            responseTransformer: async (data) => await zGetApiSnapshotResponse.parseAsync(data),
+            url: '/api/snapshot',
+            ...options
+        });
+    }
+    
+    /**
+     * Stream row count estimates of tables
+     */
+    public static estimate<ThrowOnError extends boolean = false>(options: Options<PostApiSnapshotEstimateData, ThrowOnError, PostApiSnapshotEstimateResponse>): Promise<ServerSentEventsResult<PostApiSnapshotEstimateResponses>> {
+        return (options.client ?? client).sse.post<PostApiSnapshotEstimateResponses, PostApiSnapshotEstimateErrors, ThrowOnError>({
+            responseTransformer: async (data) => await zPostApiSnapshotEstimateResponse.parseAsync(data),
+            url: '/api/snapshot/estimate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Start a snapshot of tables
+     */
+    public static start<ThrowOnError extends boolean = false>(options: Options<PostApiSnapshotStartData, ThrowOnError>): RequestResult<PostApiSnapshotStartResponses, PostApiSnapshotStartErrors, ThrowOnError> {
+        return (options.client ?? client).post<PostApiSnapshotStartResponses, PostApiSnapshotStartErrors, ThrowOnError>({
+            url: '/api/snapshot/start',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Stop the snapshot in progress, or clear a finished one
+     */
+    public static stop<ThrowOnError extends boolean = false>(options?: Options<PostApiSnapshotStopData, ThrowOnError>): RequestResult<PostApiSnapshotStopResponses, PostApiSnapshotStopErrors, ThrowOnError> {
+        return (options?.client ?? client).post<PostApiSnapshotStopResponses, PostApiSnapshotStopErrors, ThrowOnError>({
+            responseTransformer: async (data) => await zPostApiSnapshotStopResponse.parseAsync(data),
+            url: '/api/snapshot/stop',
+            ...options
+        });
+    }
+    
+    /**
+     * Describe configured tables with a suggested snapshot filter
+     */
+    public static tables<ThrowOnError extends boolean = false>(options?: Options<PostApiSnapshotTablesData, ThrowOnError>): RequestResult<PostApiSnapshotTablesResponses, PostApiSnapshotTablesErrors, ThrowOnError> {
+        return (options?.client ?? client).post<PostApiSnapshotTablesResponses, PostApiSnapshotTablesErrors, ThrowOnError>({
+            responseTransformer: async (data) => await zPostApiSnapshotTablesResponse.parseAsync(data),
+            url: '/api/snapshot/tables',
+            ...options
         });
     }
 }

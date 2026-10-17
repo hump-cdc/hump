@@ -8,3 +8,11 @@ const (
 	OperationTypeDelete   OperationType = "delete"
 	OperationTypeTruncate OperationType = "truncate"
 )
+
+// OperationTypes lists every operation type in canonical order.
+var OperationTypes = []OperationType{
+	OperationTypeInsert,
+	OperationTypeUpdate,
+	OperationTypeDelete,
+	OperationTypeTruncate,
+}

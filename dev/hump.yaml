@@ -25,6 +25,24 @@ sinks:
                   - "hump.js.>"
           retention: limits
           storage: file
+    - name: nats2-core
+      nats-core:
+          url: '{{ env "NATS2_URL" }}'
+          username: "hump"
+          password: "hump"
+          subject: "hump.{{.Schema}}.{{.Table}}"
+    - name: nats2-jetstream
+      nats-jetstream:
+          url: '{{ env "NATS2_URL" }}'
+          username: "hump"
+          password: "hump"
+          subject: "hump.js.{{.Schema}}.{{.Table}}"
+          stream:
+              name: HUMP
+              subjects:
+                  - "hump.js.>"
+          retention: limits
+          storage: file
     - name: rabbitmq1
       rabbitmq:
           url: '{{ env "RABBITMQ_URL" }}'
@@ -47,11 +65,32 @@ sinks:
           attemptTimeout: 50ms
           backoff:
               max: 50ms
+    - name: http2
+      http:
+          url: "http://localhost:5050/submit2?schema={{.Schema}}&table={{.Table}}"
+          method: "POST"
+      failure: skip
+      retry:
+          maxAttempts: 10
+          attemptTimeout: 50ms
+          backoff:
+              max: 50ms
+    - name: slow-http
+      http:
+          url: "http://localhost:5050/submit4?schema={{.Schema}}&table={{.Table}}"
+          method: "POST"
+      failure: skip
+      retry:
+          maxAttempts: 50
+          attemptTimeout: 35000ms
+          backoff:
+              max: 1500ms
 
 tables:
     - tables:
           - schema: public
             table: users
+      operations: [insert]
       sinks:
           # - preset: http1
           - preset: kafka1
@@ -66,17 +105,32 @@ tables:
             table: comments
           - schema: public
             table: events
+      operations: [insert, update, delete]
       sinks:
+          # - preset: slow-http
           # - preset: http1
-          # - preset: kafka1
-          - preset: nats-core
-          # - preset: nats-jetstream
+          - preset: kafka1
+          # - preset: nats-core
+          - preset: nats-jetstream
           # - preset: rabbitmq1
           # - preset: rabbitmq-stream
     # - table: events
     #   schema: public
     #   sinks:
-    #       - preset: kafka1
+    #       - preset: nats2-jetstream
+    #       - preset: rabbitmq1
+    #       - preset: rabbitmq-stream
+    # - table: posts
+    #   schema: public
+    #   sinks:
+    #       - preset: nats-jetstream
+    #       - preset: rabbitmq1
+    #       # - preset: http2
+    # - table: comments
+    #   schema: public
+    #   sinks:
+    #       - preset: nats2-core
+    #       # - preset: http1
     # - table: posts
     #   schema: public
     #   sinks:

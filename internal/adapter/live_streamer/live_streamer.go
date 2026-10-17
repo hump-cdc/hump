@@ -1,7 +1,7 @@
 // Package livestreamer decorates the operations collector with the live feed
 // the web UI's SSE stream carries. Deliveries accumulate into a window that
 // closes on a timer, so a pipeline running at thousands of rows a second still
-// reaches the browser as a couple of events per second.
+// reaches the browser as about one event per second.
 package livestreamer
 
 import (
@@ -19,15 +19,16 @@ const (
 	// defaultInterval is how long deliveries accumulate before the window closes.
 	defaultInterval = 500 * time.Millisecond
 	// subscriberBuffer is how many windows a subscriber may fall behind by
-	// before it starts losing them. At the default interval it is four seconds,
-	// which brackets huma's five-second SSE write timeout.
+	// before it starts losing them. At the default interval it is at least four
+	// seconds, which brackets huma's five-second SSE write timeout.
 	subscriberBuffer = 8
 )
 
-// Scraper refreshes the dashboard metrics out of schedule. It is the part of
-// the metrics collector this package needs, and is nil when telemetry is off.
+// Scraper refreshes the dashboard metrics out of schedule, closing the returned
+// channel once they are. It is the part of the metrics collector this package
+// needs.
 type Scraper interface {
-	Scrape()
+	Scrape() <-chan struct{}
 }
 
 // Streamer wraps an operations collector with the live feed. Every method of
@@ -35,7 +36,7 @@ type Scraper interface {
 // delivery to the open window when a client is watching the feed.
 type Streamer struct {
 	inner    operationscollector.Collector
-	scraper  Scraper // scraper is nil when telemetry is disabled.
+	scraper  Scraper // scraper is nil when the caller passes none, leaving windows unscraped.
 	interval time.Duration
 
 	watched atomic.Bool // watched mirrors len(subs) > 0, so Record costs one load when nobody is watching.
@@ -48,6 +49,7 @@ type Streamer struct {
 	timer      *time.Timer
 	generation uint64 // generation invalidates a timer that fired before the window it was armed for was dropped.
 	closed     bool
+	done       chan struct{} // done is closed with the streamer, releasing a flush waiting on a scrape.
 }
 
 // subscriber is one connected client's channel and its drop bookkeeping.
@@ -85,6 +87,7 @@ func New(inner operationscollector.Collector, opts ...Option) *Streamer {
 		inner:    inner,
 		interval: defaultInterval,
 		subs:     make(map[uint64]*subscriber),
+		done:     make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -202,48 +205,69 @@ func (s *Streamer) append(op port.Operation) {
 	s.pending = append(s.pending, op)
 
 	if s.timer == nil {
-		s.generation++
-		generation := s.generation
-		s.timer = time.AfterFunc(s.interval, func() { s.flush(generation) })
+		s.arm()
 	}
 }
 
-// flush refreshes the dashboard metrics and hands the closed window to every
-// subscriber, skipping any whose buffer is full. generation identifies the
-// window the timer was armed for: one that fired just before its window was
-// dropped parks on the lock and wakes against a window that is not its own,
-// which it must leave alone.
+// arm starts the timer that closes the open window. s.mu must be held.
+func (s *Streamer) arm() {
+	s.generation++
+	generation := s.generation
+	s.timer = time.AfterFunc(s.interval, func() { s.flush(generation) })
+}
+
+// flush closes the window, waits for the dashboard metrics to be scraped, and
+// hands the batch to every subscriber, skipping any whose buffer is full.
+// generation identifies the window the timer was armed for: one that fired
+// just before its window was dropped must leave the next window alone.
 //
-// The scrape happens here rather than on every Record: Scrape takes the metrics
-// collector's lock, which Dump holds for as long as it takes to merge a
-// snapshot, and that has no business on the delivery path. The collector
-// debounces requests to one a second anyway, so a per-delivery call would throw
-// away all but one in a couple of thousand.
+// The batch goes out only after the scrape, so a client refetching the metrics
+// on it reads counts that include it. The wait happens off s.mu, keeping it off
+// the delivery path; s.timer stays set meanwhile, so no other window opens and
+// deliveries that arrive in the meantime go out as the next batch, in order.
+// The cost is latency: an event can trail its first delivery by the interval
+// plus the collector's debounce.
 //
-// The batch goes out under the lock on purpose. The sends never block, and
+// The fan-out runs under the lock on purpose. The sends never block, and
 // Unsubscribe closes a channel under the same lock, so fanning out from a
 // snapshot taken outside it would send on a closed channel.
 func (s *Streamer) flush(generation uint64) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if generation != s.generation {
+		s.mu.Unlock()
 		return
 	}
-
-	s.timer = nil
 
 	batch := port.Batch{Operations: s.pending}
 	s.hint = len(s.pending)
 	s.pending = nil
 
 	if len(batch.Operations) == 0 {
+		s.timer = nil
+		s.mu.Unlock()
 		return
 	}
 
+	s.mu.Unlock()
+
 	if s.scraper != nil {
-		s.scraper.Scrape()
+		select {
+		case <-s.scraper.Scrape():
+		case <-s.done:
+		}
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// The window was dropped while waiting, by the last subscriber leaving or
+	// by close; the batch goes with it.
+	if generation != s.generation {
+		return
+	}
+
+	s.timer = nil
 
 	for id, sub := range s.subs {
 		select {
@@ -254,6 +278,10 @@ func (s *Streamer) flush(generation uint64) {
 				logger.Warn("Dropping windows for a slow subscriber", "subscriber", id, "buffer", subscriberBuffer)
 			}
 		}
+	}
+
+	if len(s.pending) > 0 {
+		s.arm()
 	}
 }
 
@@ -289,6 +317,7 @@ func (s *Streamer) close() {
 	}
 	s.closed = true
 	s.watched.Store(false)
+	close(s.done)
 
 	s.discard()
 

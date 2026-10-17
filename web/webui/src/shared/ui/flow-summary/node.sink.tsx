@@ -11,7 +11,7 @@ export type SinkNodeData = {
     name: string
     /** Sink type (`kafka`, `rabbitmq`, …); picks the header logo. */
     type: string
-    /** Connection host; together with `type` it identifies the sink. Not rendered on the card. */
+    /** Connection host; together with `type` it identifies the sink. */
     host?: string
     /** Total operations delivered. */
     operations: number
@@ -55,9 +55,14 @@ const MetricCell: FC<{ label: string; hint: string; value: ReactNode; className?
 
 export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ data, selected }) => (
     <div className={cn(sinkNodeVariants({ selected: Boolean(selected) }))}>
-        <div className="flex items-center gap-2.5">
+        <div className="flex h-8.5 items-center gap-2.5">
             <SinkIconTile type={data.type} />
-            <span className="font-medium font-mono text-ink text-sm">{data.name}</span>
+            <div className="flex flex-col gap-0.5">
+                <span className="font-medium font-mono text-ink text-sm leading-tight">{data.name}</span>
+                {data.host ? (
+                    <span className="font-mono text-ink-subtle text-xs leading-tight">{data.host}</span>
+                ) : null}
+            </div>
         </div>
 
         <div className="h-px bg-hairline-strong" />
@@ -91,7 +96,7 @@ export const SinkNodeView: FC<NodeProps<SinkNodeModel>> = ({ data, selected }) =
     </div>
 )
 
-/** Declarative config element: `<FlowSummarySink id name type operations p95 successRate health />`. */
+/** Declarative config element: `<FlowSummarySink id name type host operations p95 successRate health />`. */
 export const SinkNode: FlowNodeConfig<'sink', SinkNodeData> = Object.assign(
     (_props: FlowNodeBase & SinkNodeData) => null,
     { flowNodeType: 'sink' as const },

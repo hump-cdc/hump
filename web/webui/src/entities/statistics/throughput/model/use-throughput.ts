@@ -3,7 +3,7 @@ import { useMetrics } from '@/entities/metrics/@x/statistics'
 import { formatTimeCompact } from '@/shared/utils'
 
 /** A single point on the throughput area chart. */
-type Item = { time: string; rowsPerSec: number }
+type Item = { time: string; eventsPerSec: number }
 
 /** Round a rate to 2 fraction digits. */
 const round2 = (value: number): number => Math.round(value * 100) / 100
@@ -15,7 +15,7 @@ export const useThroughput = (): { values: Item[] } => {
 
     const values: Item[] = (data?.points ?? []).map(({ timestamp, throughput }) => ({
         time: formatTimeCompact(timestamp),
-        rowsPerSec: round2(throughput),
+        eventsPerSec: round2(throughput),
     }))
 
     return { values }

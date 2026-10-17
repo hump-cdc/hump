@@ -1,2 +1,2 @@
-export { CHART_STEPS, type ChartStep, useLiveControlsStore } from './model/store'
+export type { ChartStep } from './model/store'
 export { LiveControls } from './ui/live-controls'

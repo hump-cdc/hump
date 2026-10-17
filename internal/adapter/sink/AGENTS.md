@@ -20,7 +20,7 @@ Every subpackage has the same shape, and a new one should keep it:
 
 | File | Role |
 |---|---|
-| `<name>.go` | `Process` — the whole delivery, top to bottom |
+| `<name>.go` | `Process` (`ProcessCore` / `ProcessJetStream` in `nats`) — the whole delivery, top to bottom |
 | `client.go` | the process-global connection cache (`http` has none) |
 | `message.go` | template rendering into the broker's message type |
 | `errors.go` | `wrapError` plus the permanent/transient classification |
@@ -29,7 +29,8 @@ Every subpackage has the same shape, and a new one should keep it:
 
 ## The contract every adapter follows
 
-`Process(ctx, config, operationContext, capture)`:
+`Process(ctx, config, operationContext, capture)` (NATS: `ProcessCore` and `ProcessJetStream`, same
+signature):
 
 1. `ctx.Err()` first, returned raw — a cancelled context is not a sink error.
 2. Render, acquire a cached client, build the message. The order differs per sink (RabbitMQ
@@ -68,7 +69,8 @@ the loop today.
 
 ## Client caches are process-global and outlive the config
 
-Each subpackage keeps a package-level map guarded by a package-level mutex, keyed by the
+Each subpackage except `http` (one shared `defaultClient`) keeps a package-level map guarded by a
+package-level mutex, keyed by the
 **rendered** connection fields: Kafka by url + clientID + credentials + sasl + tls, NATS by url
 + name + whichever auth group applies, RabbitMQ by url alone (auth lives in the URL), RabbitMQ
 Streams by url for the environment and by (url, stream) for producers. Connection fields are
@@ -79,7 +81,7 @@ Eviction is uneven: Kafka and NATS never delete an entry (the `shutdown.StageSin
 the client and leaves the map alone), RabbitMQ deletes its entry from inside the shutdown hook,
 and RabbitMQ Streams also evicts a producer from
 `watchProducerClose` when the broker closes it. That goroutine deletes the entry and *then*
-sleeps ~2s, so the sleep gates nothing: the next `Process` recreates the producer immediately.
+sleeps 2.1–3s (2s base + 100ms–1s jitter), so the sleep gates nothing: the next `Process` recreates the producer immediately.
 
 ## Three reconcilers, one shape
 
@@ -133,4 +135,5 @@ asserts the ack path finishes in under 5ms — a regression lock on a removed 50
 wait, not a performance nicety. There are no broker integration tests here;
 `dev/docker-compose.yml` brings up Kafka, NATS and RabbitMQ for manual runs.
 
-Helpers live below the last test function — see the `go` skill.
+`newTestConn` sits above `TestAwaitPublishResult`, not below the last test as the `go` skill
+puts helpers.

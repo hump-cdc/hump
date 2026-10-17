@@ -19,7 +19,7 @@ const rateVariants = cva('shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 font-
 })
 
 const targetRowVariants = cva(
-    'flex h-7 w-full cursor-pointer items-center gap-2 rounded-md border bg-surface-3 px-2.5 text-left',
+    'flex h-7 w-full cursor-pointer items-center gap-2 rounded-md border bg-surface-3/30 px-2.5 text-left',
     {
         variants: {
             selected: {

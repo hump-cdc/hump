@@ -71,7 +71,7 @@ type StoryArgs = {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Table',
+    title: 'Content/Table',
     argTypes: {
         variant: {
             name: 'Variant',

@@ -80,6 +80,23 @@ const preview: Preview = {
         controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
         interactions: { disable: true },
         docs: { codePanel: true },
+        options: {
+            storySort: {
+                method: 'alphabetical',
+                order: [
+                    'Colors',
+                    'Actions',
+                    'Inputs',
+                    'Content',
+                    'Charts',
+                    'Placeholders',
+                    'Overlays',
+                    'Layout',
+                    'Flows',
+                    'Widgets',
+                ],
+            },
+        },
     },
 };
 

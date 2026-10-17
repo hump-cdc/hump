@@ -7,7 +7,7 @@ import { ProgressBar } from './progress-bar'
 type StoryArgs = Pick<ComponentProps<typeof ProgressBar>, 'value' | 'variant' | 'size'>
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Progress Bar',
+    title: 'Placeholders/Progress Bar',
     argTypes: {
         value: { name: 'Value', control: { type: 'range', min: 0, max: 100, step: 1 }, table: { category: 'Content' } },
         variant: {

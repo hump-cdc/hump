@@ -22,7 +22,7 @@ const next = (current: CheckedState, withIndeterminate: boolean): CheckedState =
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Inputs/Checkbox',
+    title: 'Inputs/Checkbox',
     argTypes: {
         indeterminate: { name: 'Indeterminate state', control: 'boolean', table: { category: 'State' } },
         invalid: { name: 'Invalid', control: 'boolean', table: { category: 'State' } },

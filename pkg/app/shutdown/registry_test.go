@@ -18,13 +18,13 @@ func TestShutdownRunsStagesInOrder(t *testing.T) {
 	r.add(StageWorkers, "pool", rec.handler("pool"))
 	r.add(StageSinks, "stream_env", rec.handler("stream_env"))
 	r.add(StageSinks, "stream_producer", rec.handler("stream_producer"))
-	r.add(StageServers, "telemetry", rec.handler("telemetry"))
+	r.add(StageServers, "observability", rec.handler("observability"))
 
 	if err := r.shutdown(time.Second); err != nil {
 		t.Fatalf("shutdown() error = %v, want nil", err)
 	}
 
-	want := []string{"pool", "stream_producer", "stream_env", "kafka", "telemetry", "web"}
+	want := []string{"pool", "stream_producer", "stream_env", "kafka", "observability", "web"}
 	if got := rec.recorded(); !slices.Equal(got, want) {
 		t.Errorf("handlers ran in order %v, want %v", got, want)
 	}

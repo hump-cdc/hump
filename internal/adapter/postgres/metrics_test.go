@@ -3,28 +3,26 @@ package postgres
 import (
 	"testing"
 
-	"github.com/jackc/pglogrepl"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
-func TestUpdateReplicationLag(t *testing.T) {
+func TestSetReplicationLag(t *testing.T) {
 	tests := []struct {
-		name      string
-		processed pglogrepl.LSN
-		server    pglogrepl.LSN
-		want      float64
+		name  string
+		bytes float64
+		want  float64
 	}{
-		{name: "server ahead", processed: 0x100, server: 0x1000, want: 0xF00},
-		{name: "processed ahead", processed: 0x1000, server: 0x100, want: 0},
-		{name: "positions equal", processed: 0x1000, server: 0x1000, want: 0},
+		{name: "positive", bytes: 0xF00, want: 0xF00},
+		{name: "zero", bytes: 0, want: 0},
+		{name: "negative", bytes: -0x100, want: 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newTestMetrics()
-			m.updateReplicationLag(tt.processed, tt.server)
+			m.setReplicationLag(tt.bytes)
 
 			got := testutil.ToFloat64(m.replicationLag)
 			if got != tt.want {

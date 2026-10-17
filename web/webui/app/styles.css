@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "prism-react-editor/layout.css";
 
 /* ── Self-hosted variable fonts (fetched on page open via these @font-face rules) ──
    Design uses weights 400/500/600, normal only; the weight-axis range below covers them. */
@@ -26,8 +27,10 @@
   --base-black: #010102;
 
   /* neutral ramp (light → dark) */
+  --base-neutral-10:  #fbfbfc;
   --base-neutral-25:  #f7f8f9;
   --base-neutral-50:  #f7f8f8;
+  --base-neutral-75:  #f3f4f6;
   --base-neutral-100: #eef0f2;
   --base-neutral-150: #e7e9ec;
   --base-neutral-175: #e6e8eb;
@@ -79,7 +82,8 @@
 
 /* ── Tier 2: semantic tokens — light (base, no class) ── */
 :root {
-  --canvas:          var(--base-white);
+  --canvas:          var(--base-neutral-10);
+  --sidebar:         var(--base-neutral-75);
   --surface-1:       var(--base-neutral-25);
   --surface-2:       var(--base-neutral-100);
   --surface-3:       var(--base-neutral-150);
@@ -116,6 +120,7 @@
 /* ── Tier 2: semantic tokens — dark overrides (re-point to other base tokens) ── */
 .dark {
   --canvas:          var(--base-black);
+  --sidebar:         var(--base-neutral-950);
   --surface-1:       var(--base-neutral-900);
   --surface-2:       var(--base-neutral-875);
   --surface-3:       var(--base-neutral-850);
@@ -200,6 +205,7 @@
   --color-black: var(--base-black);
 
   --color-canvas:          var(--canvas);
+  --color-sidebar:         var(--sidebar);
   --color-surface-1:       var(--surface-1);
   --color-surface-2:       var(--surface-2);
   --color-surface-3:       var(--surface-3);
@@ -252,6 +258,11 @@ body {
   margin: 0;
 }
 
+/* The stable gutter already reserves the scrollbar space, so drop the Radix scroll lock's extra compensation. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+}
+
 html,
 body {
   overscroll-behavior: none;
@@ -299,7 +310,8 @@ body {
   color: var(--hump-code-ln);
   user-select: none;
 }
-.hump-code .th-property {
+.hump-code .th-property,
+.hump-code .th-function {
   color: var(--syntax-tag);
 }
 .hump-code .th-string {
@@ -318,4 +330,55 @@ body {
 }
 .hump-code .th-operator {
   color: var(--syntax-punctuation);
+}
+
+/* WHERE editor (shared/ui/where-input), built on prism-react-editor. Overrides keep its box
+   in sync with the component's height math (20px lines, 7px vertical padding); Prism `token`
+   classes map onto the same `--syntax-*` tokens as the code viewer. */
+.prism-code-editor.hump-where {
+  --padding-inline: 0;
+  --pce-cursor: var(--ink);
+  --pce-selection: color-mix(in oklab, var(--primary) 25%, transparent);
+  line-height: 20px;
+  overflow: hidden auto;
+}
+.prism-code-editor.hump-where.pce-nowrap {
+  overflow: hidden;
+}
+.hump-where .pce-wrapper {
+  margin: 7px 0;
+}
+.hump-where-collapsed .pce-line {
+  visibility: hidden;
+}
+/* Prism re-enables pointer events on its textarea; a disabled input lets clicks fall through. */
+.hump-where .pce-textarea:disabled {
+  pointer-events: none;
+}
+.hump-where .pce-textarea::placeholder {
+  color: var(--ink-tertiary);
+  opacity: 1;
+}
+.hump-where .token.operator,
+.hump-where .token.punctuation {
+  color: var(--syntax-punctuation);
+}
+.hump-where .token.keyword,
+.hump-where .token.boolean {
+  color: var(--syntax-keyword);
+}
+.hump-where .token.string {
+  color: var(--syntax-string);
+}
+.hump-where .token.number {
+  color: var(--syntax-number);
+}
+.hump-where .token.comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.hump-where .token.function,
+.hump-where .token.cast,
+.hump-where .token.identifier {
+  color: var(--syntax-tag);
 }

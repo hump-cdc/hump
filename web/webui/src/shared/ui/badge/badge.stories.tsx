@@ -20,7 +20,7 @@ type StoryArgs = Pick<ComponentProps<typeof Badge>, 'variant' | 'dot' | 'dotAnim
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Badge',
+    title: 'Content/Badge',
     argTypes: {
         label: {
             name: 'Content',

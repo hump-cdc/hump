@@ -2,11 +2,8 @@ import type { FC } from 'react'
 
 import { MetricCard } from '@/shared/ui/card'
 import { NumberFlow } from '@/shared/ui/number-flow'
-import { formatNumber } from '@/shared/utils'
 
 import { useDelivered } from '../model/use-delivered'
-
-const formatDelivered = (value: number): string => formatNumber(value)
 
 export const Delivered: FC = () => {
     const { value, values } = useDelivered()
@@ -17,7 +14,7 @@ export const Delivered: FC = () => {
             hint="Change events successfully written to their destinations during the time range."
             value={value === undefined ? undefined : <NumberFlow value={value} kind="integer" />}
             values={values}
-            tooltipValueFormatter={formatDelivered}
+            tooltipValue={{ kind: 'integer' }}
             variant="success"
             aside={null}
         />

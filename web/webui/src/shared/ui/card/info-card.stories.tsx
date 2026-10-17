@@ -10,7 +10,7 @@ type StoryArgs = Pick<ComponentProps<typeof InfoCard>, 'title' | 'variant'> & {
 }
 
 const meta: Meta<StoryArgs> = {
-    title: 'UI Kit/Card/Info',
+    title: 'Content/Card/Info',
     argTypes: {
         title: { name: 'Title', control: 'text', table: { category: 'Content' } },
         content: { name: 'Content', control: 'text', table: { category: 'Content' } },

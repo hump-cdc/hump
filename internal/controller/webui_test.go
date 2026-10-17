@@ -9,10 +9,15 @@ import (
 	"time"
 
 	operationscollectoradapter "hump/internal/adapter/operations_collector"
-	getwebuiconfig "hump/internal/application/webui/get_webui_config"
-	getwebuimetrics "hump/internal/application/webui/get_webui_metrics"
-	getwebuioperations "hump/internal/application/webui/get_webui_operations"
-	streamwebuiupdates "hump/internal/application/webui/stream_webui_updates"
+	getconfig "hump/internal/application/webui/get_config"
+	getmetrics "hump/internal/application/webui/get_metrics"
+	getoperations "hump/internal/application/webui/get_operations"
+	getsnapshotestimates "hump/internal/application/webui/get_snapshot_estimates"
+	getsnapshottables "hump/internal/application/webui/get_snapshot_tables"
+	startsnapshot "hump/internal/application/webui/start_snapshot"
+	stopsnapshot "hump/internal/application/webui/stop_snapshot"
+	streamsnapshot "hump/internal/application/webui/stream_snapshot"
+	streamupdates "hump/internal/application/webui/stream_updates"
 	"hump/internal/domain"
 	operationscollectorport "hump/internal/port/operations_collector"
 	"hump/pkg/app/options"
@@ -130,6 +135,38 @@ func TestOperationsRouteRejectsAWindowlessBody(t *testing.T) {
 	}
 }
 
+func TestSnapshotEstimateRouteStreamsEvents(t *testing.T) {
+	router := newTestRouter(newTestOperationsCollector(t))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/snapshot/estimate", strings.NewReader(`{"tables":[{"schema":"public","table":"users","where":"id > 1"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK || !strings.HasPrefix(resp.Header().Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("status, content type = %d, %q, want 200 and an event stream", resp.Code, resp.Header().Get("Content-Type"))
+	}
+
+	if !strings.Contains(resp.Body.String(), "event: done") {
+		t.Fatalf("body = %q, want a done event", resp.Body)
+	}
+}
+
+func TestSnapshotEstimateRouteRejectsATablelessBody(t *testing.T) {
+	router := newTestRouter(newTestOperationsCollector(t))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/snapshot/estimate", strings.NewReader(`{"tables":[{"where":"id > 1"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 for a table without a name", resp.Code)
+	}
+}
+
 // newTestOperationsCollector returns a connected collector that is closed when
 // the test ends.
 func newTestOperationsCollector(t *testing.T) *operationscollectoradapter.Collector {
@@ -147,10 +184,15 @@ func newTestOperationsCollector(t *testing.T) *operationscollectoradapter.Collec
 func newTestRouter(collector operationscollectorport.Collector) chi.Router {
 	router := chi.NewMux()
 	NewWebUIController(
-		getwebuiconfig.NewController(options.Options{}, config.Configuration{}, nil),
-		getwebuimetrics.NewController(nil),
-		getwebuioperations.NewController(collector),
-		streamwebuiupdates.NewController(nil, nil, nil),
+		getconfig.NewController(getconfig.NewUseCase(options.Options{}, config.Configuration{}, nil)),
+		getmetrics.NewController(getmetrics.NewUseCase(nil)),
+		getoperations.NewController(getoperations.NewUseCase(collector)),
+		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil, nil)),
+		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
+		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
+		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
+		startsnapshot.NewController(startsnapshot.NewUseCase(nil)),
+		stopsnapshot.NewController(stopsnapshot.NewUseCase(nil)),
 	).Api(router)
 
 	return router

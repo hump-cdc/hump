@@ -1,0 +1,63 @@
+name: New sink
+description: Propose a new destination for change events.
+labels: [enhancement, sink]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hump delivers at-least-once and confirms the WAL position only after every sink has delivered. A new sink has to fit that model, so the delivery questions below matter most.
+
+  - type: input
+    id: system
+    attributes:
+      label: Target system
+      description: Name and a link to its documentation.
+      placeholder: Apache Pulsar, https://pulsar.apache.org/docs/
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What you would deliver there and why the existing sinks don't fit.
+    validations:
+      required: true
+
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Delivery semantics
+      description: What the system guarantees to a producer.
+      value: |
+        - Ordering:
+        - Acknowledgments / publisher confirms:
+        - Idempotency or deduplication:
+        - Batching:
+
+  - type: textarea
+    id: routing
+    attributes:
+      label: Routing
+      description: |
+        What plays the role of topic, subject, routing key, message key and headers, and which of them should be templates.
+      placeholder: |
+        topic: "{{ .Schema }}.{{ .Table }}"
+        key: primary key
+        properties: map to headers
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication and TLS
+      description: Which auth methods and TLS options the sink needs to support.
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement it?
+      description: A new external system goes in as a port in `internal/port`, then its adapter, then the wiring in `cmd/hump`. See `AGENTS.md` and `internal/adapter/sink/AGENTS.md`.
+      options:
+        - Yes, I can open a pull request
+        - Maybe, with some guidance
+        - No

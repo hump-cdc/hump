@@ -1,0 +1,147 @@
+name: Bug report
+description: Something in Hump doesn't work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For questions, use [Discussions](https://github.com/sergeyzwezdin/hump/discussions). Report vulnerabilities through the [advisory form](https://github.com/sergeyzwezdin/hump/security/advisories/new), not here.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: I reproduced the bug on the latest release or on `main`.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong, in a sentence or two.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the SQL that triggers the change, if any.
+      placeholder: |
+        1. Start Hump with the configuration below.
+        2. Run `UPDATE public.users SET name = 'x' WHERE id = 1;`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected and actual behaviour
+      placeholder: |
+        Expected: one event in the `public.users` topic.
+        Actual: two events with the same LSN.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Delivery impact
+      description: What happened to the events.
+      options:
+        - No data loss
+        - Duplicate events
+        - Missing events
+        - Wrong payload
+        - Crash or stuck replication
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Hump version
+      description: Every log line carries `version` (and `commit` when the build sets it).
+      placeholder: v1.2.3 (commit abc1234)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - Binary from GitHub Releases
+        - Docker image
+        - Built from source
+
+  - type: input
+    id: postgres-version
+    attributes:
+      label: PostgreSQL version
+      placeholder: "16.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: postgres-hosting
+    attributes:
+      label: PostgreSQL hosting
+      options:
+        - Self-hosted
+        - Amazon RDS
+        - Amazon Aurora
+        - Google Cloud SQL
+        - Azure Database for PostgreSQL
+        - Other
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      multiple: true
+      options:
+        - Replication / WAL
+        - Snapshot
+        - Kafka sink
+        - HTTP sink
+        - NATS Core sink
+        - NATS JetStream sink
+        - RabbitMQ sink
+        - RabbitMQ Streams sink
+        - Templating
+        - Retry / failure policy
+        - Web console
+        - Metrics / health probes
+        - Configuration / CLI
+        - Other
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: |
+        The relevant part of `hump.yaml` and the flags or environment variables you set.
+        **Remove secrets first:** passwords in connection URLs, tokens, `Authorization` headers.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Run with `LOG_VERBOSE=true` for debug logs. Debug logs include the parsed configuration with inline credentials, so redact secrets and row data before pasting.
+      render: shell
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Table definitions, partitioning or TimescaleDB setup, load, anything else that helps.

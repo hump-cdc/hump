@@ -1,0 +1,65 @@
+name: Feature request
+description: Suggest a change or a new capability.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        To request a new sink, use the **New sink** template instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What you are trying to do and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How it could work. A configuration snippet helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use now or other approaches you looked at.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Replication / WAL
+        - Snapshot
+        - Kafka sink
+        - HTTP sink
+        - NATS Core sink
+        - NATS JetStream sink
+        - RabbitMQ sink
+        - RabbitMQ Streams sink
+        - Templating
+        - Retry / failure policy
+        - Web console
+        - Metrics / health probes
+        - Configuration / CLI
+        - Other
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - Yes, I can open a pull request
+        - Maybe, with some guidance
+        - No
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

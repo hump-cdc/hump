@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/sergeyzwezdin/hump/discussions
+    about: Ask how to configure or run Hump in GitHub Discussions.
+  - name: Security vulnerability
+    url: https://github.com/sergeyzwezdin/hump/security/advisories/new
+    about: Report vulnerabilities privately. Don't open a public issue.
+  - name: Documentation
+    url: https://hump.dev/docs/getting-started
+    about: Configuration, sinks, templating, delivery guarantees, snapshots and observability.

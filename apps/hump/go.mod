@@ -18,7 +18,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/rabbitmq/amqp091-go v1.15.0
-	github.com/rabbitmq/rabbitmq-stream-go-client v1.8.1
+	github.com/rabbitmq/rabbitmq-stream-go-client v1.8.3
 	github.com/twmb/franz-go v1.21.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.24.0
@@ -147,7 +147,7 @@ require (
 	github.com/karamaru-alpha/copyloopvar v1.2.2 // indirect
 	github.com/kisielk/errcheck v1.30.0 // indirect
 	github.com/kkHAIKE/contextcheck v1.1.6 // indirect
-	github.com/klauspost/compress v1.18.7 // indirect
+	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/kulti/thelper v0.7.1 // indirect
 	github.com/kunwardeep/paralleltest v1.0.16 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect

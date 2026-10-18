@@ -1,6 +1,5 @@
 # https://docs.codecov.com/docs/codecov-yaml
-# Coverage is uploaded by .github/workflows/go-test.yml (flag 'go') and
-# .github/workflows/web-test.yml (flag 'webui').
+# Coverage is uploaded by .github/workflows/check.yml (flags 'go' and 'hump-tower').
 coverage:
     precision: 1
     round: down
@@ -31,9 +30,9 @@ flag_management:
             - type: patch
               target: 80%
     individual_flags:
-        # No 'paths': each flag only receives its own workflow's upload.
+        # No 'paths': each flag only receives its own upload.
         - name: go
-        - name: webui
+        - name: hump-tower
 
 # Components split the totals by module, so the PR comment shows each module's coverage and its
 # change against base, and a drop is easy to trace. They are display-only: 'statuses: []' adds
@@ -48,79 +47,81 @@ component_management:
         - component_id: go_cmd
           name: "Go · cmd"
           flag_regexes: ["^go$"]
-          paths: ["cmd/"]
+          paths: ["apps/hump/cmd/"]
         - component_id: go_config
           name: "Go · config"
           flag_regexes: ["^go$"]
-          paths: ["config/"]
+          paths: ["apps/hump/config/"]
         - component_id: go_domain_port
           name: "Go · domain & ports"
           flag_regexes: ["^go$"]
-          paths: ["internal/domain/", "internal/port/"]
+          paths: ["apps/hump/internal/domain/", "apps/hump/internal/port/"]
         - component_id: go_adapter_postgres
           name: "Go · adapters/postgres"
           flag_regexes: ["^go$"]
-          paths: ["internal/adapter/postgres/"]
+          paths: ["apps/hump/internal/adapter/postgres/"]
         - component_id: go_adapter_sink
           name: "Go · adapters/sink"
           flag_regexes: ["^go$"]
-          paths: ["internal/adapter/sink/"]
+          paths: ["apps/hump/internal/adapter/sink/"]
         - component_id: go_adapter_other
           name: "Go · adapters (other)"
           flag_regexes: ["^go$"]
-          paths: ["internal/adapter/", "!internal/adapter/postgres/", "!internal/adapter/sink/"]
+          paths: ["apps/hump/internal/adapter/", "!apps/hump/internal/adapter/postgres/", "!apps/hump/internal/adapter/sink/"]
         - component_id: go_application
           name: "Go · application"
           flag_regexes: ["^go$"]
-          paths: ["internal/application/"]
+          paths: ["apps/hump/internal/application/"]
         - component_id: go_controller
           name: "Go · controller"
           flag_regexes: ["^go$"]
-          paths: ["internal/controller/"]
+          paths: ["apps/hump/internal/controller/"]
         - component_id: go_pkg
           name: "Go · pkg"
           flag_regexes: ["^go$"]
-          paths: ["pkg/"]
-        # Web UI (flag 'webui').
-        - component_id: webui_shared_ui
-          name: "Web · shared/ui"
-          flag_regexes: ["^webui$"]
-          paths: ["web/webui/src/shared/ui/"]
-        - component_id: webui_shared
-          name: "Web · shared (other)"
-          flag_regexes: ["^webui$"]
-          paths: ["web/webui/src/shared/", "!web/webui/src/shared/ui/"]
-        - component_id: webui_entities
-          name: "Web · entities"
-          flag_regexes: ["^webui$"]
-          paths: ["web/webui/src/entities/"]
-        - component_id: webui_app
-          name: "Web · app, pages, widgets & features"
-          flag_regexes: ["^webui$"]
+          paths: ["apps/hump/pkg/"]
+        # hump-tower (flag 'hump-tower').
+        - component_id: hump_tower_shared_ui
+          name: "Hump Tower · shared/ui"
+          flag_regexes: ["^hump-tower$"]
+          paths: ["apps/hump-tower/src/shared/ui/"]
+        - component_id: hump_tower_shared
+          name: "Hump Tower · shared (other)"
+          flag_regexes: ["^hump-tower$"]
+          paths: ["apps/hump-tower/src/shared/", "!apps/hump-tower/src/shared/ui/"]
+        - component_id: hump_tower_entities
+          name: "Hump Tower · entities"
+          flag_regexes: ["^hump-tower$"]
+          paths: ["apps/hump-tower/src/entities/"]
+        - component_id: hump_tower_app
+          name: "Hump Tower · app, pages, widgets & features"
+          flag_regexes: ["^hump-tower$"]
           paths:
-              - "web/webui/app/"
-              - "web/webui/src/app/"
-              - "web/webui/src/pages/"
-              - "web/webui/src/widgets/"
-              - "web/webui/src/features/"
+              - "apps/hump-tower/app/"
+              - "apps/hump-tower/src/app/"
+              - "apps/hump-tower/src/pages/"
+              - "apps/hump-tower/src/widgets/"
+              - "apps/hump-tower/src/features/"
 
 comment:
     layout: "diff, flags, components, files"
     behavior: default
     require_changes: false
 
-# Bun writes lcov paths relative to web/webui; map them to repository paths.
+# Go profile paths start with the module path 'hump/', and Bun writes lcov paths relative to
+# apps/hump-tower; map both to repository paths.
 fixes:
-    - "src/::web/webui/src/"
-    - "app/::web/webui/app/"
+    - "hump/::apps/hump/"
+    - "src/::apps/hump-tower/src/"
+    - "app/::apps/hump-tower/app/"
 
-# Keep in sync with the profile filter in .github/workflows/go-test.yml and the
-# coveragePathIgnorePatterns in web/webui/bunfig.toml (and with the 'excluded' input of the job
-# summary step in each test workflow).
+# Keep in sync with the profile filter in apps/hump/scripts/ci.sh and the
+# coveragePathIgnorePatterns in apps/hump-tower/bunfig.toml (and with the 'excluded' inputs of the
+# coverage summary steps in .github/workflows/check.yml).
 ignore:
     # Writes the OpenAPI spec at build time; not part of the shipped binary.
-    - "cmd/openapi"
+    - "apps/hump/cmd/openapi"
     # Generated by 'bun run generate:openapi'.
-    - "web/webui/src/shared/api/generated"
+    - "apps/hump-tower/src/shared/api/generated"
     # Test-only doubles.
-    - "web/webui/**/*.fake.ts"
+    - "apps/hump-tower/**/*.fake.ts"

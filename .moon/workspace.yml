@@ -1,0 +1,17 @@
+$schema: './cache/schemas/workspace.json'
+
+versionConstraint: '>=2.6.1'
+
+projects:
+  globs:
+    # Match the moon.yml, not the folder: a folder glob also matches files,
+    # and packages/.gitkeep would make packages/ itself a project.
+    - 'apps/*/moon.yml'
+    - 'packages/*/moon.yml'
+  sources:
+    root: '.'
+
+vcs:
+  client: 'git'
+  provider: 'github'
+  defaultBranch: 'main'

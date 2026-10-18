@@ -1,5 +1,5 @@
 # Binaries
-/bin/
+/apps/*/bin/
 *.exe
 *.exe~
 *.dll
@@ -13,18 +13,23 @@ cover.out
 coverage.txt
 *.cover
 
-# Go workspace
-go.work
-go.work.sum
-
 # Vendor
 /vendor/
 
 # Build artifacts
 /dist/
 /build/
-# Rsdoctor report of `bun run analyze` in web/webui, written next to the built web UI
-/internal/controller/webui/.rsdoctor/
+# Rsdoctor report of `bun run analyze` in apps/hump-tower, written next to the built UI
+/apps/hump/internal/controller/hump_tower/.rsdoctor/
+
+# Dependencies
+node_modules/
+
+# moon
+.moon/cache/
+.moon/docker/
+# CI artifacts of moon tasks (SARIF, coverage, JUnit, annotations), read by .github/workflows/check.yml
+/.ci/
 
 # Editor / IDE
 *.swp

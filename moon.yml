@@ -1,0 +1,74 @@
+$schema: './.moon/cache/schemas/project.json'
+
+layer: 'automation'
+project:
+  title: 'Repository root'
+  description: 'Repository-wide tasks: workflow lint, local dev environment, aggregate pre-PR check.'
+
+workspace:
+  inheritedTasks:
+    include: []
+
+tasks:
+  actionlint:
+    description: 'Lint workflow syntax, expressions and shell scripts'
+    # tools/actionlint is outside go.work (its deps conflict with golangci-lint's); -modfile is
+    # rejected in workspace mode, so the module runs in its own directory with GOWORK=off.
+    script: 'bash ./apps/hump/scripts/actionlint.sh'
+    toolchains: ['go']
+    inputs:
+      - '.github/**/*'
+      - 'apps/hump/scripts/actionlint.sh'
+      - 'apps/hump/tools/actionlint/go.mod'
+      - 'apps/hump/tools/actionlint/go.sum'
+    options:
+      # CI runs ci-actionlint: root:check depends on this task, and a dependency cannot allow failure.
+      runInCI: false
+  ci-actionlint:
+    description: 'CI: actionlint with a fix hint in .ci/annotations'
+    script: 'bash ./apps/hump/scripts/actionlint.sh'
+    toolchains: ['go']
+    inputs:
+      - '.github/**/*'
+      - 'apps/hump/scripts/actionlint.sh'
+      - 'apps/hump/tools/actionlint/go.mod'
+      - 'apps/hump/tools/actionlint/go.sum'
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true
+  dev-up:
+    description: 'Start the dev environment (PostgreSQL, Kafka, NATS, RabbitMQ, HTTP sink)'
+    command: 'docker compose -f dev/docker-compose.yml up -d'
+    toolchains: ['system']
+    inputs: []
+    preset: 'utility'
+  dev-down:
+    description: 'Stop the dev environment'
+    command: 'docker compose -f dev/docker-compose.yml down'
+    toolchains: ['system']
+    inputs: []
+    preset: 'utility'
+  dev-reset:
+    description: 'Recreate the dev environment from scratch, removing its volumes'
+    script: 'docker compose -f dev/docker-compose.yml down -v && docker compose -f dev/docker-compose.yml up -d'
+    toolchains: ['system']
+    inputs: []
+    preset: 'utility'
+  check:
+    description: 'All pre-PR checks: workflow lint, Go lint and tests, hump-tower lint, tests, types and knip'
+    command: 'noop'
+    deps:
+      - 'actionlint'
+      - 'hump:lint'
+      - 'hump:test'
+      - 'hump-tower:check'
+      - 'hump-tower:test'
+      - 'hump-tower:typecheck'
+      - 'hump-tower:knip'
+    inputs: []
+    options:
+      cache: false
+      runInCI: false

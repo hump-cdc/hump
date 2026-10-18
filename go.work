@@ -1,0 +1,4 @@
+go 1.26.9
+
+// apps/hump/tools/actionlint stays out: its dependencies conflict with golangci-lint's.
+use ./apps/hump

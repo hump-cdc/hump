@@ -1,0 +1,300 @@
+name: "Repository: check"
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions: {}
+
+# Runs on main are not cancelled: Codecov compares every PR against the coverage uploaded for its
+# base commit on main, and a cancelled run leaves that commit without a report.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+    run:
+        shell: bash
+
+jobs:
+    check:
+        name: Check
+        runs-on: ubuntu-24.04
+        timeout-minutes: 40
+        permissions:
+            contents: read # checkout
+        steps:
+            # moon compares the checked-out commit with the base commit to find the affected
+            # projects, so the history is fetched in full.
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+
+            # proto comes from proto.version in .moon/toolchains.yml. auto-install runs
+            # 'proto install', which installs moon at the version in .prototools; without it the
+            # action installs moon-version, which defaults to the latest release. auto-setup runs
+            # 'moon setup', which installs Go and Bun at the versions in .moon/toolchains.yml:
+            # 'moon ci' does not install them itself and would fall back to whatever is on PATH.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # Runs every task with runInCI in the projects affected since the base commit: workflow
+            # lint, go mod tidy, Go lint, vulnerability scan, build and tests, the OpenAPI spec and
+            # the embedded hump-tower build, biome, knip, type check and tests. Reports and
+            # annotations go to .ci/ and are read by the steps below: moon prefixes task output,
+            # so workflow commands printed by a task do not become annotations. The ci-* tasks are
+            # allowed to fail and are checked by a later step; this step fails on the others
+            # (go mod tidy, the OpenAPI spec, the builds).
+            # A push whose 'before' commit is unknown (zero SHA, force push) compares against the
+            # parent commit instead.
+            - name: Run lint, build and test tasks of the affected projects
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  BASE_REF: ${{ github.base_ref }}
+                  BEFORE_SHA: ${{ github.event.before }}
+              run: |
+                  set -euo pipefail
+                  if [[ "$EVENT_NAME" == "pull_request" ]]; then
+                      base="origin/${BASE_REF}"
+                  elif [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+                      base="$BEFORE_SHA"
+                  else
+                      base="HEAD^"
+                  fi
+                  echo "Comparing against ${base}"
+                  if ! moon ci --base "$base" --summary minimal; then
+                      echo "::error title=Repository checks failed::One or more moon tasks failed; see the annotations and the task output in this step's log. Reproduce locally with: moon run root:check (a CI-only task with: CI=true moon run <project>:<task>)"
+                      exit 1
+                  fi
+
+            # Fix hints of failed tasks and the per-finding annotations of biome and knip.
+            - name: Report the findings of the moon tasks as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
+              run: cat .ci/annotations/*.txt
+
+            # The ci-* tasks are allowed to fail, so that one failure does not cancel the other
+            # checks; each failed one leaves a marker named <project>-<check> in .ci/failed.
+            - name: Check that every lint, test and scan task passed
+              if: ${{ !cancelled() && hashFiles('.ci/failed/*') != '' }}
+              run: |
+                  set -euo pipefail
+                  failed="$(find .ci/failed -type f -exec basename {} \; | sort | tr '\n' ' ')"
+                  echo "Failed checks: ${failed}"
+                  echo "::error title=Repository checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
+                  exit 1
+
+            # hump:tidy runs in 'moon ci' when the hump module is affected; this step only diffs its
+            # result. git status catches a go.work.sum that tidy creates as well as changed files,
+            # and prints the changes to the log before the step fails.
+            - name: Check that the Go modules are tidy
+              if: ${{ !cancelled() }}
+              run: |
+                  set -euo pipefail
+                  status=0
+                  if [[ -n "$(git status --porcelain -- apps/hump/go.mod apps/hump/go.sum go.work go.work.sum)" ]]; then
+                      git status -- apps/hump/go.mod apps/hump/go.sum go.work go.work.sum
+                      git diff -- apps/hump/go.mod apps/hump/go.sum go.work go.work.sum
+                      echo "::error file=apps/hump/go.mod,title=apps/hump/go.mod and go.sum are not tidy::Run 'moon run hump:tidy' locally and commit the updated apps/hump/go.mod, apps/hump/go.sum and go.work.sum."
+                      status=1
+                  fi
+                  if [[ -n "$(git status --porcelain -- apps/hump/tools/actionlint/go.mod apps/hump/tools/actionlint/go.sum)" ]]; then
+                      git diff -- apps/hump/tools/actionlint/go.mod apps/hump/tools/actionlint/go.sum
+                      echo "::error file=apps/hump/tools/actionlint/go.mod,title=apps/hump/tools/actionlint/go.mod and go.sum are not tidy::Run 'moon run hump:tidy' locally and commit the updated apps/hump/tools/actionlint/go.mod and go.sum."
+                      status=1
+                  fi
+                  exit "$status"
+
+            # go mod tidy never removes tool directives, so a tool nobody runs any more stays in
+            # go.mod. The go command runs a tool by the last element of its path, without a major
+            # version suffix; a tool counts as used when a moon.yml, a project script or .github runs
+            # it that way. The pattern is built from the tool name at run time, so the text of this
+            # step never matches a real tool. go.mod is parsed with awk rather than 'go mod edit
+            # -json', so the step does not depend on which Go is on PATH outside moon.
+            - name: Check that every apps/hump/go.mod tool directive is used
+              if: ${{ !cancelled() }}
+              run: |
+                  set -euo pipefail
+                  shopt -s nullglob
+                  sources=(moon.yml apps/*/moon.yml apps/*/scripts packages/*/moon.yml packages/*/scripts .github)
+                  unused=0
+                  while IFS= read -r path; do
+                      base="$path"
+                      if [[ "$base" =~ ^(.+)/v[0-9]+$ ]]; then
+                          base="${BASH_REMATCH[1]}"
+                      fi
+                      name="${base##*/}"
+                      pattern="go tool ${name//./\\.}([^[:alnum:]_.-]|\$)"
+                      if ! grep -rqE "$pattern" "${sources[@]}"; then
+                          echo "Tool ${path} (run as '${name}') is not used in ${sources[*]}."
+                          echo "::error file=apps/hump/go.mod,title=Unused go.mod tool directive::${path} is not run by any moon task, project script or workflow. Remove it locally in apps/hump with 'go get -tool ${path}@none', then run 'moon run hump:tidy' and commit go.mod and go.sum."
+                          unused=1
+                      fi
+                  done < <(awk '
+                      /^tool \(/ { block = 1; next }
+                      block && /^\)/ { block = 0; next }
+                      block && $1 !~ /^\/\// && NF { print $1 }
+                      /^tool [^(]/ { print $2 }
+                  ' apps/hump/go.mod)
+                  exit "$unused"
+
+            # hump-tower:openapi runs in 'moon ci' when the hump module is affected; this step only
+            # diffs its result and prints the changes to the log before the step fails.
+            - name: Check that the hump-tower OpenAPI spec is up to date
+              if: ${{ !cancelled() }}
+              env:
+                  OPENAPI_SPEC: apps/hump-tower/src/shared/api/openapi.json
+              run: |
+                  set -euo pipefail
+                  if ! git diff --exit-code -- "$OPENAPI_SPEC"; then
+                      echo "::error file=${OPENAPI_SPEC},title=hump-tower OpenAPI spec is out of date::Run 'moon run hump-tower:openapi' locally and commit the updated ${OPENAPI_SPEC}."
+                      exit 1
+                  fi
+
+            # hump-tower:build runs in 'moon ci' when hump-tower or hump is affected. rsbuild cleans
+            # the output directory, so a stale build shows up as deleted tracked files and new
+            # untracked hashed files: git status --porcelain catches both, git diff alone would not.
+            - name: Check that the embedded hump-tower build in apps/hump/internal/controller/hump_tower is up to date
+              if: ${{ !cancelled() }}
+              env:
+                  BUILD_DIR: apps/hump/internal/controller/hump_tower
+              run: |
+                  set -euo pipefail
+                  if [[ -n "$(git status --porcelain -- "$BUILD_DIR")" ]]; then
+                      git status -- "$BUILD_DIR"
+                      git diff --stat -- "$BUILD_DIR"
+                      echo "::error file=${BUILD_DIR}/index.html,title=Embedded hump-tower build is out of date::Run 'moon run hump-tower:build' locally and commit the updated ${BUILD_DIR}."
+                      exit 1
+                  fi
+
+            # moon installs the Bun dependencies of the workspace before the first Bun task; this step
+            # diffs what that install changed and prints it to the log before the step fails.
+            - name: Check that package.json files and bun.lock are in sync
+              if: ${{ !cancelled() }}
+              run: |
+                  set -euo pipefail
+                  if [[ -n "$(git status --porcelain -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json')" ]]; then
+                      git diff -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json'
+                      echo "::error file=bun.lock,title=bun.lock is out of date::Run 'bun install' in the repository root locally and commit the updated package.json files and bun.lock."
+                      exit 1
+                  fi
+
+            # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Summarize Go lint findings in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump/golangci-lint.sarif') != '' }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: .ci/hump/golangci-lint.sarif
+                  title: Go code lint
+
+            - name: Summarize Go vulnerability findings in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump/govulncheck.sarif') != '' }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: .ci/hump/govulncheck.sarif
+                  title: Go vulnerability scan
+
+            # biome writes absolute paths; sarif-summary makes them repository-relative.
+            - name: Summarize hump-tower lint findings in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/biome.sarif') != '' }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: .ci/hump-tower/biome.sarif
+                  title: hump-tower code lint
+
+            # coverage.out exists only when the Go tests passed (apps/hump/scripts/ci.sh drops
+            # cmd/openapi from the profile; codecov.yml ignores the same path). Counts every block of
+            # the profile once (-coverpkg repeats it per test binary), so the total is covered /
+            # total statements, not an average of percentages. It can differ by a tenth from
+            # 'go tool cover -func', which skips closures in package-level variables. Profile paths
+            # start with the module path 'hump/'; link-prefix makes the file links repository paths.
+            - name: Summarize Go code coverage by package and file in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump/coverage.out') != '' }}
+              uses: ./.github/actions/coverage-summary # zizmor: ignore[self-repository]
+              with:
+                  format: go
+                  coverage-file: .ci/hump/coverage.out
+                  title: Go unit test coverage
+                  strip-prefix: hump/
+                  link-prefix: apps/hump/
+                  excluded: cmd/openapi
+
+            # The 'fixes' entry in codecov.yml maps the 'hump/' profile paths to apps/hump/.
+            # Fork PRs and Dependabot PRs get no CODECOV_TOKEN: the upload then goes tokenless and
+            # Codecov may reject it, so it fails the job only when the token is present.
+            # Dependabot does not bump the Codecov CLI version input.
+            - name: Upload Go code coverage to Codecov
+              if: ${{ !cancelled() && hashFiles('.ci/hump/coverage.out') != '' }}
+              uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  version: v11.3.1
+                  files: .ci/hump/coverage.out
+                  disable_search: true
+                  flags: go
+                  fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
+
+            # Feeds Codecov Test Analytics (flaky and failed tests in the PR comment), so it also
+            # runs when the tests fail.
+            - name: Upload Go unit test results to Codecov
+              if: ${{ !cancelled() && hashFiles('.ci/hump/junit.xml') != '' }}
+              uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  version: v11.3.1
+                  report_type: test_results
+                  files: .ci/hump/junit.xml
+                  disable_search: true
+                  flags: go
+                  fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
+
+            # Sums the per-file LF/LH (lines) and FNF/FNH (functions) records of the lcov report,
+            # the same file Codecov receives, weighted by line count and cut to one decimal like
+            # codecov.yml (precision 1, round down). The "All files" row of Bun's text table is an
+            # unweighted per-file average, so it differs. Group depth 3 is the FSD layer and
+            # slice (src/entities/flows, src/shared/ui). Bun writes paths relative to
+            # apps/hump-tower; link-prefix makes the file links repository paths. 'excluded' lists
+            # the coveragePathIgnorePatterns of apps/hump-tower/bunfig.toml and has to be kept in
+            # sync with it.
+            - name: Summarize hump-tower code coverage by directory and file in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/coverage/lcov.info') != '' }}
+              uses: ./.github/actions/coverage-summary # zizmor: ignore[self-repository]
+              with:
+                  format: lcov
+                  coverage-file: .ci/hump-tower/coverage/lcov.info
+                  title: hump-tower unit test coverage
+                  group-depth: "3"
+                  link-prefix: apps/hump-tower/
+                  excluded: src/shared/api/generated/**, **/*.fake.ts
+
+            # Bun writes paths relative to apps/hump-tower; the 'fixes' entries in codecov.yml map
+            # them to repository paths. Token handling as in the Go upload above.
+            - name: Upload hump-tower code coverage to Codecov
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/coverage/lcov.info') != '' }}
+              uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  version: v11.3.1
+                  files: .ci/hump-tower/coverage/lcov.info
+                  disable_search: true
+                  flags: hump-tower
+                  fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
+
+            - name: Upload hump-tower unit test results to Codecov
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/junit.xml') != '' }}
+              uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  version: v11.3.1
+                  report_type: test_results
+                  files: .ci/hump-tower/junit.xml
+                  disable_search: true
+                  flags: hump-tower
+                  fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}

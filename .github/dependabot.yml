@@ -2,21 +2,22 @@
 version: 2
 updates:
     - package-ecosystem: "gomod"
-      directory: "/"
+      directory: "/apps/hump"
       schedule:
           interval: "weekly"
       cooldown:
           default-days: 7
 
     - package-ecosystem: "gomod"
-      directory: "/tools/actionlint"
+      directory: "/apps/hump/tools/actionlint"
       schedule:
           interval: "weekly"
       cooldown:
           default-days: 7
 
+    # bun.lock at the root covers every workspace in apps/* and packages/*.
     - package-ecosystem: "bun"
-      directory: "/web/webui"
+      directory: "/"
       schedule:
           interval: "weekly"
       cooldown:

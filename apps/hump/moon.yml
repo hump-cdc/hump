@@ -1,0 +1,126 @@
+$schema: '../../.moon/cache/schemas/project.json'
+
+language: 'go'
+layer: 'application'
+stack: 'backend'
+project:
+  title: 'hump'
+  description: 'PostgreSQL change data capture service (Go module `hump`); embeds the hump-tower UI.'
+
+env:
+  # Matches the released binary; ci-test turns it on for -race.
+  CGO_ENABLED: '0'
+
+fileGroups:
+  sources: ['**/*.go', 'go.mod', 'go.sum']
+  embedded: ['internal/controller/hump_tower/**/*']
+
+taskOptions:
+  # Developer tasks; CI runs tidy, build and ci-*.
+  runInCI: false
+
+tasks:
+  build:
+    description: 'Check that all packages build without cgo, then build bin/hump with the embedded hump-tower UI'
+    script: 'go build ./... && go build -ldflags "$(sh ./scripts/ldflags.sh)" -o ./bin/hump ./cmd/hump'
+    deps: ['hump-tower:build']
+    inputs: ['@group(sources)', '@group(embedded)', 'scripts/ldflags.sh']
+    outputs: ['bin/hump']
+    options:
+      # Stamps commit and date; in CI it also forces the UI rebuild for the embed drift check.
+      cache: false
+      runInCI: true
+  run:
+    description: 'Run hump against the dev environment (start it with moon run root:dev-up)'
+    script: 'exec go run -ldflags "$(sh ./scripts/ldflags.sh)" ./cmd/hump -f ../../dev/hump.yaml'
+    deps: ['hump-tower:build']
+    preset: 'server'
+    # Fallbacks only: task env does not override the caller's environment.
+    env:
+      DATABASE_URL: 'postgres://hump:hump@localhost:5437/hump?sslmode=disable'
+      TELEMETRY_PORT: '9100'
+      WEB_PORT: '3200'
+      LOG_VERBOSE: 'false'
+      LOG_FORMAT: 'pretty'
+      CORS: 'http://localhost:3000'
+      KAFKA_HOST: 'localhost:9092'
+      NATS_URL: 'nats://localhost:4222'
+      NATS2_URL: 'nats://localhost:4223'
+      RABBITMQ_URL: 'amqp://hump:hump@localhost:5672/'
+      RABBITMQ_STREAM_URL: 'rabbitmq-stream://hump:hump@localhost:5552/%2F'
+  run-cleanup:
+    description: 'Remove hump replication artifacts from the dev database'
+    script: 'exec go run -ldflags "$(sh ./scripts/ldflags.sh)" ./cmd/hump -f ../../dev/hump.yaml --cleanup'
+    preset: 'utility'
+    env:
+      DATABASE_URL: 'postgres://hump:hump@localhost:5437/hump?sslmode=disable'
+      LOG_VERBOSE: 'false'
+      LOG_FORMAT: 'pretty'
+  test:
+    description: 'Run all unit tests'
+    script: 'go tool gotestsum --format testdox ./...'
+    inputs: ['@group(sources)']
+  test-file:
+    description: 'Run the tests of the package in the directory moon was started from'
+    script: 'cd "$MOON_WORKING_DIR" && exec go tool gotestsum --format testdox'
+    preset: 'utility'
+  test-cover:
+    description: 'Run all tests with -coverpkg=./... and open the HTML coverage report'
+    script: 'bash ./scripts/cover.sh "$PWD" -coverpkg=./... ./...'
+    preset: 'utility'
+  test-file-cover:
+    description: 'Coverage report for the package in the directory moon was started from'
+    script: 'bash ./scripts/cover.sh "$MOON_WORKING_DIR"'
+    preset: 'utility'
+  lint:
+    description: 'golangci-lint with .golangci.yml'
+    script: 'go tool golangci-lint run'
+    inputs: ['@group(sources)', '.golangci.yml']
+  lint-fix:
+    description: 'golangci-lint with automatic fixes'
+    script: 'go tool golangci-lint run --fix'
+    preset: 'utility'
+  fmt:
+    description: 'Format Go code (gofmt, goimports)'
+    script: 'go tool golangci-lint fmt'
+    preset: 'utility'
+  tidy:
+    description: 'go mod tidy for hump and for the separate actionlint tool module'
+    script: 'go mod tidy && GOWORK=off go -C tools/actionlint mod tidy'
+    inputs: ['@group(sources)', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum']
+    options:
+      # CI diffs the result in a later workflow step.
+      cache: false
+      runInCI: true
+  ci-lint:
+    description: 'CI: golangci-lint with a SARIF report in .ci/hump'
+    script: 'bash ./scripts/ci.sh lint'
+    inputs: ['@group(sources)', '.golangci.yml', 'scripts/ci.sh']
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true
+  ci-vulncheck:
+    description: 'CI: govulncheck with a SARIF report in .ci/hump'
+    script: 'bash ./scripts/ci.sh vulncheck'
+    inputs: ['@group(sources)', 'scripts/ci.sh']
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true
+  ci-test:
+    description: 'CI: tests with -race, coverage and JUnit in .ci/hump'
+    script: 'bash ./scripts/ci.sh test'
+    env:
+      CGO_ENABLED: '1'
+    inputs: ['@group(sources)', 'scripts/ci.sh']
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true

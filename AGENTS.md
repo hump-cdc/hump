@@ -62,7 +62,8 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
    `project.description`, tasks).
 2. TypeScript: add a `package.json`, then run `bun install` in the root to update `bun.lock`.
 3. Go: add a `go.mod` and its directory to `go.work` (`go work use ./packages/<name>`). Add a
-   `gomod` entry for it to `.github/dependabot.yml`.
+   `gomod` entry for it to `.github/dependabot.yml` and add the module to the dep-age check
+   (`hump:ci-dep-age`) in `apps/hump/scripts/ci.sh`.
 
 ## Dependencies
 
@@ -77,10 +78,16 @@ the 7-day Dependabot cooldown in `.github/dependabot.yml`.
   exact version: no `^`, `~`, `*` or `latest`. `install.exact` in the root `bunfig.toml` makes
   `bun add` / `bun update` save exact versions, but it does not check what you type into
   `package.json` by hand, so write those exact too.
-- Go: no tooling enforces it. Pin concrete versions in every `go.mod` (`apps/hump`,
-  `apps/hump/tools/actionlint`, future `packages/*`). Before `go get` of a version, check its
-  publish time with `go list -m -json <module>@<version>` (the `Time` field) and pick one at
-  least 7 days old.
+- Go: enforced in CI by `hump:ci-dep-age`. It fails when any module in the full build list
+  (`go list -m all`, direct and transitive, with `GOWORK=off`) of `apps/hump/go.mod` or
+  `apps/hump/tools/actionlint/go.mod` was published less than 7 days ago. It also checks
+  `golang.org/x/vuln` at `GOVULNCHECK_VERSION`, the govulncheck version pinned in
+  `apps/hump/scripts/ci.sh`, so raising that version falls under the rule too. Run it locally
+  with `CI=true moon run hump:ci-dep-age`.
+  Pin concrete versions in every `go.mod` (`apps/hump`, `apps/hump/tools/actionlint`, future
+  `packages/*`). Before `go get` of a version, check its publish time with
+  `go list -m -json <module>@<version>` (the `Time` field) and pick one at least 7 days old,
+  so CI does not fail after the fact.
   A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, an
   `apps/*/scripts` (or `packages/*/scripts`) script or `.github`; CI fails on an unused one in
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.

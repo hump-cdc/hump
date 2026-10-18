@@ -49,6 +49,20 @@ describe('getCompletions', () => {
         expect(labels('"sta')).toBeUndefined()
     })
 
+    test('completes again once a comment, string or dollar quote is closed', () => {
+        expect(labels('status = 1 -- note\nand i')?.[0]).toBe('id')
+        expect(labels('/* note */ sta')?.[0]).toBe('status')
+        expect(labels('"Status" = \'a\' and i')?.[0]).toBe('id')
+        expect(labels('x = $$a$$ and i')?.[0]).toBe('id')
+        expect(labels('x = $tag$a$tag$ and i')?.[0]).toBe('id')
+        expect(labels('$1 and i')?.[0]).toBe('id')
+    })
+
+    test('stays quiet inside a dollar-quoted string', () => {
+        expect(labels('x = $$sta')).toBeUndefined()
+        expect(labels('x = $tag$ $$ sta')).toBeUndefined()
+    })
+
     test('needs a prefix unless invoked explicitly', () => {
         expect(labels('status = ')).toBeUndefined()
         expect(labels('status = ', true)).toEqual(expect.arrayContaining(['id', 'status']))

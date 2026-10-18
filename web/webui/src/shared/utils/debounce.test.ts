@@ -37,6 +37,23 @@ describe('debounce', () => {
         expect(runs).toBe(2)
     })
 
+    test('counts maxWait from the first call of each burst', () => {
+        const calls: number[] = []
+        const debounced = debounce((value: number) => calls.push(value), 300, { maxWait: 500 })
+
+        debounced(1)
+        jest.advanceTimersByTime(300)
+        expect(calls).toEqual([1])
+
+        jest.advanceTimersByTime(1000)
+        debounced(2)
+        jest.advanceTimersByTime(299)
+        expect(calls).toEqual([1])
+
+        jest.advanceTimersByTime(1)
+        expect(calls).toEqual([1, 2])
+    })
+
     test('cancel drops the pending call', () => {
         let runs = 0
         const debounced = debounce(() => runs++, 300)
@@ -46,5 +63,23 @@ describe('debounce', () => {
         jest.advanceTimersByTime(1000)
 
         expect(runs).toBe(0)
+    })
+
+    test('cancel starts a fresh maxWait window for the next burst', () => {
+        let runs = 0
+        const debounced = debounce(() => runs++, 300, { maxWait: 400 })
+
+        debounced()
+        jest.advanceTimersByTime(200)
+        debounced()
+        jest.advanceTimersByTime(100)
+        debounced.cancel()
+
+        debounced()
+        jest.advanceTimersByTime(299)
+        expect(runs).toBe(0)
+
+        jest.advanceTimersByTime(1)
+        expect(runs).toBe(1)
     })
 })

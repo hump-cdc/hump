@@ -1,0 +1,7 @@
+[install]
+# Skip npm versions published less than 7 days ago (matches the Dependabot cooldown).
+minimumReleaseAge = 604800
+# Save exact versions (no ^ or ~) when adding packages.
+exact = true
+# Keep the hoisted node_modules layout; a workspace would otherwise default to the isolated linker.
+linker = "hoisted"

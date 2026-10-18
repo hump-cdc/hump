@@ -36,7 +36,7 @@ Recommended implementation: hook into the database driver / connection pool so a
 
 ## Consumer side (this project)
 
-Required `pluginArguments` in `internal/wal/wal.go`:
+Required `pluginArguments` in `apps/hump/internal/adapter/postgres/wal.go`:
 
 ```go
 pluginArguments: []string{
@@ -100,7 +100,7 @@ For trace propagation you want `true`:
 
 5. **Concurrent transactions.** With `proto_version '2'` and streaming **off** (current setup), pgoutput delivers committed transactions one at a time in commit order — `pendingTrace` is keyed by `Xid` which keeps things correct even if Postgres interleaves during decoding. If you ever enable `streaming 'true'`, the same xid keying still works, but you must also handle `StreamAbortMessageV2` to drop the buffered trace context for aborted streamed transactions.
 
-6. **REPLICA IDENTITY FULL is unrelated.** Trace IDs ride on logical messages, not on tuple data, so replica identity does not affect them. Required for the rest of the project's TOAST handling (`internal/database/replication/replica_identity.go`).
+6. **REPLICA IDENTITY FULL is unrelated.** Trace IDs ride on logical messages, not on tuple data, so replica identity does not affect them. Required for the rest of the project's TOAST handling (`EnsureReplicaIdentityFull` in `apps/hump/internal/adapter/postgres/bootstrapper.go`).
 
 7. **Memory.** `pendingTrace` is bounded by concurrent in-flight transactions on the publisher (typically small). Always `delete(w.pendingTrace, xid)` on `CommitMessageV2` (and `StreamAbortMessageV2` if streaming) so the map doesn't leak entries from never-emitted-trace transactions. To be safe against application bugs, periodically purge entries older than some max-transaction-age threshold.
 

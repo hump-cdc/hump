@@ -22,7 +22,7 @@ Blank issues are disabled.
 ## What we don't accept
 
 - Cosmetic refactors: renames, reformatting or moving code around with no functional purpose.
-- Changes that break the layer and import rules in [AGENTS.md](AGENTS.md).
+- Changes that break the layer and import rules in [apps/hump/AGENTS.md](apps/hump/AGENTS.md).
 - Anything that weakens at-least-once delivery. Hump confirms a WAL position only after every sink has delivered the change, and that stays.
 - New dependencies, Go modules or npm packages, that weren't agreed in the issue.
 
@@ -30,34 +30,41 @@ Blank issues are disabled.
 
 | Tool | Notes | Install |
 |---|---|---|
-| Go | Version from the `go` directive in [go.mod](go.mod) (1.26.9 at the time of writing) | [go.dev/dl](https://go.dev/dl/) or `brew install go` |
+| proto | Installs moon; `moon setup` then installs Go and Bun at the pinned versions | [moonrepo.dev/docs/proto/install](https://moonrepo.dev/docs/proto/install) |
 | Docker with Compose v2 | Runs the dev environment (`docker compose`, not `docker-compose`) | [Docker Desktop](https://docs.docker.com/get-docker/), OrbStack or Colima |
-| Task | Runs everything in [taskfile.yaml](taskfile.yaml) | [taskfile.dev](https://taskfile.dev/installation/) or `brew install go-task` |
-| bun | Builds and tests the web UI | [bun.sh](https://bun.sh/) or `brew install oven-sh/bun/bun` |
 
-The Go tools (golangci-lint, gotestsum, gocov, gocov-html) are pinned as `tool` dependencies in [go.mod](go.mod) and run through `go tool`, so there is nothing to install. The first run compiles them, which takes 1–2 minutes. Later runs use the build cache.
+You don't install moon, Go or Bun yourself. moon is pinned in [.prototools](.prototools), Go and Bun in [.moon/toolchains.yml](.moon/toolchains.yml).
 
-On first checkout, install the web UI dependencies:
+The Go tools (golangci-lint, gotestsum, gocov, gocov-html) are pinned as `tool` dependencies in [apps/hump/go.mod](apps/hump/go.mod) and run through `go tool`. The first run compiles them, which takes 1–2 minutes. Later runs use the build cache.
+
+On first checkout, review [.prototools](.prototools), then run in the repository root:
 
 ```sh
-cd web/webui && bun install
+proto trust .prototools   # once; lets proto apply auto-install from .prototools
+proto install             # moon, from .prototools
+moon setup                # Go and Bun, from .moon/toolchains.yml
+bun install               # dependencies of every workspace package
 ```
+
+proto ignores `auto-install` in an untrusted `.prototools`. Once trusted, the moon shim installs a missing pinned version on first run, for example after the pin changes.
+
+The repository is a [moon](https://moonrepo.dev/) monorepo: the Go service is in `apps/hump`, the web UI in `apps/hump-tower`. Development commands are moon tasks: `moon run <project>:<task>`, from any directory.
 
 ## Local development
 
 ### Dev environment
 
 ```sh
-task dev:up      # docker compose -f dev/docker-compose.yml up -d
-task dev:down    # stop the containers, keep the data
-task dev:reset   # down -v, then up -d: wipes volumes and re-runs dev/compose_init/01-schema.sql
+moon run root:dev-up      # docker compose -f dev/docker-compose.yml up -d
+moon run root:dev-down    # stop the containers, keep the data
+moon run root:dev-reset   # down -v, then up -d: wipes volumes and re-runs dev/compose_init/01-schema.sql
 ```
 
 The compose file in [dev/docker-compose.yml](dev/docker-compose.yml) starts:
 
 | Service | Host ports | Notes |
 |---|---|---|
-| `postgres-15` … `postgres-18` | 5435, 5436, **5437**, 5438 | TimescaleDB images, `wal_level=logical`. User, password and database are all `hump`. `task run` uses `postgres-17` (5437) |
+| `postgres-15` … `postgres-18` | 5435, 5436, **5437**, 5438 | TimescaleDB images, `wal_level=logical`. User, password and database are all `hump`. `moon run hump:run` uses `postgres-17` (5437) |
 | `kafka` | 9092 | KRaft single node. Containers reach it at `kafka:29092`. `kafka-init` creates the topics `users`, `posts`, `comments`, `events` |
 | `nats` | 4222, monitoring 8222 | JetStream on, user/password `hump`/`hump` |
 | `nats2` | 4223, monitoring 8223 | A second, independent NATS server |
@@ -68,46 +75,60 @@ The schema from [dev/compose_init/01-schema.sql](dev/compose_init/01-schema.sql)
 
 ### Environment
 
-`task run` sets these variables:
+`moon run hump:run` sets these variables (in [apps/hump/moon.yml](apps/hump/moon.yml)). They are fallbacks: a variable already set in your shell wins.
 
-| Variable | Default | Override from your shell |
-|---|---|---|
-| `DATABASE_URL` | `postgres://hump:hump@localhost:5437/hump?sslmode=disable` | Yes |
-| `WEB_PORT` | `3200` | Yes |
-| `TELEMETRY_PORT` | `9100` | Yes |
-| `KAFKA_HOST` | `localhost:9092` | No, edit `taskfile.yaml` |
-| `NATS_URL` | `nats://localhost:4222` | No |
-| `NATS2_URL` | `nats://localhost:4223` | No |
-| `RABBITMQ_URL` | `amqp://hump:hump@localhost:5672/` | No |
-| `RABBITMQ_STREAM_URL` | `rabbitmq-stream://hump:hump@localhost:5552/%2F` | No |
+| Variable | Default |
+|---|---|
+| `DATABASE_URL` | `postgres://hump:hump@localhost:5437/hump?sslmode=disable` |
+| `WEB_PORT` | `3200` |
+| `TELEMETRY_PORT` | `9100` |
+| `KAFKA_HOST` | `localhost:9092` |
+| `NATS_URL` | `nats://localhost:4222` |
+| `NATS2_URL` | `nats://localhost:4223` |
+| `RABBITMQ_URL` | `amqp://hump:hump@localhost:5672/` |
+| `RABBITMQ_STREAM_URL` | `rabbitmq-stream://hump:hump@localhost:5552/%2F` |
 
 It also sets `CORS=http://localhost:3000` for the UI dev server, `LOG_FORMAT=pretty` and `LOG_VERBOSE=false`.
 
 To run against another Postgres version, override `DATABASE_URL`:
 
 ```sh
-DATABASE_URL=postgres://hump:hump@localhost:5435/hump?sslmode=disable task run   # PostgreSQL 15
+DATABASE_URL=postgres://hump:hump@localhost:5435/hump?sslmode=disable moon run hump:run   # PostgreSQL 15
 ```
 
 ### Tasks
 
+The Go service is the `hump` project, the web UI is `hump-tower`, and repo-wide tasks live in the `root` project. Each `moon.yml` has a `description` for every task.
+
 | Task | What it does |
 |---|---|
-| `task run` | Builds the web UI (`task web:build`, which regenerates the OpenAPI spec first), then runs `go run ./cmd/hump -f dev/hump.yaml` |
-| `task run:cleanup` | Removes Hump's replication slot and publication from the dev database |
-| `task web:dev` | UI dev server on port 3000, calling the API at `http://localhost:3200`. Keep `task run` going alongside it |
-| `task web:storybook` | Storybook on port 6006 |
-| `task build` | Builds `./bin/hump` with the embedded UI |
-| `task openapi` | Writes the OpenAPI spec to `web/webui/src/shared/api/openapi.json` |
-| `task lint` | Runs golangci-lint with the config in [.golangci.yml](.golangci.yml) |
-| `task lint:fix` | Runs golangci-lint and applies the fixes it can make automatically |
-| `task fmt` | Formats Go code with gofmt and goimports (`golangci-lint fmt`) |
+| `moon run hump:run` | Builds the web UI (`hump-tower:build`, which regenerates the OpenAPI spec first), then runs `go run ./cmd/hump -f ../../dev/hump.yaml` in `apps/hump` |
+| `moon run hump:run-cleanup` | Removes Hump's replication slot and publication from the dev database |
+| `moon run hump:build` | Builds `apps/hump/bin/hump` with the embedded UI |
+| `moon run hump:test` | Runs all Go unit tests |
+| `moon run hump:test-file` | Runs the tests of the Go package in the current directory |
+| `moon run hump:test-cover` | Runs all Go tests with coverage and opens the HTML report |
+| `moon run hump:test-file-cover` | The same for the Go package in the current directory |
+| `moon run hump:lint` | Runs golangci-lint with the config in [apps/hump/.golangci.yml](apps/hump/.golangci.yml) |
+| `moon run hump:lint-fix` | Runs golangci-lint and applies the fixes it can make automatically |
+| `moon run hump:fmt` | Formats Go code with gofmt and goimports (`golangci-lint fmt`) |
+| `moon run hump:tidy` | Runs `go mod tidy` for `apps/hump` and `apps/hump/tools/actionlint` |
+| `moon run hump-tower:dev` | UI dev server on port 3000, calling the API at `http://localhost:3200`. Keep `moon run hump:run` going alongside it |
+| `moon run hump-tower:storybook` | Storybook on port 6006 |
+| `moon run hump-tower:build` | Builds the UI into `apps/hump/internal/controller/hump_tower` |
+| `moon run hump-tower:openapi` | Writes the OpenAPI spec to `apps/hump-tower/src/shared/api/openapi.json` |
+| `moon run hump-tower:test` | Runs the UI unit tests (`bun test`) |
+| `moon run hump-tower:check` | Runs Biome: lint, format, import order |
+| `moon run hump-tower:typecheck` | Runs the TypeScript type check |
+| `moon run hump-tower:knip` | Finds unused files, exports, types and dependencies |
+| `moon run root:actionlint` | Lints the GitHub Actions workflows |
+| `moon run root:check` | Runs every check before a pull request, see [Checks](#checks) |
 
-`task web:dev` has the API URL fixed in `taskfile.yaml`, so it won't follow a changed `WEB_PORT`.
+`hump-tower:dev` sets `API_URL=http://localhost:3200` as a fallback. If you change `WEB_PORT`, set `API_URL` to match: `API_URL=http://localhost:3300 moon run hump-tower:dev`.
 
 ### Debugging
 
-Use any editor with Delve support. Point the debug configuration at the `./cmd/hump` package, pass `-f dev/hump.yaml` as arguments, and set the same environment as `task run` (the table above). Containers have to be up first.
+Use any editor with Delve support. Run it from the repository root: point the debug configuration at the `./apps/hump/cmd/hump` package, pass `-f dev/hump.yaml` as arguments, and set the same environment as `moon run hump:run` (the table above). Containers have to be up first.
 
 ## Smoke test
 
@@ -116,8 +137,8 @@ This checks the full path from a row change to the sinks. Run it after any chang
 1. Start the environment and Hump:
 
    ```sh
-   task dev:up
-   task run
+   moon run root:dev-up
+   moon run hump:run
    ```
 
    Start Hump before writing rows. It creates the replication slot on its first start, and changes made before that aren't captured.
@@ -164,7 +185,7 @@ This checks the full path from a row change to the sinks. Run it after any chang
 
 5. Open the web UI at `http://localhost:3200` (`WEB_PORT`) and check the live events and stats. Prometheus metrics are at `http://localhost:9100/metrics` (`TELEMETRY_PORT`), and the health probes are at `/health/startup`, `/health/ready` and `/health/live` on the same port.
 
-To test other sinks, comment or uncomment the `- preset: …` lines under `tables:` in `dev/hump.yaml` and restart `task run`. The presets are defined under `sinks:` in the same file.
+To test other sinks, comment or uncomment the `- preset: …` lines under `tables:` in `dev/hump.yaml` and restart `moon run hump:run`. The presets are defined under `sinks:` in the same file.
 
 ### HTTP sink routes
 
@@ -181,21 +202,21 @@ Read the logged bodies with `docker compose -f dev/docker-compose.yml logs -f ht
 
 ## Architecture
 
-Dependencies point inwards, towards `internal/domain`:
+The Go service lives in `apps/hump`; the paths below are relative to it. Dependencies point inwards, towards `internal/domain`:
 
 | Layer | Role |
 |---|---|
 | `internal/domain` | Named types and constants. No behaviour, no I/O |
 | `internal/port` | Interfaces and the types they exchange, one package per capability |
 | `internal/adapter` | Port implementations: PostgreSQL, sinks, metrics and so on |
-| `internal/application` | Use cases grouped by scope (`processing`, `webui`), one package per use case. Depend on ports, never on adapters |
+| `internal/application` | Use cases grouped by scope (`processing`, `hump_tower`), one package per use case. Depend on ports, never on adapters |
 | `internal/controller`, `cmd/hump` | The WAL listener and HTTP servers; `cmd/hump` builds the adapters and injects them |
 
-[AGENTS.md](AGENTS.md) has the full import rules.
+[apps/hump/AGENTS.md](apps/hump/AGENTS.md) has the full import rules.
 
 ### Adding a sink
 
-Open a **New sink** issue first. Once it's approved, the change touches these places (from [internal/adapter/sink/AGENTS.md](internal/adapter/sink/AGENTS.md)):
+Open a **New sink** issue first. Once it's approved, the change touches these places (from [apps/hump/internal/adapter/sink/AGENTS.md](apps/hump/internal/adapter/sink/AGENTS.md)), all relative to `apps/hump`:
 
 1. A `SinkType<Name>` constant and an entry in the `SinkTypes` list in `internal/port/sink/sink_type.go`.
 2. `config/sink/config_<name>.go` implementing `Definition` (`Type`, `DisplayName`, `Metadata`), plus `CrossValidate` and `UnmarshalYAML`.
@@ -207,33 +228,37 @@ Open a **New sink** issue first. Once it's approved, the change touches these pl
 
 ### Package notes
 
-Most packages under `internal/` have their own `AGENTS.md`. Read the one for the package you're changing:
+Most packages under `apps/hump/internal/` have their own `AGENTS.md`. Read the one for the package you're changing:
 
-- Domain: [domain](internal/domain/AGENTS.md)
-- Ports: [database](internal/port/database/AGENTS.md), [live_stream](internal/port/live_stream/AGENTS.md), [metrics_collector](internal/port/metrics_collector/AGENTS.md), [operations_collector](internal/port/operations_collector/AGENTS.md), [sink](internal/port/sink/AGENTS.md), [snapshot](internal/port/snapshot/AGENTS.md)
-- Adapters: [live_streamer](internal/adapter/live_streamer/AGENTS.md), [metrics_collector](internal/adapter/metrics_collector/AGENTS.md), [operations_collector](internal/adapter/operations_collector/AGENTS.md), [postgres](internal/adapter/postgres/AGENTS.md), [sink](internal/adapter/sink/AGENTS.md), [snapshot](internal/adapter/snapshot/AGENTS.md)
-- Processing use cases: [cleanup_database](internal/application/processing/cleanup_database/AGENTS.md), [process_operation](internal/application/processing/process_operation/AGENTS.md)
-- Web UI use cases: [get_config](internal/application/webui/get_config/AGENTS.md), [get_metrics](internal/application/webui/get_metrics/AGENTS.md), [get_operations](internal/application/webui/get_operations/AGENTS.md), [get_snapshot_estimates](internal/application/webui/get_snapshot_estimates/AGENTS.md), [get_snapshot_tables](internal/application/webui/get_snapshot_tables/AGENTS.md), [start_snapshot](internal/application/webui/start_snapshot/AGENTS.md), [stop_snapshot](internal/application/webui/stop_snapshot/AGENTS.md), [stream_snapshot](internal/application/webui/stream_snapshot/AGENTS.md), [stream_updates](internal/application/webui/stream_updates/AGENTS.md)
-- Controllers: [controller](internal/controller/AGENTS.md)
+- Domain: [domain](apps/hump/internal/domain/AGENTS.md)
+- Ports: [database](apps/hump/internal/port/database/AGENTS.md), [live_stream](apps/hump/internal/port/live_stream/AGENTS.md), [metrics_collector](apps/hump/internal/port/metrics_collector/AGENTS.md), [operations_collector](apps/hump/internal/port/operations_collector/AGENTS.md), [sink](apps/hump/internal/port/sink/AGENTS.md), [snapshot](apps/hump/internal/port/snapshot/AGENTS.md)
+- Adapters: [live_streamer](apps/hump/internal/adapter/live_streamer/AGENTS.md), [metrics_collector](apps/hump/internal/adapter/metrics_collector/AGENTS.md), [operations_collector](apps/hump/internal/adapter/operations_collector/AGENTS.md), [postgres](apps/hump/internal/adapter/postgres/AGENTS.md), [sink](apps/hump/internal/adapter/sink/AGENTS.md), [snapshot](apps/hump/internal/adapter/snapshot/AGENTS.md)
+- Processing use cases: [cleanup_database](apps/hump/internal/application/processing/cleanup_database/AGENTS.md), [process_operation](apps/hump/internal/application/processing/process_operation/AGENTS.md)
+- Web UI (hump-tower) use cases: [get_config](apps/hump/internal/application/hump_tower/get_config/AGENTS.md), [get_metrics](apps/hump/internal/application/hump_tower/get_metrics/AGENTS.md), [get_operations](apps/hump/internal/application/hump_tower/get_operations/AGENTS.md), [get_snapshot_estimates](apps/hump/internal/application/hump_tower/get_snapshot_estimates/AGENTS.md), [get_snapshot_tables](apps/hump/internal/application/hump_tower/get_snapshot_tables/AGENTS.md), [start_snapshot](apps/hump/internal/application/hump_tower/start_snapshot/AGENTS.md), [stop_snapshot](apps/hump/internal/application/hump_tower/stop_snapshot/AGENTS.md), [stream_snapshot](apps/hump/internal/application/hump_tower/stream_snapshot/AGENTS.md), [stream_updates](apps/hump/internal/application/hump_tower/stream_updates/AGENTS.md)
+- Controllers: [controller](apps/hump/internal/controller/AGENTS.md)
 
 ## Generated files
 
-Some generated files are committed. Before you open a pull request, run `task build` and commit everything it changed:
+Some generated files are committed. CI fails when they are out of date. Before you open a pull request, regenerate them and commit everything that changed:
 
-- `web/webui/src/shared/api/openapi.json`, the OpenAPI spec;
-- `web/webui/src/shared/api/generated/`, the API client;
-- `internal/controller/webui/`, the UI bundle embedded into the binary.
+- `apps/hump-tower/src/shared/api/openapi.json`, the OpenAPI spec: `moon run hump-tower:openapi`;
+- `apps/hump-tower/src/shared/api/generated/`, the API client: `bun run generate:openapi` in `apps/hump-tower` (`hump-tower:build` runs it too);
+- `apps/hump/internal/controller/hump_tower/`, the UI bundle embedded into the binary: `moon run hump-tower:build`.
+
+`moon run hump:build` runs all three.
 
 ## Tests
 
 - New behaviour comes with unit tests.
 - A bug fix comes with a test that fails without the fix.
-- Coverage of the packages you touch must not drop. CI checks this. Locally, `task test:cover` opens an HTML report for the whole module, and `task test:file:cover` does the same for the package in the current directory.
+- Coverage of the packages you touch must not drop. CI checks this. Locally, `moon run hump:test-cover` opens an HTML report for the whole Go module, and `moon run hump:test-file-cover` does the same for the package in the current directory.
 - A change to a sink or to the WAL path also needs the [smoke test](#smoke-test). Describe what you ran in the **Testing** section of the pull request.
 
 ## Checks
 
-`task check` has to pass. It runs `task lint` and `task test`, then, in `web/webui`, `biome check`, `bun test` and `tsc --noEmit`. CI runs the same checks on every pull request.
+`moon run root:check` has to pass. It runs actionlint, `hump:lint`, `hump:test` and, for the web UI, `hump-tower:check` (Biome), `hump-tower:test`, `hump-tower:typecheck` and `hump-tower:knip`.
+
+CI ([.github/workflows/check.yml](.github/workflows/check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the generated files above are stale, or when `bun.lock` is out of sync with the `package.json` files.
 
 ## Commits and pull requests
 
@@ -246,6 +271,6 @@ Some generated files are committed. Before you open a pull request, run `task bu
 
 ## AI-assisted contributions
 
-AI tools are welcome. Agent instructions are in [AGENTS.md](AGENTS.md) and the per-package `AGENTS.md` files, so agents get the same rules as people.
+AI tools are welcome. Agent instructions are in [AGENTS.md](AGENTS.md), [apps/hump/AGENTS.md](apps/hump/AGENTS.md), [apps/hump-tower/AGENTS.md](apps/hump-tower/AGENTS.md) and the per-package `AGENTS.md` files, so agents get the same rules as people.
 
 You are the author, though. You need to understand and have reviewed every line you submit. Generated issues and pull requests that nobody reviewed are closed.

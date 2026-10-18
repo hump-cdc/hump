@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/webui/public/logo_lg.svg" width="120" alt="Hump logo">
+<img src="apps/hump-tower/public/logo_lg.svg" width="120" alt="Hump logo">
 
 <h1>Hump</h1>
 

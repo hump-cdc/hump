@@ -1,0 +1,5 @@
+moon = "2.6.1"
+
+[settings]
+# Install a missing pinned version on first run instead of failing.
+auto-install = true

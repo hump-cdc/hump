@@ -20,7 +20,7 @@ Work goes in this order:
 
 ## Contributor expectations
 
-If you change the web console, `bun run check` in `web/webui` must pass. It runs Biome, and Biome's accessibility rules are part of its recommended rule set.
+If you change the web console, `moon run hump-tower:check` (`bun run check` in `apps/hump-tower`) must pass. It runs Biome, and Biome's accessibility rules are part of its recommended rule set.
 
 For any user-facing change, say in the Testing section of the pull request what you checked by hand:
 

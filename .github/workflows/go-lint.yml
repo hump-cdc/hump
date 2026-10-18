@@ -56,3 +56,34 @@ jobs:
               with:
                   sarif-file: ${{ runner.temp }}/golangci-lint.sarif
                   title: Go code lint
+
+            # The binary is installed rather than started with go run, which turns every non-zero
+            # exit into 1 and would hide exit code 3 (the code calls a vulnerable symbol).
+            # The SARIF run always exits 0 and only feeds the job summary; the text run fails the
+            # step and prints the call traces. Dependabot does not bump GOVULNCHECK_VERSION.
+            - name: Scan Go code and dependencies for known vulnerabilities
+              if: ${{ !cancelled() }}
+              env:
+                  GOVULNCHECK_VERSION: v1.9.0
+              run: |
+                  set -euo pipefail
+                  package="golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+                  GOBIN="${RUNNER_TEMP}/bin" go install "$package"
+                  govulncheck="${RUNNER_TEMP}/bin/govulncheck"
+                  "$govulncheck" -format sarif ./... >"${RUNNER_TEMP}/govulncheck.sarif"
+                  status=0
+                  "$govulncheck" ./... || status=$?
+                  if [[ "$status" -eq 3 ]]; then
+                      echo "::error file=go.mod,title=Code calls known vulnerabilities::Upgrade the modules or the Go version in go.mod to the 'Fixed in' versions from the log (go get <module>@<version> or go mod edit -go=<version>, then go mod tidy) and commit go.mod and go.sum. Reproduce locally with: go run ${package} ./..."
+                      exit 1
+                  elif [[ "$status" -ne 0 ]]; then
+                      echo "::error title=Vulnerability scan did not complete::govulncheck exited with status ${status}; see the log above for the cause."
+                      exit 1
+                  fi
+
+            - name: Summarize Go vulnerability findings in the job summary
+              if: ${{ !cancelled() }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: ${{ runner.temp }}/govulncheck.sarif
+                  title: Go vulnerability scan

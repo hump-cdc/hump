@@ -30,7 +30,7 @@ Blank issues are disabled.
 
 | Tool | Notes | Install |
 |---|---|---|
-| Go | Version from the `go` directive in [go.mod](go.mod) (1.26.1 at the time of writing) | [go.dev/dl](https://go.dev/dl/) or `brew install go` |
+| Go | Version from the `go` directive in [go.mod](go.mod) (1.26.9 at the time of writing) | [go.dev/dl](https://go.dev/dl/) or `brew install go` |
 | Docker with Compose v2 | Runs the dev environment (`docker compose`, not `docker-compose`) | [Docker Desktop](https://docs.docker.com/get-docker/), OrbStack or Colima |
 | Task | Runs everything in [taskfile.yaml](taskfile.yaml) | [taskfile.dev](https://taskfile.dev/installation/) or `brew install go-task` |
 | bun | Builds and tests the web UI | [bun.sh](https://bun.sh/) or `brew install oven-sh/bun/bun` |

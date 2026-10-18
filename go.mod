@@ -1,6 +1,6 @@
 module hump
 
-go 1.26.1
+go 1.26.9
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.38.0

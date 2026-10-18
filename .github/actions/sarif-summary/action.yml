@@ -1,0 +1,24 @@
+name: SARIF report to job summary
+description: >-
+    Appends the findings of a SARIF 2.1.0 report to the job summary as a table with links to the
+    affected lines. Writes nothing when the report has no findings, and only warns when the report
+    file is missing, so the failure of the step that produced it stays visible.
+
+inputs:
+    sarif-file:
+        description: Path to the SARIF report.
+        required: true
+    title:
+        description: Summary heading. Defaults to the tool names found in the report.
+        required: false
+        default: ""
+
+runs:
+    using: composite
+    steps:
+        - name: Write SARIF findings to the job summary
+          shell: bash
+          env:
+              SARIF_FILE: ${{ inputs.sarif-file }}
+              SUMMARY_TITLE: ${{ inputs.title }}
+          run: bash "${GITHUB_ACTION_PATH}/sarif-summary.sh"

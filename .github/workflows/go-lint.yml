@@ -1,0 +1,58 @@
+name: Go code lint
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    golangci-lint:
+        name: Lint Go code
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read # checkout
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # Also registers the Go problem matcher that turns the text output into PR annotations.
+            - name: Set up Go toolchain
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: go.mod
+                  cache: false
+
+            # git diff prints the changes tidy made to the log before the step fails.
+            - name: Check that go.mod and go.sum are tidy
+              run: |
+                  go mod tidy
+                  if ! git diff --exit-code -- go.mod go.sum; then
+                      echo "::error file=go.mod,title=go.mod and go.sum are not tidy::Run 'go mod tidy' locally and commit the updated go.mod and go.sum."
+                      exit 1
+                  fi
+
+            # The golangci-lint version comes from the golangci-lint/v2 requirement in go.mod.
+            # A SARIF output replaces the default text output, so the text output is kept explicitly.
+            - name: Lint Go code against .golangci.yml
+              uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+              with:
+                  args: >-
+                      --output.text.path=stdout
+                      --output.sarif.path=${{ runner.temp }}/golangci-lint.sarif
+
+            # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Summarize Go lint findings in the job summary
+              if: ${{ !cancelled() }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: ${{ runner.temp }}/golangci-lint.sarif
+                  title: Go code lint

@@ -1,0 +1,63 @@
+name: Web UI code lint
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    biome:
+        name: Lint web UI code
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read # checkout
+        defaults:
+            run:
+                working-directory: web/webui
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # The Bun version comes from packageManager in package.json. The path is relative to the
+            # repository root: defaults.run.working-directory does not apply to actions.
+            - name: Set up Bun
+              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version-file: web/webui/package.json
+                  no-cache: true
+
+            # git diff prints the changes bun install made to the log before the step fails.
+            - name: Check that package.json and bun.lock are in sync
+              run: |
+                  bun install
+                  if ! git diff --exit-code -- package.json bun.lock; then
+                      echo "::error file=web/webui/bun.lock,title=bun.lock is out of date::Run 'bun install' in web/webui locally and commit the updated package.json and bun.lock."
+                      exit 1
+                  fi
+
+            # biome ci runs the same lint, format and import order checks as 'bun run check', read-only.
+            # The default reporter keeps the text output, github turns findings into PR annotations.
+            - name: Lint web UI code against biome.json
+              run: >-
+                  bun x --no-install biome ci
+                  --reporter=default
+                  --reporter=github
+                  --reporter=sarif
+                  --reporter-file="${RUNNER_TEMP}/biome.sarif"
+
+            # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Summarize web UI lint findings in the job summary
+              if: ${{ !cancelled() }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: ${{ runner.temp }}/biome.sarif
+                  title: Web UI code lint

@@ -33,3 +33,17 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   - step `Lint workflow syntax, expressions and shell scripts`, not `Run actionlint`.
 - Job names are the status-check names that the branch ruleset on `main` lists as required
   checks. Renaming a job requires updating the ruleset.
+
+## Failure messages
+
+- Every failure a workflow raises must tell the developer what is wrong and how to fix it, so
+  they can act on the message alone, without reading the workflow or guessing. A bare non-zero
+  exit or a raw tool dump is not enough.
+- In a custom `run:` check, emit a GitHub error annotation before `exit 1`: point it at the
+  offending file, give it a title that names the problem, and put the fix (the command to run
+  or the change to make) in the message. Print the details (diff, offending values) to the log
+  as well.
+
+  ```bash
+  echo "::error file=go.mod,title=go.mod and go.sum are not tidy::Run 'go mod tidy' locally and commit the updated go.mod and go.sum."
+  ```

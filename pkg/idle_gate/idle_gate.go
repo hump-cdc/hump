@@ -78,11 +78,11 @@ func (g *Gate) Disconnect() {
 	}
 
 	generation := g.generation
-	g.idle = time.AfterFunc(g.timeout, func() { g.deactivate(uint64(generation)) })
+	g.idle = time.AfterFunc(g.timeout, func() { g.deactivate(generation) })
 }
 
 // Active reports whether the gate is activated. It is a hint rather than a
-// guarentee: the last client may leave right after the call returns.
+// guarantee: the last client may leave right after the call returns.
 func (g *Gate) Active() bool {
 	return g.active.Load()
 }

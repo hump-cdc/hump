@@ -41,7 +41,7 @@ func init() {
 	} else {
 		slog.SetDefault(
 			slog.New(
-				tint.NewHandler(os.Stdout,
+				tint.NewTextHandler(os.Stdout,
 					&tint.Options{
 						TimeFormat: time.Kitchen,
 						Level:      level,

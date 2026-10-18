@@ -20,7 +20,7 @@ const LIVE_REFETCH_DEBOUNCE_MS = 300
 const LIVE_REFETCH_MAX_WAIT_MS = 1_000
 
 /** One row of the recent operations list. */
-export type RecentOperation = {
+type RecentOperation = {
     id: string
     op: string
     time: Date

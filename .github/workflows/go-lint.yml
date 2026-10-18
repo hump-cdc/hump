@@ -1,4 +1,4 @@
-name: Go code lint
+name: "Go: lint"
 
 on:
     pull_request:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
     golangci-lint:
-        name: Lint Go code
+        name: Lint
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout
@@ -37,6 +37,54 @@ jobs:
                   go mod tidy
                   if ! git diff --exit-code -- go.mod go.sum; then
                       echo "::error file=go.mod,title=go.mod and go.sum are not tidy::Run 'go mod tidy' locally and commit the updated go.mod and go.sum."
+                      exit 1
+                  fi
+
+            # tools/actionlint is a separate module, so the root tidy above does not cover it. Tidy runs
+            # inside its directory: with -modfile from the root, the root packages would join the module
+            # graph and tidy would add their dependencies to tools/actionlint/go.mod.
+            # git diff prints the changes tidy made to the log before the step fails.
+            - name: Check that tools/actionlint/go.mod and go.sum are tidy
+              run: |
+                  go -C tools/actionlint mod tidy
+                  if ! git diff --exit-code -- tools/actionlint/go.mod tools/actionlint/go.sum; then
+                      echo "::error file=tools/actionlint/go.mod,title=tools/actionlint/go.mod and go.sum are not tidy::Run 'go -C tools/actionlint mod tidy' locally and commit the updated tools/actionlint/go.mod and go.sum."
+                      exit 1
+                  fi
+
+            # go mod tidy never removes tool directives, so a tool nobody runs any more stays in go.mod.
+            # The go command runs a tool by the last element of its path, without a major version suffix;
+            # a tool counts as used when taskfile.yaml or .github runs it that way. The pattern is built
+            # from the tool name at run time, so the text of this step never matches a real tool.
+            - name: Check that every go.mod tool directive is used
+              run: |
+                  set -euo pipefail
+                  unused=0
+                  while IFS= read -r path; do
+                      base="$path"
+                      if [[ "$base" =~ ^(.+)/v[0-9]+$ ]]; then
+                          base="${BASH_REMATCH[1]}"
+                      fi
+                      name="${base##*/}"
+                      pattern="go tool ${name//./\\.}([^[:alnum:]_.-]|\$)"
+                      if ! grep -rqE "$pattern" taskfile.yaml .github; then
+                          echo "Tool ${path} (run as '${name}') is not used in taskfile.yaml or .github."
+                          echo "::error file=go.mod,title=Unused go.mod tool directive::${path} is not run by any task or workflow. Remove it locally with 'go get -tool ${path}@none' and 'go mod tidy', then commit go.mod and go.sum."
+                          unused=1
+                      fi
+                  done < <(go mod edit -json | jq -r '.Tool[]?.Path')
+                  exit "$unused"
+
+            # The spec embeds pkg/version.Version as info.version. 'task openapi' sets it to 0.0.0
+            # through ldflags; without it the generator writes "development" and the diff always fails.
+            # git diff prints the changes the generator made to the log before the step fails.
+            - name: Check that the web UI OpenAPI spec is up to date
+              env:
+                  OPENAPI_OUT: web/webui/src/shared/api/openapi.json
+              run: |
+                  go run -ldflags "-X hump/pkg/version.Version=0.0.0" ./cmd/openapi
+                  if ! git diff --exit-code -- "$OPENAPI_OUT"; then
+                      echo "::error file=${OPENAPI_OUT},title=Web UI OpenAPI spec is out of date::Run 'task openapi' locally and commit the updated ${OPENAPI_OUT}."
                       exit 1
                   fi
 

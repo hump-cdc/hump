@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export const MOBILE_BREAKPOINT = 1024
+const MOBILE_BREAKPOINT = 1024
 
 const query = (breakpoint: number): string => `(max-width: ${breakpoint - 1}px)`
 

@@ -1,0 +1,49 @@
+name: Code coverage report to job summary
+description: >-
+    Appends a code coverage report to the job summary: the total with an indicator and a bar, a
+    table per Go package or directory, and a collapsed per-file table. Reads a Go coverprofile or
+    an lcov report. Fails with an error annotation when the report is missing or empty.
+
+inputs:
+    format:
+        description: Report format, 'go' (coverprofile) or 'lcov'.
+        required: true
+    coverage-file:
+        description: Path to the coverage report.
+        required: true
+    title:
+        description: Summary heading.
+        required: true
+    group-depth:
+        description: >-
+            Leading directory components a group keeps; 0 groups by the whole directory, i.e. one
+            group per Go package.
+        required: false
+        default: "0"
+    strip-prefix:
+        description: Removed from the start of every path in the report, e.g. the Go module path.
+        required: false
+        default: ""
+    link-prefix:
+        description: Prepended to a report path to make it repository-relative for file links.
+        required: false
+        default: ""
+    excluded:
+        description: Comma-separated paths or patterns left out of the report, listed under the total.
+        required: false
+        default: ""
+
+runs:
+    using: composite
+    steps:
+        - name: Write code coverage report to the job summary
+          shell: bash
+          env:
+              COVERAGE_FORMAT: ${{ inputs.format }}
+              COVERAGE_FILE: ${{ inputs.coverage-file }}
+              SUMMARY_TITLE: ${{ inputs.title }}
+              GROUP_DEPTH: ${{ inputs.group-depth }}
+              STRIP_PREFIX: ${{ inputs.strip-prefix }}
+              LINK_PREFIX: ${{ inputs.link-prefix }}
+              EXCLUDED: ${{ inputs.excluded }}
+          run: bash "${GITHUB_ACTION_PATH}/coverage-summary.sh"

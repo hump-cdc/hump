@@ -7,14 +7,14 @@ import type {
 } from '@/shared/api'
 
 /** A sink a table is delivered to, with the target rendered for that table. */
-export type SnapshotSink = {
+type SnapshotSink = {
     type: string
     host: string
     target: string
 }
 
 /** A table column, with its type as PostgreSQL formats it. */
-export type SnapshotColumn = {
+type SnapshotColumn = {
     name: string
     type: string
 }

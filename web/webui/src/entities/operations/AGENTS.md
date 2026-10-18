@@ -10,7 +10,7 @@ lays the three out and owns everything URL-related.
 
 | Path | Role |
 |---|---|
-| `filter/index.ts` | `OperationsFilter`, `useOperationsFilter`, `defaultFilterValues`, `operationItems`, `statusItems`, types `OperationsFilterState` / `OperationsFilterValues` |
+| `filter/index.ts` | `OperationsFilter`, `useOperationsFilter`, `defaultFilterValues`, `operationItems`, `statusItems`, type `OperationsFilterValues` |
 | `filter/model/store.ts` | the persisted zustand filter store |
 | `filter/model/options.ts` | the fixed operation and status option lists |
 | `filter/ui/operations-filter.tsx` | five `MultiComboBox` facets and the search input |

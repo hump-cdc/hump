@@ -28,9 +28,9 @@ file. The types in `model/types.ts` that no `@x` file re-exports (`Metrics`, `Me
 
 | File | Consumer | Exposes |
 |---|---|---|
-| `@x/statistics.ts` | the seven chart slices of `entities/statistics` (`delivered`, `failed`, `throughput`, `heap-in-use`, `replication-lag`, `sink-delivery`, `sink-latency`) | `useMetrics`, `MetricsPoint` |
+| `@x/statistics.ts` | the seven chart slices of `entities/statistics` (`delivered`, `failed`, `throughput`, `heap-in-use`, `replication-lag`, `sink-delivery`, `sink-latency`) | `useMetrics` |
 | `@x/flows.ts` | `entities/flows/flows` | `useMetrics`, `MetricsTopology`, `MetricsSink` |
-| `@x/inspector.ts` | `entities/flows/inspector` | `useMetrics`, `MetricsTopology`, `MetricsTable`, `MetricsDelivery`, `MetricsConnection` |
+| `@x/inspector.ts` | `entities/flows/inspector` | `useMetrics`, `MetricsTopology`, `MetricsTable`, `MetricsDelivery` |
 | `@x/operations.ts` | `entities/operations/filter` | `useMetrics` |
 
 The files are named after the consumer, and not consistently by group or by slice: `statistics`

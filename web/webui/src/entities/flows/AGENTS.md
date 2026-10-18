@@ -36,7 +36,7 @@ There are no stories here; the canvas stories belong to the kit.
 | Slice | `index.ts` exports |
 |---|---|
 | `@/entities/flows/flows` | `Flows` |
-| `@/entities/flows/inspector` | `FlowInspector`, `useFlowInspectorStore`, type `SelectedItem` |
+| `@/entities/flows/inspector` | `FlowInspector`, `useFlowInspectorStore` |
 | `@/entities/flows/toolbar` | `FlowsToolbar` |
 
 Slices reach each other only through `@x`, in one direction, `toolbar → flows → inspector`:

@@ -1,4 +1,4 @@
-name: Web UI unit tests
+name: "Web: test"
 
 on:
     pull_request:
@@ -20,7 +20,7 @@ defaults:
 
 jobs:
     test:
-        name: Run web UI unit tests with coverage
+        name: Test
         runs-on: ubuntu-24.04
         timeout-minutes: 10
         permissions:
@@ -73,21 +73,20 @@ jobs:
             # Sums the per-file LF/LH (lines) and FNF/FNH (functions) records of the lcov report,
             # the same file Codecov receives, weighted by line count and cut to one decimal like
             # codecov.yml (precision 1, round down). The "All files" row of Bun's text table is an
-            # unweighted per-file average, so it differs.
-            - name: Summarize total code coverage in the job summary
-              run: |
-                  set -euo pipefail
-                  read -r line_pct func_pct < <(awk -F: '
-                      $1 == "LF" { lf += $2 } $1 == "LH" { lh += $2 }
-                      $1 == "FNF" { fnf += $2 } $1 == "FNH" { fnh += $2 }
-                      function pct(hit, found) { return found ? int(1000 * hit / found) / 10 : 0 }
-                      END { printf "%.1f%% %.1f%%\n", pct(lh, lf), pct(fnh, fnf) }
-                  ' "${RUNNER_TEMP}/coverage/lcov.info")
-                  {
-                      echo "## Web UI unit test coverage"
-                      echo
-                      echo "Total line coverage: **${line_pct}**, function coverage: **${func_pct}**"
-                  } >>"$GITHUB_STEP_SUMMARY"
+            # unweighted per-file average, so it differs. Group depth 3 is the FSD layer and
+            # slice (src/entities/flows, src/shared/ui). Bun writes paths relative to web/webui;
+            # link-prefix makes the file links repository paths. 'excluded' lists the
+            # coveragePathIgnorePatterns of bunfig.toml and has to be kept in sync with it.
+            # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Summarize code coverage by directory and file in the job summary
+              uses: ./.github/actions/coverage-summary # zizmor: ignore[self-repository]
+              with:
+                  format: lcov
+                  coverage-file: ${{ runner.temp }}/coverage/lcov.info
+                  title: Web UI unit test coverage
+                  group-depth: "3"
+                  link-prefix: web/webui/
+                  excluded: src/shared/api/generated/**, **/*.fake.ts
 
             # Bun writes paths relative to web/webui; the 'fixes' entry in codecov.yml maps them to
             # repository paths. Fork PRs and Dependabot PRs get no CODECOV_TOKEN: the upload then

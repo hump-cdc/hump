@@ -1,4 +1,4 @@
-name: Web UI code lint
+name: "Web: lint"
 
 on:
     pull_request:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
     biome:
-        name: Lint web UI code
+        name: Lint
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout
@@ -41,6 +41,31 @@ jobs:
                   bun install
                   if ! git diff --exit-code -- package.json bun.lock; then
                       echo "::error file=web/webui/bun.lock,title=bun.lock is out of date::Run 'bun install' in web/webui locally and commit the updated package.json and bun.lock."
+                      exit 1
+                  fi
+
+            # rsbuild cleans the output directory, so a stale build shows up as deleted tracked files and
+            # new untracked hashed files: git status --porcelain catches both, git diff alone would not.
+            # git status and git diff --stat print the changes the build made to the log before the step fails.
+            - name: Check that the embedded web UI build in internal/controller/webui is up to date
+              run: |
+                  set -euo pipefail
+                  bun run build
+                  if [ -n "$(git status --porcelain -- ../../internal/controller/webui)" ]; then
+                      git status -- ../../internal/controller/webui
+                      git diff --stat -- ../../internal/controller/webui
+                      echo "::error file=internal/controller/webui/index.html,title=Embedded web UI build is out of date::Run 'bun run build' in web/webui locally and commit the updated internal/controller/webui."
+                      exit 1
+                  fi
+
+            # Runs after the build: generate:openapi in it creates src/shared/api/generated, which the
+            # imports knip follows resolve to. The github-actions reporter turns findings into annotations
+            # with paths relative to web/webui; sed prefixes them so they attach to the files in the PR.
+            - name: Check web UI for unused dependencies, files and exports
+              run: |
+                  set -euo pipefail
+                  if ! bun x --no-install knip --reporter github-actions | sed -E 's/^(::[a-z]+ file=)/\1web\/webui\//'; then
+                      echo "::error file=web/webui/package.json,title=Web UI has unused dependencies, files or exports::Run 'bun run knip' in web/webui locally, then remove what it reports (or, for a false positive, adjust the knip configuration in web/webui) and commit the changes."
                       exit 1
                   fi
 

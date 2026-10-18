@@ -29,7 +29,7 @@ stories.
 |---|---|---|
 | `config` | `useConfig`, `ConfigProvider` | `src/app/providers.tsx`, `widgets/sidebar/connection-info.tsx` |
 | `source-viewer` | `SourceViewer` | `pages/configuration` |
-| `state` | `LiveControls`, type `ChartStep` | `widgets/sidebar/app-header.tsx` (`LiveControls`) |
+| `state` | `LiveControls` | `widgets/sidebar/app-header.tsx` (`LiveControls`) |
 
 Other entities may not use the barrels; they go through `@x`, one file per consumer, each
 re-exporting the single thing that consumer needs:
@@ -40,7 +40,7 @@ re-exporting the single thing that consumer needs:
 | `config/@x/operations.ts` | `useConfig` | `operations/filter` |
 | `config/@x/inspector.ts` | `useConfig` | `flows/inspector` |
 | `config/@x/source-viewer.ts` | `useConfig` | `source-viewer` (the sibling slice of this module) |
-| `state/@x/statistics.ts` | `useLiveControlsChartStep`, `ChartStep` | the seven `statistics/*` chart slices |
+| `state/@x/statistics.ts` | `useLiveControlsChartStep` | the seven `statistics/*` chart slices |
 | `state/@x/flows.ts` | `useLiveControlsChartStep` | `flows/flows` |
 | `state/@x/inspector.ts` | `useLiveControlsChartStep` | `flows/inspector` |
 | `state/@x/operations.ts` | `useLiveControlsChartStep` | `operations/filter` |

@@ -65,6 +65,8 @@ the 7-day Dependabot cooldown in `.github/dependabot.yml`.
   but it does not check what you type into `package.json` by hand, so write those exact too.
 - Go: no tooling enforces it. Before `go get` of a version, check its publish time with
   `go list -m -json <module>@<version>` (the `Time` field) and pick one at least 7 days old.
+  A `tool` directive in `go.mod` must be run as `go tool <name>` in `taskfile.yaml` or `.github`;
+  CI fails on an unused one. Remove it with `go get -tool <path>@none` and `go mod tidy`.
 
 ## Before finishing a task
 
@@ -75,4 +77,5 @@ the task done:
   table's "May import" column and the adapter-only-in-`cmd/hump` rule, but not "no sideways
   imports": that one stays a review check. `task lint:fix` applies the automatic fixes.
 - Web UI: `bun run check` in `web/webui` (Biome: lint, format, import order).
-  `bun run check --write` applies the safe fixes.
+  `bun run check --write` applies the safe fixes. Then `bun run knip` in `web/webui` (unused files,
+  exports, types and dependencies); it must exit 0.

@@ -30,6 +30,7 @@ Run in `web/webui`. The `task` targets in the root `taskfile.yaml` wrap some of 
 | `bun test` | every `*.test.ts(x)`, colocated with the code under test, written on `bun:test` |
 | `bun run storybook` | Storybook on port 6006; `task web:storybook` |
 | `bun run build-storybook` | `storybook build` → static Storybook in `storybook-static/` (gitignored) |
+| `bun run knip` | knip (`knip.jsonc`): unused files, exports, types and dependencies; must exit 0 |
 | `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev`, `build` |
 | `bun run generate-routes` | `tsr generate` → `app/routeTree.gen.ts` |
 | `task openapi` | Go `cmd/openapi` → `src/shared/api/openapi.json`; `web:dev`, `web:build` depend on it |

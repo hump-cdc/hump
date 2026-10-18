@@ -40,6 +40,19 @@ jobs:
                       exit 1
                   fi
 
+            # The spec embeds pkg/version.Version as info.version. 'task openapi' sets it to 0.0.0
+            # through ldflags; without it the generator writes "development" and the diff always fails.
+            # git diff prints the changes the generator made to the log before the step fails.
+            - name: Check that the web UI OpenAPI spec is up to date
+              env:
+                  OPENAPI_OUT: web/webui/src/shared/api/openapi.json
+              run: |
+                  go run -ldflags "-X hump/pkg/version.Version=0.0.0" ./cmd/openapi
+                  if ! git diff --exit-code -- "$OPENAPI_OUT"; then
+                      echo "::error file=${OPENAPI_OUT},title=Web UI OpenAPI spec is out of date::Run 'task openapi' locally and commit the updated ${OPENAPI_OUT}."
+                      exit 1
+                  fi
+
             # The golangci-lint version comes from the golangci-lint/v2 requirement in go.mod.
             # A SARIF output replaces the default text output, so the text output is kept explicitly.
             - name: Lint Go code against .golangci.yml

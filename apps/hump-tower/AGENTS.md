@@ -41,7 +41,7 @@ There is no dev proxy: `API_URL` and `VERSION` are compile-time constants (`sour
 declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 (`src/shared/api/client.ts`). There is no type-check script in `package.json` (`tsconfig.json` has
 `noEmit`); the moon task `hump-tower:typecheck` runs `tsc --noEmit`. `moon run root:check` runs the
-`check`, `test`, `typecheck` and `knip` tasks here, after actionlint and the Go lint and tests.
+`check`, `test`, `typecheck` and `knip` tasks here, alongside actionlint and the Go lint and tests.
 
 ## Directory layout
 
@@ -52,6 +52,7 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
 | `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`); the `src/widgets` stories glob is configured, but there are no widget stories yet |
 | `public/` | fonts, logos, favicon |
+| `scripts/` | `ci.sh`, run by the `ci-*` moon tasks |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.
 

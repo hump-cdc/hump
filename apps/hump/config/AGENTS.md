@@ -4,7 +4,8 @@ The table configuration: YAML text in, a validated `Configuration` with every de
 out. `Parse` is the only entry point and runs once, in `cmd/hump/main.go`, on the string
 `pkg/app/options` resolved from `--config` / `--config-file`, then the `CONFIG` / `CONFIG_FILE`
 environment variables, then stdin. Nothing is re-read or
-reloaded afterwards. The user-facing schema is documented in `README.md` and `docs/template.md`;
+reloaded afterwards. The user-facing schema is documented at https://hump.dev/docs/getting-started (outside this
+repo), templating in `docs/template.md`;
 this file is about what the code does around it.
 
 ## Layout
@@ -62,11 +63,9 @@ extra keys are appended. That one rule explains all of the following.
   (`schema`, `replica`, `sinks`, `operations`) is inherited.
 - **Preset override is shallow.** A sink entry's sibling keys replace the preset's keys
   wholesale: `preset: k1` next to `kafka: {topic: t2}` yields `kafka: {topic: t2}` — the
-  preset's `url` is gone and the sink then fails `required`. `README.md` ("Sink presets")
-  describes a deep merge; the code does not do one. [README and code disagree]
+  preset's `url` is gone and the sink then fails `required`. The code does no deep merge.
 - **Preset names are not validated.** `collectSinkPresets` keeps the **last** preset of a
-  duplicated `name`, and a non-string `name` becomes the key `""`. README says both are
-  rejected. Only an unknown reference is an error (`unknown sink preset: "x"`, a plain
+  duplicated `name`, and a non-string `name` becomes the key `""`. Only an unknown reference is an error (`unknown sink preset: "x"`, a plain
   `fmt.Errorf` with no position).
 - **Table `operations` replaces the sink's**, including one that came from a preset
   (`TestParse_TableOperationsOverrideSinkAndPreset`).

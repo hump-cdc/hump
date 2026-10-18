@@ -4,7 +4,8 @@ Change data capture for PostgreSQL: hump reads logical replication (WAL) changes
 update, delete, truncate — for the configured tables and delivers them to sinks: Kafka, HTTP,
 NATS (core / JetStream), RabbitMQ, RabbitMQ Streams. Payloads are templated; delivery has
 retry and failure policies. It can also snapshot existing table rows, exposes Prometheus
-metrics, and ships a web UI. Configuration is described in `README.md`.
+metrics, and ships a web UI. `README.md` has a quick start; the full configuration reference is
+at https://hump.dev/docs/getting-started, templating is in `docs/template.md`.
 
 ## Stack
 

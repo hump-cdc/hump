@@ -30,7 +30,7 @@ places adding a sink type touches.
 ## `Context` is user-facing
 
 Its exported fields are what a template sees as `.Version`, `.Timestamp`, `.Operation`,
-`.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next` — documented in README and
+`.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next` — documented in
 `docs/template.md`. Renaming or removing a field breaks users' config files. `Version` is the
 build version (`version.Version`), set by `process_operation`.
 

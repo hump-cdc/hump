@@ -17,7 +17,9 @@ which view is on screen.
   own stream to `GET /api/snapshot`, the only source of per-table detail. The two share neither
   a cache nor a connection; the percent here is computed client-side by `aggregate`.
 
-There are no tests or stories in this slice.
+There are no stories in this slice. Tests cover the pure model only: `model/selectors.test.ts`
+(`snapshotQuery`, `aggregate`) and `model/tables.test.ts` (the `useTables` store and what it
+persists, against an in-memory `localStorage`; no DOM).
 
 ## Layout
 

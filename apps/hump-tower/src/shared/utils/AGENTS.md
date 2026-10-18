@@ -17,7 +17,8 @@ public.
   `useSwitchViewValue` and `SwitchViewValueContext`, which go with `useSwitchAnimation`.
 - A bare name (`cn.ts`, `debounce.ts`, `sleep.ts`) — everything else. `debounce.ts` holds both
   the plain function and its hook, `useDebounce`.
-- Tests sit next to the file as `<name>.test.ts` on `bun:test`. `debounce` and `sleep` have one.
+- Tests sit next to the file as `<name>.test.ts` on `bun:test`. Every `format.*`
+  file, `debounce` and `sleep` have one; the hooks and `cn` have none.
 
 ## Formatters
 

@@ -13,6 +13,7 @@ Consumers: `entities/metrics`, `entities/operations`, `entities/flows`, `feature
 | File | Role |
 |---|---|
 | `keys.ts` | `keys` — every hand-written query and mutation key — and `OperationsFilterKey` |
+| `keys.test.ts` | pins the key tuples of every factory and that the prefixes start every variant |
 | `invalidate.ts` | which queries a live batch and a reconnect make stale, and the call that does it |
 | `invalidate.test.ts` | pins the filters, the `cancelRefetch` option and prefix matching on real keys |
 | `index.ts` | exports all of the above, the two `LIVE_*_QUERIES` filter lists included |
@@ -79,6 +80,7 @@ only caller:
 
 ## Tests
 
-`bun test`, on `bun:test`. Two styles: a `QueryClient` whose `invalidateQueries` is replaced by a
+`bun test`, on `bun:test`. `keys.test.ts` compares the built keys with literal tuples.
+`invalidate.test.ts` has two styles: a `QueryClient` whose `invalidateQueries` is replaced by a
 recorder, to assert filters and options; and a real `QueryClient` seeded with `setQueryData`, to
 assert that the prefix invalidates every `metrics` duration and leaves `['config']` alone.

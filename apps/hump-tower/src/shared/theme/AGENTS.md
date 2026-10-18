@@ -15,6 +15,7 @@ Consumers: `src/app/providers.tsx` mounts `ThemeProvider`; `widgets/sidebar`
 | `types.ts` | `Theme` = `'light' \| 'dark' \| 'system'`, `ResolvedTheme` = `'light' \| 'dark'` |
 | `constants.ts` | storage key, default theme, class names, transition length, media query |
 | `theme-script.ts` | `themeInitScript`: the pre-paint script, as a string |
+| `theme-script.test.ts` | runs the script string against injected `localStorage`/`matchMedia`/`document` stand-ins: stored value, `system`, default, storage failure |
 | `theme-provider.tsx` | `ThemeProvider`, `ThemeContext`, reading/persisting/applying the theme |
 | `use-theme.ts` | `useTheme`: the context, or a throw outside a provider |
 | `index.ts` | `ThemeProvider`, `useTheme`, and the type `Theme` |

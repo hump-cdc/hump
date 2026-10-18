@@ -104,7 +104,7 @@ The Go service is the `hump` project, the web UI is `hump-tower`, and repo-wide 
 |---|---|
 | `moon run hump:run` | Builds the web UI (`hump-tower:build`, which regenerates the OpenAPI spec first), then runs `go run ./cmd/hump -f ../../dev/hump.yaml` in `apps/hump` |
 | `moon run hump:run-cleanup` | Removes Hump's replication slot and publication from the dev database |
-| `moon run hump:build` | Builds `apps/hump/bin/hump` with the embedded UI |
+| `moon run hump:build` | Checks that every package compiles without cgo (`go build ./...` with `CGO_ENABLED=0`), then builds `apps/hump/bin/hump` with the embedded UI |
 | `moon run hump:test` | Runs all Go unit tests |
 | `moon run hump:test-file` | Runs the tests of the Go package in the current directory |
 | `moon run hump:test-cover` | Runs all Go tests with coverage and opens the HTML report |
@@ -239,7 +239,7 @@ Most packages under `apps/hump/internal/` have their own `AGENTS.md`. Read the o
 
 ## Generated files
 
-Some generated files are committed. CI fails when they are out of date. Before you open a pull request, regenerate them and commit everything that changed:
+Some generated files are committed. CI fails when the OpenAPI spec or the embedded UI bundle is out of date. Before you open a pull request, regenerate them and commit everything that changed:
 
 - `apps/hump-tower/src/shared/api/openapi.json`, the OpenAPI spec: `moon run hump-tower:openapi`;
 - `apps/hump-tower/src/shared/api/generated/`, the API client: `bun run generate:openapi` in `apps/hump-tower` (`hump-tower:build` runs it too);
@@ -251,14 +251,14 @@ Some generated files are committed. CI fails when they are out of date. Before y
 
 - New behaviour comes with unit tests.
 - A bug fix comes with a test that fails without the fix.
-- Coverage of the packages you touch must not drop. CI checks this. Locally, `moon run hump:test-cover` opens an HTML report for the whole Go module, and `moon run hump:test-file-cover` does the same for the package in the current directory.
+- Coverage of the packages you touch must not drop. CI checks coverage through Codecov: Go or web UI total coverage may not drop by more than 1 point, and changed lines need 80% coverage. Locally, `moon run hump:test-cover` opens an HTML report for the whole Go module, and `moon run hump:test-file-cover` does the same for the package in the current directory.
 - A change to a sink or to the WAL path also needs the [smoke test](#smoke-test). Describe what you ran in the **Testing** section of the pull request.
 
 ## Checks
 
 `moon run root:check` has to pass. It runs actionlint, `hump:lint`, `hump:test` and, for the web UI, `hump-tower:check` (Biome), `hump-tower:test`, `hump-tower:typecheck` and `hump-tower:knip`.
 
-CI ([.github/workflows/check.yml](.github/workflows/check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the generated files above are stale, or when `bun.lock` is out of sync with the `package.json` files.
+CI ([.github/workflows/check.yml](.github/workflows/check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the OpenAPI spec or the embedded UI bundle is stale, or when `bun.lock` is out of sync with the `package.json` files.
 
 ## Commits and pull requests
 

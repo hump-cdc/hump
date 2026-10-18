@@ -23,8 +23,8 @@ types) and `@/shared/state` (`keys.queries.metrics`). Nothing from `shared/live`
 There is **no `index.ts`**. Every consumer is another entity, and entities reach each other only
 through `@x`, so the `@x` files are the whole public API. `normalizeMetrics`, `refetchInterval`
 and `METRICS_POINTS_MAX` are exported from `use-metrics.ts` for the test only and are in no `@x`
-file. The types in `model/types.ts` that no `@x` file re-exports (`Metrics`, `MetricsTableOp`,
-`MetricsSinkTarget`, `MetricsDuration`) are internal.
+file. The types in `model/types.ts` that no `@x` file re-exports (`Metrics`, `MetricsPoint`,
+`MetricsTableOp`, `MetricsSinkTarget`, `MetricsConnection`, `MetricsDuration`) are internal.
 
 | File | Consumer | Exposes |
 |---|---|---|
@@ -37,8 +37,9 @@ The files are named after the consumer, and not consistently by group or by slic
 and `operations` are group folders, `flows` and `inspector` are two slices of the `flows` group.
 A new consuming entity gets **its own** `@x/<consumer>.ts` re-exporting from `../model/*` only
 what it needs; do not point it at an existing file, and do not widen a file for a different
-consumer. A consumer from a layer above `entities` would need an `index.ts` added first — the
-`biome.json` overrides let those layers import a slice through its barrel only.
+consumer. A consumer from a layer above `entities` would need an `index.ts` added first: `@x`
+files are for entities, and the other layers import a slice through its barrel. (`biome.json`
+does not enforce this: its public-API rule lets any layer import an `@x` file.)
 
 Every consumer calls `useMetrics` with the chart step from the live controls
 (`useLiveControlsChartStep`, `entities/config/state`), so they share one cache entry and one

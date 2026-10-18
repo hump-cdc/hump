@@ -21,8 +21,8 @@ taskOptions:
 
 tasks:
   build:
-    description: 'Build bin/hump with the embedded hump-tower UI'
-    script: 'go build -ldflags "$(sh ./scripts/ldflags.sh)" -o ./bin/hump ./cmd/hump'
+    description: 'Check that all packages build without cgo, then build bin/hump with the embedded hump-tower UI'
+    script: 'go build ./... && go build -ldflags "$(sh ./scripts/ldflags.sh)" -o ./bin/hump ./cmd/hump'
     deps: ['hump-tower:build']
     inputs: ['@group(sources)', '@group(embedded)', 'scripts/ldflags.sh']
     outputs: ['bin/hump']

@@ -153,5 +153,6 @@ under, so headers and other metadata (the HTTP sink's `method` and `status`) sha
 
 `bun:test`, next to the code: `blocks.test.ts` (block arithmetic, the clamped-page case),
 `to-request.test.ts` (omitted, empty and sorted facets, the trimmed search), `map-operation.test.ts`
-(bigint conversion, attempts and the retries fallback), `headers.test.ts`. The hooks, the stores and
+(bigint conversion, attempts and the retries fallback), `headers.test.ts`, and a `store.test.ts`
+for each store (`filter`: defaults, setters, `apply`; `details`: select and clear). The hooks and
 the components have none.

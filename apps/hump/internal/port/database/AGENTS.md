@@ -21,8 +21,8 @@ interface to `controller/process.go`, `get_config`, `get_snapshot_tables`,
 `get_snapshot_estimates` and `adapter/snapshot`, and to `cleanup_database` in cleanup mode;
 each uses the few methods it needs. Nothing
 asserts `var _ Database = (*T)(nil)` — the typed `var db databasePort.Database = …` in `main.go`
-is the only compile-time proof. The test fakes (`fakeDatabase` in `adapter/snapshot` and the
-`hump_tower` use case packages) **embed** `database.Database` and override only what the test reads,
+is the only compile-time proof. The test fakes (`fakeDatabase` in `adapter/snapshot`,
+`processing/cleanup_database` and the `hump_tower` use case packages) **embed** `database.Database` and override only what the test reads,
 so a new method compiles everywhere and panics on a nil embedded interface the first time a
 test reaches it.
 

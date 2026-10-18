@@ -79,7 +79,7 @@ interface. That method is the whole link between the two — do not rename or re
 `unavailable_test.go` is the lock on user-visible behaviour, through real templates: the value
 is empty for `empty` and `coalesce`, equal to `""` for `eq`/`ne`, detectable only by
 `unavailable` — and `default` does **not** replace it (`{{ .Next.blob | default "n/a" }}`
-renders `""`). README and `docs/template.md` describe the same behaviour in prose; change them
+renders `""`). `docs/template.md` describes the same behaviour in prose; change both
 together.
 
 ## Tables

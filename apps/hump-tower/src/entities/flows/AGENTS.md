@@ -27,8 +27,8 @@ own path. The only consumer is `src/pages/flows/ui` (`flows.tsx`, `use-insets.ts
 | `inspector/ui/recent-operations.tsx` | the recent deliveries list |
 | `toolbar/ui/flows-toolbar.tsx` | `FlowsToolbar`: the Tables and Sinks multi-selects |
 
-Tests (`bun:test`) sit next to `topology`, `filter`, `mode`, `resolve`, `recent-filter` and
-`operations-search`.
+Tests (`bun:test`) sit next to `topology`, `filter`, `mode`, `resolve`, `recent-filter`,
+`operations-search` and the inspector `store`.
 There are no stories here; the canvas stories belong to the kit.
 
 ## Public contract and imports

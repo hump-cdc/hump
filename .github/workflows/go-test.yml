@@ -96,7 +96,7 @@ jobs:
                   version: v11.3.1
                   files: ${{ runner.temp }}/coverage.out
                   disable_search: true
-                  flags: unit
+                  flags: go
                   fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 
             # Feeds Codecov Test Analytics (flaky and failed tests in the PR comment), so it also
@@ -110,5 +110,5 @@ jobs:
                   report_type: test_results
                   files: ${{ runner.temp }}/junit.xml
                   disable_search: true
-                  flags: unit
+                  flags: go
                   fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}

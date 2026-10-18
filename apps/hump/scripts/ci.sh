@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# CI checks of the hump Go module: ci.sh lint|vulncheck|test. Run by the hump:ci-* moon tasks with
-# the working directory apps/hump.
+# CI checks of the hump Go module: ci.sh lint|vulncheck|test|dep-age. Run by the hump:ci-* moon
+# tasks with the working directory apps/hump.
 #
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump. A failure appends a fix
 # hint as a workflow command to .ci/annotations/hump-<check>.txt (moon prefixes task output, so
@@ -12,6 +12,9 @@ set -euo pipefail
 
 # Dependabot does not bump this version.
 GOVULNCHECK_VERSION="v1.9.0"
+
+# Minimum age of a Go module version, matching the Dependabot cooldown in .github/dependabot.yml.
+MIN_AGE_DAYS=7
 
 main() {
     local check="${1:-}"
@@ -25,8 +28,9 @@ main() {
         lint) lint ;;
         vulncheck) vulncheck ;;
         test) run_tests ;;
+        dep-age) dep_age ;;
         *)
-            echo "usage: ci.sh lint|vulncheck|test" >&2
+            echo "usage: ci.sh lint|vulncheck|test|dep-age" >&2
             exit 2
             ;;
     esac
@@ -92,6 +96,32 @@ run_tests() {
     grep -v '^hump/cmd/openapi/' "$REPORTS/cover.out" >"$REPORTS/coverage.out"
 }
 
+# dep_age fails when a module version was published less than MIN_AGE_DAYS days ago: every module
+# in the build list (direct and transitive) of apps/hump/go.mod and of the separate
+# tools/actionlint/go.mod, and the govulncheck release that vulncheck installs. GOWORK=off gives
+# each go.mod its own build list instead of the go.work one. Publish times come from the module
+# proxy; modules without one (replaced by a local directory) are skipped. A version exactly
+# MIN_AGE_DAYS old passes, so Dependabot's own PRs, opened after its cooldown, pass too.
+dep_age() {
+    local format="2006-01-02T15:04:05Z"
+    local template="{{if and (not .Main) .Time}}{{.Path}} {{.Version}} {{.Time.UTC.Format \"${format}\"}} {{(.Time.AddDate 0 0 ${MIN_AGE_DAYS}).UTC.Format \"${format}\"}}{{end}}"
+    local cutoff
+    cutoff="$(cutoff_time)"
+    echo "Module versions published after ${cutoff} are younger than ${MIN_AGE_DAYS} days."
+
+    local status=0
+    check_ages apps/hump/go.mod "$cutoff" \
+        "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then in apps/hump run 'go get <module>@<version>' and 'moon run hump:tidy' and commit go.mod and go.sum" \
+        env GOWORK=off go list -m -f "$template" all || status=1
+    check_ages apps/hump/tools/actionlint/go.mod "$cutoff" \
+        "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then in apps/hump/tools/actionlint run 'GOWORK=off go get <module>@<version>' and 'moon run hump:tidy' and commit go.mod and go.sum" \
+        env GOWORK=off go -C tools/actionlint list -m -f "$template" all || status=1
+    check_ages apps/hump/scripts/ci.sh "$cutoff" \
+        "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then set GOVULNCHECK_VERSION in apps/hump/scripts/ci.sh to it" \
+        go list -m -f "$template" "golang.org/x/vuln@${GOVULNCHECK_VERSION}" || status=1
+    return "$status"
+}
+
 # annotate records a failed check: it appends the fix hint (a workflow command) to the check's
 # annotation file and creates the check's marker in .ci/failed. The ci-* tasks are allowed to fail,
 # so that one failure does not cancel the other checks; the workflow fails on the markers.
@@ -100,6 +130,39 @@ annotate() {
     echo "$line" >>"$ANNOTATIONS/hump-${check}.txt"
     mkdir -p "$FAILED"
     echo "$check" >"$FAILED/hump-${check}"
+}
+
+# check_ages runs a 'go list -m' command that prints '<module> <version> <published> <allowed>'
+# lines and annotates every module published after the cutoff against file. fix is the remedy for
+# file, with <module> and <version> as placeholders. Times are fixed-width RFC 3339 UTC, so they
+# compare as strings.
+check_ages() {
+    local file="$1" cutoff="$2" fix="$3"
+    shift 3
+    local listing
+    if ! listing="$("$@")"; then
+        annotate dep-age "::error file=${file},title=Go module age check did not complete::'go list -m' failed for ${file}; see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-dep-age"
+        return 1
+    fi
+
+    local young=0 module version published allowed
+    while read -r module version published allowed; do
+        if [[ -z "$module" || ! "$published" > "$cutoff" ]]; then
+            continue
+        fi
+        echo "${file}: ${module} ${version} was published ${published}, allowed from ${allowed}"
+        local hint="${fix//<module>/${module}}"
+        annotate dep-age "::error file=${file},title=Go module younger than ${MIN_AGE_DAYS} days::${module} ${version} was published ${published} and is allowed from ${allowed} (${MIN_AGE_DAYS}-day minimum release age; see .github/dependabot.yml). Pick an older version: ${hint}. Or wait until ${allowed}. Reproduce locally with: CI=true moon run hump:ci-dep-age"
+        young=1
+    done <<<"$listing"
+    return "$young"
+}
+
+# cutoff_time prints the time MIN_AGE_DAYS days ago in RFC 3339 UTC. date -d is GNU (CI), date -r
+# is BSD (macOS).
+cutoff_time() {
+    local cutoff=$(($(date -u +%s) - MIN_AGE_DAYS * 86400))
+    date -u -d "@${cutoff}" +%FT%TZ 2>/dev/null || date -u -r "$cutoff" +%FT%TZ
 }
 
 main "$@"

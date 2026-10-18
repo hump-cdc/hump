@@ -112,6 +112,16 @@ tasks:
       # The workflow fails on .ci/failed markers instead: a failed task would abort the
       # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
       allowFailure: true
+  ci-dep-age:
+    description: 'CI: 7-day minimum release age of every Go module and of govulncheck'
+    script: 'bash ./scripts/ci.sh dep-age'
+    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'scripts/ci.sh']
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true
   ci-test:
     description: 'CI: tests with -race, coverage and JUnit in .ci/hump'
     script: 'bash ./scripts/ci.sh test'

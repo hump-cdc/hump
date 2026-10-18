@@ -70,9 +70,12 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 - A CI-only task is named `ci-<check>` and has `runInCI: 'only'`, `cache: false` and
   `allowFailure: true`, so one failure does not cancel the other checks. Tasks that CI runs
   without `allowFailure` (`hump:tidy`, `hump-tower:openapi`, the builds) fail `moon ci` directly.
+  `hump:ci-dep-age` is a CI-only task: it fails on a Go module published less than 7 days ago,
+  matching the Dependabot cooldown (details in the root `AGENTS.md`, "Dependencies").
 - Drift checks are workflow steps after `moon ci`: they diff what the tasks regenerated (tidy
   `go.mod`/`go.sum`, the OpenAPI spec, the embedded UI build, `bun.lock`) and fail with an
   `::error` annotation that names the command to run locally.
 - Dependabot directories: `gomod` in `/apps/hump` and `/apps/hump/tools/actionlint`, `bun` in
   `/` (the root `bun.lock` covers every workspace), `docker-compose` in `/dev`,
-  `github-actions` in `/`. A new Go module under `packages/` needs its own `gomod` entry.
+  `github-actions` in `/`. A new Go module under `packages/` needs its own `gomod` entry and
+  must be added to the dep-age check in `apps/hump/scripts/ci.sh`.

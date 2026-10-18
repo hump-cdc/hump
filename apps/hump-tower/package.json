@@ -71,6 +71,6 @@
     "knip": "6.41.0",
     "storybook": "10.6.1",
     "storybook-react-rsbuild": "3.6.1",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }

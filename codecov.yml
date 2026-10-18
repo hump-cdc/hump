@@ -35,8 +35,77 @@ flag_management:
         - name: go
         - name: webui
 
+# Components split the totals by module, so the PR comment shows each module's coverage and its
+# change against base, and a drop is easy to trace. They are display-only: 'statuses: []' adds
+# no checks. To gate a module, give its entry 'statuses' (same shape as in flag_management).
+# Paths are prefixes of repository paths ('!' excludes); within a flag they must not overlap,
+# and a new top-level code directory needs a component, or it is left out of the table.
+component_management:
+    default_rules:
+        statuses: []
+    individual_components:
+        # Go (flag 'go').
+        - component_id: go_cmd
+          name: "Go · cmd"
+          flag_regexes: ["^go$"]
+          paths: ["cmd/"]
+        - component_id: go_config
+          name: "Go · config"
+          flag_regexes: ["^go$"]
+          paths: ["config/"]
+        - component_id: go_domain_port
+          name: "Go · domain & ports"
+          flag_regexes: ["^go$"]
+          paths: ["internal/domain/", "internal/port/"]
+        - component_id: go_adapter_postgres
+          name: "Go · adapters/postgres"
+          flag_regexes: ["^go$"]
+          paths: ["internal/adapter/postgres/"]
+        - component_id: go_adapter_sink
+          name: "Go · adapters/sink"
+          flag_regexes: ["^go$"]
+          paths: ["internal/adapter/sink/"]
+        - component_id: go_adapter_other
+          name: "Go · adapters (other)"
+          flag_regexes: ["^go$"]
+          paths: ["internal/adapter/", "!internal/adapter/postgres/", "!internal/adapter/sink/"]
+        - component_id: go_application
+          name: "Go · application"
+          flag_regexes: ["^go$"]
+          paths: ["internal/application/"]
+        - component_id: go_controller
+          name: "Go · controller"
+          flag_regexes: ["^go$"]
+          paths: ["internal/controller/"]
+        - component_id: go_pkg
+          name: "Go · pkg"
+          flag_regexes: ["^go$"]
+          paths: ["pkg/"]
+        # Web UI (flag 'webui').
+        - component_id: webui_shared_ui
+          name: "Web · shared/ui"
+          flag_regexes: ["^webui$"]
+          paths: ["web/webui/src/shared/ui/"]
+        - component_id: webui_shared
+          name: "Web · shared (other)"
+          flag_regexes: ["^webui$"]
+          paths: ["web/webui/src/shared/", "!web/webui/src/shared/ui/"]
+        - component_id: webui_entities
+          name: "Web · entities"
+          flag_regexes: ["^webui$"]
+          paths: ["web/webui/src/entities/"]
+        - component_id: webui_app
+          name: "Web · app, pages, widgets & features"
+          flag_regexes: ["^webui$"]
+          paths:
+              - "web/webui/app/"
+              - "web/webui/src/app/"
+              - "web/webui/src/pages/"
+              - "web/webui/src/widgets/"
+              - "web/webui/src/features/"
+
 comment:
-    layout: "diff, flags, files"
+    layout: "diff, flags, components, files"
     behavior: default
     require_changes: false
 

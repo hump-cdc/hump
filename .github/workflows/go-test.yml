@@ -81,8 +81,8 @@ jobs:
                   grep -v '^hump/cmd/openapi/' "${RUNNER_TEMP}/cover.out" >"${RUNNER_TEMP}/coverage.out"
 
             # Counts every block of the profile once (-coverpkg repeats it per test binary), so
-            # the total is covered / total statements like Codecov's, not an average. It can be a
-            # tenth above 'go tool cover -func', which skips closures in package-level variables.
+            # the total is covered / total statements, not an average of percentages. It can differ
+            # by a tenth from 'go tool cover -func', which skips closures in package-level variables.
             # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
             - name: Summarize code coverage by package and file in the job summary
               uses: ./.github/actions/coverage-summary # zizmor: ignore[self-repository]

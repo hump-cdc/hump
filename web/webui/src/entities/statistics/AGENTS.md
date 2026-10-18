@@ -56,8 +56,8 @@ const { data } = useMetrics(chartStep)         // entities/metrics/@x/statistics
   in `entities/config/state` is hand-written and checked with `satisfies` against the generated
   request enum that `MetricsDuration` comes from.
 - Sibling entities are reachable only through their `@x/statistics.ts` files. Each of those
-  exposes the minimum: `useMetrics` and `MetricsPoint` from `entities/metrics`,
-  `useLiveControlsChartStep` and `ChartStep` from `entities/config/state`, `useConfig` from
+  exposes the minimum: `useMetrics` from `entities/metrics`,
+  `useLiveControlsChartStep` from `entities/config/state`, `useConfig` from
   `entities/config/config`. Need more — widen the `@x` file, do not import the entity's
   barrel or its files.
 

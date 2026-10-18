@@ -1,4 +1,4 @@
-name: "Web UI: test"
+name: "Web: test"
 
 on:
     pull_request:

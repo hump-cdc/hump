@@ -17,7 +17,7 @@ Consumers: `src/app/providers.tsx` mounts `ThemeProvider`; `widgets/sidebar`
 | `theme-script.ts` | `themeInitScript`: the pre-paint script, as a string |
 | `theme-provider.tsx` | `ThemeProvider`, `ThemeContext`, reading/persisting/applying the theme |
 | `use-theme.ts` | `useTheme`: the context, or a throw outside a provider |
-| `index.ts` | `ThemeProvider`, `useTheme`, and the types `Theme`, `ResolvedTheme`, `ThemeContextValue` |
+| `index.ts` | `ThemeProvider`, `useTheme`, and the type `Theme` |
 
 The constants, `ThemeContext` and `themeInitScript` are not part of the public contract.
 

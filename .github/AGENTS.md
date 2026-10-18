@@ -28,7 +28,7 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 - Every workflow, job and step has an explicit `name:`. Don't use the tool name or a generic verb
   on its own.
 - Workflow: `Area: action`, a short area, a colon and a short lowercase action: `Go: lint`,
-  `Web UI: test`, `Workflows: security report`; not `GitHub Actions workflows lint`.
+  `Web: test`, `Workflows: security report`; not `GitHub Actions workflows lint`.
 - Job: a short action without the area, because GitHub shows checks as `Workflow / Job`
   (`Go: lint / Lint`): `Lint`, `Build and test`, `Security`; not `zizmor`.
 - Step: the full action and its subject: `Lint workflow syntax, expressions and shell scripts`,

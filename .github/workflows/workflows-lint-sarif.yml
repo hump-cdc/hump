@@ -1,4 +1,4 @@
-name: GitHub Actions workflows security report
+name: "Workflows: security report"
 
 on:
     push:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
     zizmor:
-        name: Report GitHub Actions workflow security issues to code scanning
+        name: Security report
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout

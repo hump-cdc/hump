@@ -1,4 +1,4 @@
-name: Web UI code lint
+name: "Web UI: lint"
 
 on:
     pull_request:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
     biome:
-        name: Lint web UI code
+        name: Lint
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout

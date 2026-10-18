@@ -25,14 +25,18 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 
 ## Naming
 
-- Every workflow, job and step has an explicit `name:` that states the action and its subject, so
-  a reader knows what it does and on what without opening the file. Don't name the tool or use a
-  generic verb on its own:
-  - workflow `GitHub Actions workflows lint`, not `Workflows lint`;
-  - job `Scan GitHub Actions workflows for security issues`, not `zizmor`;
-  - step `Lint workflow syntax, expressions and shell scripts`, not `Run actionlint`.
+- Every workflow, job and step has an explicit `name:`. Don't use the tool name or a generic verb
+  on its own.
+- Workflow: `Area: action`, a short area, a colon and a short lowercase action: `Go: lint`,
+  `Web UI: test`, `Workflows: security report`; not `GitHub Actions workflows lint`.
+- Job: a short action without the area, because GitHub shows checks as `Workflow / Job`
+  (`Go: lint / Lint`): `Lint`, `Build and test`, `Security`; not `zizmor`.
+- Step: the full action and its subject: `Lint workflow syntax, expressions and shell scripts`,
+  not `Run actionlint`.
 - Job names are the status-check names that the branch ruleset on `main` lists as required
   checks. Renaming a job requires updating the ruleset.
+- The ruleset matches a required check by job name alone. This project deliberately has two jobs
+  named `Lint` (the Go and Web UI lint workflows).
 
 ## Failure messages
 

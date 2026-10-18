@@ -46,7 +46,8 @@ fixes:
     - "app/::web/webui/app/"
 
 # Keep in sync with the profile filter in .github/workflows/go-test.yml and the
-# coveragePathIgnorePatterns in web/webui/bunfig.toml.
+# coveragePathIgnorePatterns in web/webui/bunfig.toml (and with the 'excluded' input of the job
+# summary step in each test workflow).
 ignore:
     # Writes the OpenAPI spec at build time; not part of the shipped binary.
     - "cmd/openapi"

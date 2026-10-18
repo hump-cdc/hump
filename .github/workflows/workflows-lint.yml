@@ -1,4 +1,4 @@
-name: GitHub Actions workflows lint
+name: "Workflows: lint"
 
 on:
     pull_request:
@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
     actionlint:
-        name: Lint GitHub Actions workflow syntax
+        name: Syntax
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout
@@ -31,7 +31,7 @@ jobs:
               run: go tool -modfile=tools/actionlint/go.mod actionlint
 
     zizmor:
-        name: Scan GitHub Actions workflows for security issues
+        name: Security
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout

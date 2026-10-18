@@ -1,4 +1,4 @@
-name: Go code lint
+name: "Go: lint"
 
 on:
     pull_request:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
     golangci-lint:
-        name: Lint Go code
+        name: Lint
         runs-on: ubuntu-latest
         permissions:
             contents: read # checkout

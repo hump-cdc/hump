@@ -1,4 +1,4 @@
-name: Go build and unit tests
+name: "Go: test"
 
 on:
     pull_request:
@@ -20,7 +20,7 @@ defaults:
 
 jobs:
     test:
-        name: Build Go code and run unit tests with coverage
+        name: Build and test
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         permissions:
@@ -74,17 +74,24 @@ jobs:
 
             # cmd/openapi only writes the OpenAPI spec at build time, so it is dropped from the
             # profile; codecov.yml ignores the same path. The filtered profile feeds both the job
-            # summary and Codecov, so the two report the same total.
-            - name: Summarize total code coverage in the job summary
+            # summary and Codecov, so the two count the same code.
+            - name: Remove cmd/openapi from the coverage profile
               run: |
                   set -euo pipefail
                   grep -v '^hump/cmd/openapi/' "${RUNNER_TEMP}/cover.out" >"${RUNNER_TEMP}/coverage.out"
-                  total="$(go tool cover -func="${RUNNER_TEMP}/coverage.out" | awk '/^total:/ { print $NF }')"
-                  {
-                      echo "## Go unit test coverage"
-                      echo
-                      echo "Total statement coverage (excluding \`cmd/openapi\`): **${total}**"
-                  } >>"$GITHUB_STEP_SUMMARY"
+
+            # Counts every block of the profile once (-coverpkg repeats it per test binary), so
+            # the total is covered / total statements like Codecov's, not an average. It can be a
+            # tenth above 'go tool cover -func', which skips closures in package-level variables.
+            # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Summarize code coverage by package and file in the job summary
+              uses: ./.github/actions/coverage-summary # zizmor: ignore[self-repository]
+              with:
+                  format: go
+                  coverage-file: ${{ runner.temp }}/coverage.out
+                  title: Go unit test coverage
+                  strip-prefix: hump/
+                  excluded: cmd/openapi
 
             # Fork PRs and Dependabot PRs get no CODECOV_TOKEN: the upload then goes tokenless and
             # Codecov may reject it, so it fails the job only when the token is present.

@@ -1,0 +1,27 @@
+# https://docs.codecov.com/docs/codecov-yaml
+# Coverage is uploaded by .github/workflows/go-test.yml.
+coverage:
+    precision: 1
+    round: down
+    status:
+        # Fails a PR that lowers total coverage by more than 1 point against its base commit.
+        # The threshold absorbs noise from timing-dependent code paths.
+        project:
+            default:
+                target: auto
+                threshold: 1%
+        # Lines added or changed in a PR must be at least 80% covered, a bit above the current
+        # total, so new code raises the average instead of following it down.
+        patch:
+            default:
+                target: 80%
+
+comment:
+    layout: "diff, flags, files"
+    behavior: default
+    require_changes: false
+
+# Keep in sync with the profile filter in .github/workflows/go-test.yml.
+ignore:
+    # Writes the OpenAPI spec at build time; not part of the shipped binary.
+    - "cmd/openapi"

@@ -3,8 +3,8 @@
 This guide covers proposing a change, running Hump locally and getting a pull request merged.
 
 - Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
-- Report vulnerabilities privately through the [advisory form](https://github.com/sergeyzwezdin/hump/security/advisories/new), never in an issue or pull request. See [SECURITY.md](SECURITY.md).
-- Ask questions in [Discussions](https://github.com/sergeyzwezdin/hump/discussions).
+- Report vulnerabilities privately through the [advisory form](https://github.com/hump-cdc/hump/security/advisories/new), never in an issue or pull request. See [SECURITY.md](SECURITY.md).
+- Ask questions in [Discussions](https://github.com/hump-cdc/hump/discussions).
 - User documentation lives at [hump.dev/docs](https://hump.dev/docs/getting-started).
 
 ## Open an issue first

@@ -75,7 +75,7 @@ export const AppSidebar: FC = () => {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton tooltip="Github" asChild>
-                            <a href="https://github.com/sergeyzwezdin/hump" target="_blank" rel="noreferrer">
+                            <a href="https://github.com/hump-cdc/hump" target="_blank" rel="noreferrer">
                                 <Github />
                                 <span>
                                     Github

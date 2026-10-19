@@ -30,9 +30,9 @@ For any user-facing change, say in the Testing section of the pull request what 
 
 ## Reporting accessibility issues
 
-Open a [bug report](https://github.com/sergeyzwezdin/hump/issues/new?template=bug_report.yml) and select **Accessibility** under **Affected area**. For **Delivery impact**, choose **Not applicable**. You can leave **PostgreSQL version** empty.
+Open a [bug report](https://github.com/hump-cdc/hump/issues/new?template=bug_report.yml) and select **Accessibility** under **Affected area**. For **Delivery impact**, choose **Not applicable**. You can leave **PostgreSQL version** empty.
 
-If you have a question, or you aren't sure it's a bug, ask in [GitHub Discussions](https://github.com/sergeyzwezdin/hump/discussions).
+If you have a question, or you aren't sure it's a bug, ask in [GitHub Discussions](https://github.com/hump-cdc/hump/discussions).
 
 A useful report says:
 
@@ -65,18 +65,18 @@ The web console has been tested in:
 - desktop: the latest Chrome, Edge, Safari and Firefox;
 - mobile: iOS and Android.
 
-Keyboard-only use, 200% zoom and screen readers (VoiceOver, NVDA) haven't been evaluated yet ([#17](https://github.com/sergeyzwezdin/hump/issues/17)). Combinations not listed here may work, but nobody has checked.
+Keyboard-only use, 200% zoom and screen readers (VoiceOver, NVDA) haven't been evaluated yet ([#17](https://github.com/hump-cdc/hump/issues/17)). Combinations not listed here may work, but nobody has checked.
 
 The CLI, logs and metrics are plain text output.
 
 ## Known limitations
 
-- Charts on the Statistics page have no text alternative. If you can't see the charts, you can't read the numbers in them. Workaround: the same counters are available as Prometheus metrics at `/metrics` on the telemetry port (`--telemetry-port`). [#15](https://github.com/sergeyzwezdin/hump/issues/15)
-- Every console page has the same browser title, "hump", so tabs and screen reader page announcements don't tell the pages apart. [#16](https://github.com/sergeyzwezdin/hump/issues/16)
-- Keyboard-only use, 200% zoom and screen readers haven't been evaluated. Barriers there are likely, but nobody has found and written them down yet. [#17](https://github.com/sergeyzwezdin/hump/issues/17)
+- Charts on the Statistics page have no text alternative. If you can't see the charts, you can't read the numbers in them. Workaround: the same counters are available as Prometheus metrics at `/metrics` on the telemetry port (`--telemetry-port`). [#15](https://github.com/hump-cdc/hump/issues/15)
+- Every console page has the same browser title, "hump", so tabs and screen reader page announcements don't tell the pages apart. [#16](https://github.com/hump-cdc/hump/issues/16)
+- Keyboard-only use, 200% zoom and screen readers haven't been evaluated. Barriers there are likely, but nobody has found and written them down yet. [#17](https://github.com/hump-cdc/hump/issues/17)
 
 ## Feedback and improvements
 
-- To suggest a change to how the project handles accessibility, use the [feature request form](https://github.com/sergeyzwezdin/hump/issues/new?template=feature_request.yml).
+- To suggest a change to how the project handles accessibility, use the [feature request form](https://github.com/hump-cdc/hump/issues/new?template=feature_request.yml).
 - To fix something in this document, open a pull request that edits `ACCESSIBILITY.md`.
 - If you hit a barrier now, follow [Reporting accessibility issues](#reporting-accessibility-issues).

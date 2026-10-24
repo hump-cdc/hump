@@ -112,7 +112,7 @@ The Go service is the `hump` project, the web UI is `hump-tower`, and repo-wide 
 | `moon run hump:lint` | Runs golangci-lint with the config in [apps/hump/.golangci.yml](apps/hump/.golangci.yml) |
 | `moon run hump:lint-fix` | Runs golangci-lint and applies the fixes it can make automatically |
 | `moon run hump:fmt` | Formats Go code with gofmt and goimports (`golangci-lint fmt`) |
-| `moon run hump:tidy` | Runs `go mod tidy` for `apps/hump` and `apps/hump/tools/actionlint` |
+| `moon run hump:tidy` | Runs `go mod tidy` for `apps/hump`, `apps/hump/tools/actionlint` and `apps/hump/tools/govulncheck` |
 | `moon run hump-tower:dev` | UI dev server on port 3000, calling the API at `http://localhost:3200`. Keep `moon run hump:run` going alongside it |
 | `moon run hump-tower:storybook` | Storybook on port 6006 |
 | `moon run hump-tower:build` | Builds the UI into `apps/hump/internal/controller/hump_tower` |
@@ -260,7 +260,13 @@ Some generated files are committed. CI fails when the OpenAPI spec or the embedd
 
 CI ([.github/workflows/check.yml](.github/workflows/check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the OpenAPI spec or the embedded UI bundle is stale, or when `bun.lock` is out of sync with the `package.json` files.
 
-[.github/workflows/security-scan.yml](.github/workflows/security-scan.yml) runs on every push to `main`, every Monday and on manual dispatch. It scans the workflows with zizmor and the Go module `apps/hump` with govulncheck, and uploads both reports to the repository's **Security** tab. The weekly govulncheck run also catches vulnerabilities published after the last change to `apps/hump`.
+[.github/workflows/security-scan.yml](.github/workflows/security-scan.yml) runs on every push to `main`, every Monday and on manual dispatch. It scans the workflows with zizmor and the Go module `apps/hump` with govulncheck, and uploads both reports to the repository's **Security** tab. It also runs `bun audit` on every npm package in the root `bun.lock`, direct and transitive, and checks that each one comes from registry.npmjs.org; those findings appear in the job log and annotations, not in the Security tab. The weekly runs also catch vulnerabilities published after the last change to `apps/hump` or `bun.lock`.
+
+[.github/workflows/scorecard.yml](.github/workflows/scorecard.yml) runs the [OpenSSF Scorecard](https://scorecard.dev/) checks on every push to `main`, every Thursday and on manual dispatch. It uploads the findings to the **Security** tab and publishes the score shown by the badge in the README.
+
+Every job in every workflow starts with [Harden-Runner](https://github.com/step-security/harden-runner) in audit mode, which records the outbound network connections of the job. Once the audit runs show which endpoints each job needs, it switches to block mode, and a connection to any other endpoint fails the job.
+
+Dependabot proposes a new dependency version 7 days after its release, and a new major version of a Go module or npm package after 30 days. Minor and patch updates of each Go module and of the Bun workspace come in one grouped pull request, every major update in its own. All GitHub Actions updates come in one pull request.
 
 ## Commits and pull requests
 

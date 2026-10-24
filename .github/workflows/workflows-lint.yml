@@ -17,6 +17,13 @@ jobs:
         permissions:
             contents: read # checkout
         steps:
+            # Audit mode only logs outbound connections; the policy switches to block once the
+            # endpoints this job needs are collected from the audit runs.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:

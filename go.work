@@ -1,4 +1,5 @@
-go 1.26.9
+go 1.26.10
 
-// apps/hump/tools/actionlint stays out: its dependencies conflict with golangci-lint's.
+// The tool modules apps/hump/tools/actionlint and apps/hump/tools/govulncheck stay out: their
+// dependencies would join hump's build list (actionlint's conflict with golangci-lint's).
 use ./apps/hump

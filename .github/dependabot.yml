@@ -1,4 +1,7 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Cooldown: a version is proposed 7 days after its release (the minimum release age in the root
+# AGENTS.md), a new major version after 30 days. Minor and patch updates of an ecosystem come in
+# one grouped PR per directory; major updates get a PR each.
 version: 2
 updates:
     - package-ecosystem: "gomod"
@@ -7,6 +10,10 @@ updates:
           interval: "weekly"
       cooldown:
           default-days: 7
+          semver-major-days: 30
+      groups:
+          minor-patch:
+              update-types: ["minor", "patch"]
 
     - package-ecosystem: "gomod"
       directory: "/apps/hump/tools/actionlint"
@@ -14,6 +21,21 @@ updates:
           interval: "weekly"
       cooldown:
           default-days: 7
+          semver-major-days: 30
+      groups:
+          minor-patch:
+              update-types: ["minor", "patch"]
+
+    - package-ecosystem: "gomod"
+      directory: "/apps/hump/tools/govulncheck"
+      schedule:
+          interval: "weekly"
+      cooldown:
+          default-days: 7
+          semver-major-days: 30
+      groups:
+          minor-patch:
+              update-types: ["minor", "patch"]
 
     # bun.lock at the root covers every workspace in apps/* and packages/*.
     - package-ecosystem: "bun"
@@ -22,6 +44,10 @@ updates:
           interval: "weekly"
       cooldown:
           default-days: 7
+          semver-major-days: 30
+      groups:
+          minor-patch:
+              update-types: ["minor", "patch"]
 
     - package-ecosystem: "docker-compose"
       directory: "/dev"
@@ -30,9 +56,14 @@ updates:
       cooldown:
           default-days: 7
 
+    # semver-major-days is not supported for GitHub Actions, so every action update waits 7 days
+    # and all of them come in one PR.
     - package-ecosystem: "github-actions"
       directory: "/"
       schedule:
           interval: "weekly"
       cooldown:
           default-days: 7
+      groups:
+          github-actions:
+              patterns: ["*"]

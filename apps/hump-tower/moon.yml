@@ -63,6 +63,21 @@ tasks:
   test:
     description: 'Unit tests (bun test)'
     command: 'bun test'
+  test-file:
+    description: 'Run one test file, passed as an arg: moon run hump-tower:test-file -- <path>'
+    # command, not script: moon appends the passthrough args only to a command. A path that
+    # starts with / or ./ runs that file; a bare name would be a substring filter.
+    command: 'bun test'
+    preset: 'utility'
+  test-cover:
+    description: 'Run all tests with a coverage table in the terminal'
+    command: 'bun test --coverage --coverage-reporter=text'
+    preset: 'utility'
+  test-file-cover:
+    description: 'Run one test file with a coverage table: moon run hump-tower:test-file-cover -- <path>'
+    # Covers whatever the test imports, not only the file under test.
+    command: 'bun test --coverage --coverage-reporter=text'
+    preset: 'utility'
   check:
     description: 'Biome: lint, format, import order'
     command: 'bun run check'

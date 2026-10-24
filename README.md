@@ -7,7 +7,7 @@
 <p>Your database, as an event stream.</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/sergeyzwezdin/hump)](https://github.com/sergeyzwezdin/hump/releases)
+[![GitHub release](https://img.shields.io/github/v/release/hump-cdc/hump)](https://github.com/hump-cdc/hump/releases)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791)
 
 [Website](https://hump.dev) · [Documentation](https://hump.dev/docs/getting-started)
@@ -43,7 +43,7 @@ It uses the built-in `pgoutput` plugin, so PostgreSQL needs no extensions. Your 
 
    `max_replication_slots` and `max_wal_senders` must be at least 1; the defaults are fine. The user Hump connects as needs the `REPLICATION` attribute or superuser rights. Hump creates the publication and the replication slot itself.
 
-2. Install. Download the binary for your platform from [GitHub Releases](https://github.com/sergeyzwezdin/hump/releases).
+2. Install. Download the binary for your platform from [GitHub Releases](https://github.com/hump-cdc/hump/releases).
 
 3. Configure. Create `hump.yaml`:
 

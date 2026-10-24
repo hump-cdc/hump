@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. For questions, use [Discussions](https://github.com/sergeyzwezdin/hump/discussions). Report vulnerabilities through the [advisory form](https://github.com/sergeyzwezdin/hump/security/advisories/new), not here.
+        Thanks for the report. For questions, use [Discussions](https://github.com/hump-cdc/hump/discussions). Report vulnerabilities through the [advisory form](https://github.com/hump-cdc/hump/security/advisories/new), not here.
 
   - type: checkboxes
     id: checks

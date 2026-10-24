@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through GitHub: open the **Security** tab and click **Report a vulnerability**, or go straight to the [advisory form](https://github.com/sergeyzwezdin/hump/security/advisories/new). Don't open a public issue, pull request or discussion for a vulnerability.
+Report vulnerabilities privately through GitHub: open the **Security** tab and click **Report a vulnerability**, or go straight to the [advisory form](https://github.com/hump-cdc/hump/security/advisories/new). Don't open a public issue, pull request or discussion for a vulnerability.
 
 A useful report includes:
 

@@ -10,12 +10,13 @@ in the root `AGENTS.md`.
 |---|---|---|
 | `check.yml` | `Repository: check` | Every lint, build and test task through `moon ci` |
 | `workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
-| `security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports |
+| `security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
 | `scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
 | `scan-image.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
 | `docker-scan.yml` | `Docker: scan` | Calls `scan-image.yml` on every PR and push to `main` |
-| `publish.yml` | `Docker: publish` | On a `v*` release: calls `scan-image.yml`, then `publish-image.yml` |
+| `publish.yml` | `Docker: publish` | On a `v*` release: calls `scan-image.yml`, `publish-image.yml`, then `scan-published-image.yml` on the pushed digest |
 | `publish-image.yml` | `Docker: publish image` | Reusable: pushes, signs and attests `docker.io/humpcdc/hump` |
+| `scan-published-image.yml` | `Docker: scan published image` | Reusable: scans the pushed image by digest (or the latest release image) with Trivy |
 
 Don't break these:
 
@@ -38,8 +39,9 @@ Don't break these:
   Trivy exceptions go to `.trivyignore` in the repo root (Trivy picks it up on its own; create it
   when needed), each with a reason and a review date.
 - Dependabot doesn't bump these inputs; raise them by hand to releases at least 7 days old:
-  zizmor `version` (only versions the pinned `zizmorcore/zizmor-action` supports),
-  `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`.
+  `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`,
+  `codecov/codecov-action` `version`. zizmor-action has no `version` input set: its default
+  `latest` is the zizmor version the action locks with hashes, so it follows the action SHA.
 - Drift checks are steps after `moon ci`: they diff regenerated files and fail with an `::error`
   naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
   `hump-tower:openapi`, the builds) fail `moon ci` directly.
@@ -47,7 +49,7 @@ Don't break these:
   `workflows-lint.yml` (PRs) and `security-scan.yml` (`main`) both upload zizmor SARIF with
   category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
   or high alerts. A fork PR can't upload, so there `workflows-lint.yml` runs zizmor without SARIF
-  and fails on findings.
+  and fails on findings; its required `Security` check blocks the merge.
 - A new `gomod` entry in `dependabot.yml` copies the cooldown and group of the existing ones.
 
 ## Pinning actions
@@ -85,7 +87,8 @@ Don't break these:
   the full action and subject (`Lint workflow syntax, expressions and shell scripts`, not `Run
   actionlint`).
 - Job names are the required checks of the `main` ruleset; renaming a job means updating it. A
-  reusable call shows as `caller job / called job`; `Docker image / Build and scan` is required.
+  reusable call shows as `caller job / called job`. Required: `Check`, `Docker image / Build and
+  scan` and `Security`; the ruleset has no bypass actors.
 - The ruleset matches checks by job name alone, so two jobs share a name only if they should
   count as one check.
 

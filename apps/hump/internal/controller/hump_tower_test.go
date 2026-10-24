@@ -21,6 +21,7 @@ import (
 	"hump/internal/domain"
 	operationscollectorport "hump/internal/port/operations_collector"
 	"hump/pkg/app/options"
+	"hump/pkg/middleware"
 
 	"hump/config"
 
@@ -169,6 +170,18 @@ func TestSnapshotEstimateRouteRejectsATablelessBody(t *testing.T) {
 
 // newTestOperationsCollector returns a connected collector that is closed when
 // the test ends.
+func TestEmbeddedShellPolicyAllowsTheThemeScript(t *testing.T) {
+	handler := middleware.Static(humpTowerFS, "hump_tower")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if strings.Count(csp, "'sha256-") != 1 {
+		t.Fatalf("Content-Security-Policy = %q, want exactly one script hash: the inline theme script", csp)
+	}
+}
+
 func newTestOperationsCollector(t *testing.T) *operationscollectoradapter.Collector {
 	t.Helper()
 

@@ -9,6 +9,10 @@ name: "Docker: publish image"
 # caller passes no secrets.
 on:
     workflow_call:
+        outputs:
+            digest:
+                description: Digest of the pushed multi-arch image index (sha256:...), for the rescan in publish.yml
+                value: ${{ jobs.publish.outputs.digest }}
 
 permissions: {}
 
@@ -27,6 +31,8 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 45
         environment: production
+        outputs:
+            digest: ${{ steps.build.outputs.digest }}
         permissions:
             contents: read # checkout
             id-token: write # keyless cosign signature and attestations (Sigstore OIDC)

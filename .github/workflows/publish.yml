@@ -1,7 +1,8 @@
 name: "Docker: publish"
 
-# Runs only for a published GitHub release. Both jobs also require a v* tag: the production
-# environment accepts only v* tags, and the image tags come from the release tag.
+# Runs only for a published GitHub release: Scan -> Publish -> Rescan. Every job also requires a
+# v* tag: the production environment accepts only v* tags, and the image tags come from the
+# release tag.
 on:
     release:
         types:
@@ -15,7 +16,7 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: false
 
-# Both jobs call reusable workflows of this repository at the release tag; the self-repository
+# Every job calls a reusable workflow of this repository at the release tag; the self-repository
 # form ($/...) is not supported by actionlint v1.7.12 yet. A caller's permissions are the ceiling
 # for the called workflow, so each job grants what its called job needs.
 jobs:
@@ -41,3 +42,17 @@ jobs:
             contents: read # checkout
             id-token: write # keyless cosign signature and attestations (Sigstore OIDC)
             attestations: write # store the attestations in the GitHub attestations API
+
+    # Scans the pushed image from Docker Hub by the digest Publish outputs, so the Security tab
+    # shows what users actually pull. security-scan.yml rescans the latest release weekly with
+    # the same workflow. No environment and no secrets.
+    rescan:
+        name: Rescan
+        needs: publish
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: ./.github/workflows/scan-published-image.yml # zizmor: ignore[self-repository]
+        with:
+            digest: ${{ needs.publish.outputs.digest }}
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning

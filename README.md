@@ -10,6 +10,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/hump-cdc/hump)](https://github.com/hump-cdc/hump/releases)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/hump-cdc/hump/badge)](https://scorecard.dev/viewer/?uri=github.com/hump-cdc/hump)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](#verifying-the-image)
 
 [Website](https://hump.dev) · [Documentation](https://hump.dev/docs/getting-started)
 
@@ -78,7 +79,7 @@ docker buildx imagetools inspect docker.io/humpcdc/hump:<version>
 
 ### Verifying the image
 
-Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/publish-image.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well.
+Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/publish-image.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week.
 
 Check the signature:
 

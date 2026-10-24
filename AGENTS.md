@@ -96,9 +96,13 @@ versions everywhere.
   A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, an
   `apps/*/scripts` (or `packages/*/scripts`) script or `.github`; CI fails on an unused one in
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.
-- Toolchain: moon in `.prototools`; proto, Go and Bun in `.moon/toolchains.yml`. Dependabot does
-  not update these files. It does bump the base images in `apps/hump/Dockerfile`, whose bun and Go
-  tags must match `.moon/toolchains.yml`, so change them together.
+- Toolchain: moon and Go in `.prototools`; proto, Go and Bun in `.moon/toolchains.yml`. Go is
+  pinned in `.prototools` because `proto install` otherwise reads the `go` directive of `go.mod` /
+  `go.work` as a `^` range and installs a newer Go. Dependabot does not update these files. It does
+  bump the base images in `apps/hump/Dockerfile`, whose bun tag must match `.moon/toolchains.yml`.
+  The Go version must match in `.moon/toolchains.yml`, `.prototools`, the `golang` tag in
+  `apps/hump/Dockerfile` and the `go` directive of `apps/hump/go.mod` and `go.work`; change them
+  together.
   `.prototools` sets `auto-install`; proto applies it only after `proto trust .prototools`.
 
 ## Before finishing a task

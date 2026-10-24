@@ -92,6 +92,8 @@ tasks:
   ci-biome:
     description: 'CI: biome with a SARIF report in .ci/hump-tower'
     script: 'bash ./scripts/ci.sh biome'
+    # biome sees the freshly generated API client.
+    deps: ['build']
     options:
       cache: false
       runInCI: 'only'
@@ -101,6 +103,8 @@ tasks:
   ci-test:
     description: 'CI: tests with lcov coverage and JUnit in .ci/hump-tower'
     script: 'bash ./scripts/ci.sh test'
+    # The tests see the freshly generated API client.
+    deps: ['build']
     options:
       cache: false
       runInCI: 'only'
@@ -110,6 +114,8 @@ tasks:
   ci-typecheck:
     description: 'CI: TypeScript type check with a fix hint in .ci/annotations'
     script: 'bash ./scripts/ci.sh typecheck'
+    # tsc sees the freshly generated API client.
+    deps: ['build']
     options:
       cache: false
       runInCI: 'only'

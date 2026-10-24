@@ -1,4 +1,4 @@
-name: "Workflows: security report"
+name: "Repository: security scan"
 
 on:
     push:
@@ -14,10 +14,17 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: false
 
+defaults:
+    run:
+        shell: bash
+
 jobs:
+    # zizmor-action uploads with the fixed category 'zizmor', which does not depend on the workflow
+    # or job name. The code_scanning rule of the main ruleset matches the tool name 'zizmor'.
     zizmor:
         name: Security report
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
         permissions:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
@@ -32,3 +39,87 @@ jobs:
               with:
                   advanced-security: true
                   version: "1.31.1"
+
+    # check.yml runs the same scan only when a PR or push touches apps/hump; this job also catches
+    # vulnerabilities published since the last change to the module.
+    govulncheck:
+        name: Go vulnerability report
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # Same inputs as in check.yml: proto and moon at the pinned versions, Go from
+            # .moon/toolchains.yml through 'moon setup'.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # hump:ci-vulncheck writes .ci/hump/govulncheck.sarif and, when govulncheck reports
+            # called vulnerabilities (exit 3) or fails, a fix hint in .ci/annotations and the marker
+            # .ci/failed/hump-vulncheck. The task allows failure, so 'moon run' exits 0 in both
+            # cases; the last step fails the job, after the report is uploaded. moon runs a
+            # runInCI: 'only' task only when CI=true; the runner sets it, this makes it explicit.
+            - name: Scan apps/hump for known Go vulnerabilities
+              env:
+                  CI: "true"
+              run: |
+                  set -euo pipefail
+                  if ! moon run hump:ci-vulncheck; then
+                      echo "::error title=Vulnerability scan did not run::moon could not run hump:ci-vulncheck; see this step's log. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+
+            # govulncheck writes paths relative to the module (go.mod, internal/...) with the base
+            # %SRCROOT%; code scanning resolves them from the repository root, so they get the
+            # apps/hump/ prefix. %GOROOT% paths (standard library frames) are left as they are.
+            - name: Make the paths in the Go vulnerability report repository-relative
+              if: ${{ !cancelled() && hashFiles('.ci/hump/govulncheck.sarif') != '' }}
+              env:
+                  SARIF_FILE: .ci/hump/govulncheck.sarif
+              run: |
+                  set -euo pipefail
+                  tmp="${RUNNER_TEMP}/govulncheck.sarif"
+                  if ! jq '(.. | objects | select(.uriBaseId? == "%SRCROOT%" and (.uri | type) == "string" and (.uri | startswith("apps/hump/") | not)) | .uri) |= "apps/hump/" + .' "$SARIF_FILE" >"$tmp"; then
+                      echo "::error file=apps/hump/scripts/ci.sh,title=Go vulnerability report is not valid JSON::govulncheck wrote an invalid ${SARIF_FILE}; see the log of the scan step. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+                  mv "$tmp" "$SARIF_FILE"
+
+            # Runs also when the scan found vulnerabilities, so the Security tab shows them.
+            - name: Upload Go vulnerability findings to the Security tab
+              if: ${{ !cancelled() && hashFiles('.ci/hump/govulncheck.sarif') != '' }}
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: .ci/hump/govulncheck.sarif
+                  category: govulncheck
+
+            - name: Report the Go vulnerability scan findings as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
+              run: cat .ci/annotations/*.txt
+
+            # ci.sh leaves no marker when it stops before govulncheck runs (e.g. 'go install' of
+            # govulncheck fails), so a missing report fails the job too.
+            - name: Check that the Go vulnerability scan passed
+              if: ${{ !cancelled() }}
+              env:
+                  SARIF_FILE: .ci/hump/govulncheck.sarif
+              run: |
+                  set -euo pipefail
+                  if [[ -f .ci/failed/hump-vulncheck ]]; then
+                      echo "::error file=apps/hump/go.mod,title=Go vulnerability scan failed::The annotation above names the fix; the findings are in the Security tab (category govulncheck). Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+                  if ! jq -e '.runs' "$SARIF_FILE" >/dev/null 2>&1; then
+                      echo "::error file=apps/hump/scripts/ci.sh,title=Vulnerability scan did not complete::hump:ci-vulncheck wrote no valid ${SARIF_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi

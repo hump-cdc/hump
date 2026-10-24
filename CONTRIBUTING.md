@@ -260,6 +260,8 @@ Some generated files are committed. CI fails when the OpenAPI spec or the embedd
 
 CI ([.github/workflows/check.yml](.github/workflows/check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the OpenAPI spec or the embedded UI bundle is stale, or when `bun.lock` is out of sync with the `package.json` files.
 
+[.github/workflows/security-scan.yml](.github/workflows/security-scan.yml) runs on every push to `main`, every Monday and on manual dispatch. It scans the workflows with zizmor and the Go module `apps/hump` with govulncheck, and uploads both reports to the repository's **Security** tab. The weekly govulncheck run also catches vulnerabilities published after the last change to `apps/hump`.
+
 ## Commits and pull requests
 
 - Write the commit message as one English sentence in the imperative mood: "Add RabbitMQ Streams sink", "Fix retry backoff for HTTP 429". Don't use Conventional Commits prefixes such as `feat:` or `fix:`.

@@ -54,7 +54,8 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
   - `.ci/annotations/<project>-<check>.txt` — annotations and fix hints;
   - `.ci/failed/<project>-<check>` — failure markers.
 
-  `.github/workflows/check.yml` reads them after `moon ci`. Details in `.github/AGENTS.md`.
+  `.github/workflows/check.yml` reads them after `moon ci`, and `.github/workflows/security-scan.yml`
+  after its weekly `hump:ci-vulncheck` run. Details in `.github/AGENTS.md`.
 
 ### Adding a package
 

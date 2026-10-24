@@ -32,7 +32,7 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 - Every workflow, job and step has an explicit `name:`. Don't use the tool name or a generic verb
   on its own.
 - Workflow: `Area: action`, a short area, a colon and a short lowercase action:
-  `Repository: check`, `Workflows: lint`, `Workflows: security report`; not
+  `Repository: check`, `Workflows: lint`, `Repository: security scan`; not
   `GitHub Actions workflows lint`.
 - Job: a short action without the area, because GitHub shows checks as `Workflow / Job`
   (`Repository: check / Check`): `Check`, `Security`, `Security report`; not `zizmor`.
@@ -62,6 +62,13 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 - `check.yml` (`Repository: check`, job `Check`) runs every lint, build and test task through
   `moon ci`, which picks the projects affected since the base commit. `workflows-lint.yml`
   runs only zizmor; actionlint is the `root:ci-actionlint` task.
+- `security-scan.yml` (`Repository: security scan`) runs on push to `main`, weekly (Monday
+  06:00 UTC) and on `workflow_dispatch`, and uploads SARIF to code scanning. Job `Security
+  report` runs zizmor (category `zizmor`; the `main` ruleset's code scanning rule matches the
+  tool `zizmor`). Job `Go vulnerability report` runs `hump:ci-vulncheck` on `apps/hump`, so
+  govulncheck also runs weekly, not only when a change affects the module; it rewrites the
+  report paths to repository-relative ones, uploads it under category `govulncheck` and then
+  fails on the `.ci/failed/hump-vulncheck` marker or a missing report.
 - moon prefixes task output in CI, so a workflow command (`::error ...`) printed by a task does
   not become an annotation. A task never prints workflow commands. It writes them to
   `.ci/annotations/<project>-<check>.txt`, its reports (SARIF, coverage, JUnit) to

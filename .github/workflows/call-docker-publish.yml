@@ -46,7 +46,8 @@ jobs:
               with:
                   persist-credentials: false
 
-            # The Docker build has no .git, so ldflags.sh cannot read the commit there.
+            # The Docker build has no .git, so the ldflags of the hump:build task cannot read the
+            # commit there.
             - name: Compute the version, commit and build date of the image
               id: version
               env:

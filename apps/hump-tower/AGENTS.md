@@ -29,7 +29,7 @@ catch:
 | `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev` and `build` |
 | `moon run hump-tower:openapi` | Go `apps/hump/cmd/openapi` → `src/shared/api/openapi.json`; `dev` and `build` depend on it |
 | `moon run hump-tower:typecheck` | `tsc --noEmit`; there is no type-check script in `package.json` |
-| `moon run hump-tower:audit` | `bun audit` over the root `bun.lock`, transitive packages included (Dependabot alerts see only direct ones). CI's `ci-audit` skips `AUDIT_IGNORES` in `scripts/ci.sh` and also checks that every package comes from `registry.npmjs.org` |
+| `moon run hump-tower:audit` | `bun audit` over the root `bun.lock`, transitive packages included (Dependabot alerts see only direct ones). CI's `ci-audit` skips `AUDIT_IGNORES` in `scripts/hump-tower-ci.sh` (repo root) and also checks that every package comes from `registry.npmjs.org` |
 
 `bun test` runs every `*.test.ts(x)`, colocated with the code under test and written on `bun:test`.
 
@@ -46,7 +46,6 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
 | `.storybook/` | Storybook config; stories come from `src/shared/ui` and `src/widgets` |
 | `public/` | fonts, logos, favicon |
-| `scripts/ci.sh` | the bodies of the `ci-*` moon tasks |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.
 

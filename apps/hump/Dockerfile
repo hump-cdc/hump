@@ -51,7 +51,8 @@ COPY apps/hump ./
 # The UI built above; .dockerignore keeps the committed build out of the context.
 COPY --from=ui /src/apps/hump/internal/controller/hump_tower ./internal/controller/hump_tower
 
-# Passed in instead of scripts/ldflags.sh: there is no .git in the context to read the commit from.
+# Passed in instead of the ldflags of the hump:build task (apps/hump/moon.yml): there is no .git
+# in the context to read the commit from.
 ARG VERSION=0.0.0 COMMIT=unknown DATE=
 
 RUN --mount=type=cache,target=/go/pkg/mod \

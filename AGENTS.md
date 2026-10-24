@@ -21,11 +21,12 @@ Project rules: `apps/hump/AGENTS.md` (Go app), `apps/hump-tower/AGENTS.md` (web 
 
 | Path | Contents |
 |---|---|
-| `apps/hump` | Go module `hump`: `cmd/`, `internal/`, `pkg/`, `config/`, `scripts/`, `tools/actionlint` and `tools/govulncheck` (separate Go tool modules, outside `go.work`), `Dockerfile` (image `humpcdc/hump`, build context: repo root) |
+| `apps/hump` | Go module `hump`: `cmd/`, `internal/`, `pkg/`, `config/`, `tools/actionlint` and `tools/govulncheck` (separate Go tool modules, outside `go.work`), `Dockerfile` (image `humpcdc/hump`, build context: repo root) |
 | `apps/hump-tower` | Web UI, package `hump-tower` |
 | `packages/` | Shared packages; empty for now |
 | `dev/` | Local dev environment: `docker-compose.yml`, `hump.yaml` |
 | `docs/` | Design notes |
+| `scripts/` | Long moon task scripts, named `<project>-<name>.sh` (`hump-ci.sh`); short ones are inlined into `script:` in `moon.yml` |
 | `.moon/` | `workspace.yml` (project globs), `toolchains.yml` (proto, Go, Bun versions) |
 | `moon.yml` | The `root` project: repo-wide tasks |
 | `go.work` | Go workspace: `use ./apps/hump` |
@@ -43,6 +44,9 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
 - CI runs `moon ci`: every task with `runInCI` in the projects affected since the base commit.
   Run a CI-only task locally with `CI=true moon run <project>:<task>`.
 - Task names are kebab-case (`test-file-cover`) and every task has a `description`.
+- A short task body goes inline in `script:`. A long one goes to `scripts/<project>-<name>.sh` in
+  the repo root, listed in the task's `inputs` as `/scripts/...`; it still runs with the project
+  root as cwd.
 - A task belongs to the project whose files it works on. Repo-wide tasks (workflow lint, the
   dev environment, the aggregate `check`) go to the root `moon.yml`. Exception:
   `hump-tower:openapi` runs Go code from `apps/hump` but lives in `hump-tower`, because a
@@ -67,7 +71,7 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
 2. TypeScript: add a `package.json`, then run `bun install` in the root to update `bun.lock`.
 3. Go: add a `go.mod` and its directory to `go.work` (`go work use ./packages/<name>`). Add a
    `gomod` entry for it to `.github/dependabot.yml` and add the module to the dep-age check
-   (`hump:ci-dep-age`) in `apps/hump/scripts/ci.sh`. A Go tool module kept outside `go.work`
+   (`hump:ci-dep-age`) in `scripts/hump-ci.sh`. A Go tool module kept outside `go.work`
    (like `apps/hump/tools/actionlint` and `apps/hump/tools/govulncheck`) gets the same
    Dependabot entry and dep-age check, plus a `GOWORK=off go -C <dir> mod tidy` in the
    `hump:tidy` task and its `go.mod` / `go.sum` in the tidy diff of `.github/workflows/ci-check.yml`.
@@ -93,8 +97,8 @@ versions everywhere.
   `apps/hump/tools/govulncheck` is too young. The last one pins govulncheck (`golang.org/x/vuln`),
   which `hump:ci-vulncheck` builds from it. Run it locally with `CI=true moon run hump:ci-dep-age`.
   Before `go get` of a version, check its `Time` with `go list -m -json <module>@<version>`.
-  A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, an
-  `apps/*/scripts` (or `packages/*/scripts`) script or `.github`; CI fails on an unused one in
+  A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, a
+  script in the root `scripts/` or `.github`; CI fails on an unused one in
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.
 - Toolchain: moon and Go in `.prototools`; proto, Go and Bun in `.moon/toolchains.yml`. Go is
   pinned in `.prototools` because `proto install` otherwise reads the `go` directive of `go.mod` /

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# CI checks of the hump Go module: ci.sh lint|vulncheck|test|dep-age. Run by the hump:ci-* moon
-# tasks with the working directory apps/hump.
+# CI checks of the hump Go module: hump-ci.sh lint|vulncheck|test|dep-age. Run by the hump:ci-*
+# moon tasks with the working directory apps/hump.
 #
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump. A failure appends a fix
 # hint as a workflow command to .ci/annotations/hump-<check>.txt (moon prefixes task output, so
@@ -27,7 +27,7 @@ main() {
         test) run_tests ;;
         dep-age) dep_age ;;
         *)
-            echo "usage: ci.sh lint|vulncheck|test|dep-age" >&2
+            echo "usage: hump-ci.sh lint|vulncheck|test|dep-age" >&2
             exit 2
             ;;
     esac
@@ -172,7 +172,7 @@ relative_sarif_paths() {
     tmp="$(mktemp)"
     if ! jq '(.. | objects | select(.uriBaseId? == "%SRCROOT%" and (.uri | type) == "string" and (.uri | startswith("apps/hump/") | not)) | .uri) |= "apps/hump/" + .' "$file" >"$tmp"; then
         rm -f "$tmp"
-        annotate vulncheck "::error file=apps/hump/scripts/ci.sh,title=Go vulnerability report could not be rewritten::jq failed to make the paths in .ci/hump/govulncheck.sarif repository-relative (invalid JSON or jq missing); see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+        annotate vulncheck "::error file=scripts/hump-ci.sh,title=Go vulnerability report could not be rewritten::jq failed to make the paths in .ci/hump/govulncheck.sarif repository-relative (invalid JSON or jq missing); see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
         return 1
     fi
     mv "$tmp" "$file"

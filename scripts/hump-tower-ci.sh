@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# CI checks of the hump-tower web UI: ci.sh knip|biome|typecheck|test|audit. Run by the hump-tower:ci-* moon tasks
-# with the working directory apps/hump-tower.
+# CI checks of the hump-tower web UI: hump-tower-ci.sh knip|biome|typecheck|test|audit. Run by the
+# hump-tower:ci-* moon tasks with the working directory apps/hump-tower.
 #
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump-tower. Annotations go to
 # .ci/annotations/hump-tower-<check>.txt: moon prefixes task output, so workflow commands printed
@@ -39,7 +39,7 @@ main() {
         test) run_tests ;;
         audit) audit ;;
         *)
-            echo "usage: ci.sh knip|biome|typecheck|test|audit" >&2
+            echo "usage: hump-tower-ci.sh knip|biome|typecheck|test|audit" >&2
             exit 2
             ;;
     esac
@@ -125,7 +125,7 @@ vulnerabilities() {
     local status=0
     bun audit "${ignores[@]}" || status=$?
     if [[ "$status" -eq 1 ]]; then
-        annotate audit "::error file=bun.lock,title=npm dependencies have known vulnerabilities::Upgrade the packages listed in the log to a fixed version that is at least 7 days old: raise a direct dependency in its package.json, or add an exact 'overrides' entry to the root package.json for a transitive one, run 'bun install' in the repository root and commit package.json and bun.lock. When no fixed version is 7 days old yet, add the advisory to AUDIT_IGNORES in apps/hump-tower/scripts/ci.sh with the date to revisit it. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+        annotate audit "::error file=bun.lock,title=npm dependencies have known vulnerabilities::Upgrade the packages listed in the log to a fixed version that is at least 7 days old: raise a direct dependency in its package.json, or add an exact 'overrides' entry to the root package.json for a transitive one, run 'bun install' in the repository root and commit package.json and bun.lock. When no fixed version is 7 days old yet, add the advisory to AUDIT_IGNORES in scripts/hump-tower-ci.sh with the date to revisit it. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
     elif [[ "$status" -ne 0 ]]; then
         annotate audit "::error file=bun.lock,title=npm vulnerability scan did not complete::bun audit exited with status ${status}; see the log for the cause. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
     fi

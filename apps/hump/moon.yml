@@ -22,9 +22,11 @@ taskOptions:
 tasks:
   build:
     description: 'Check that all packages build without cgo, then build bin/hump with the embedded hump-tower UI'
-    script: 'go build ./... && go build -ldflags "$(sh ./scripts/ldflags.sh)" -o ./bin/hump ./cmd/hump'
+    # The ldflags stamp pkg/version: VERSION (default 0.0.0), the short commit and the UTC build
+    # date. run and run-cleanup repeat them.
+    script: 'go build ./... && go build -ldflags "-s -w -X hump/pkg/version.Version=${VERSION:-0.0.0} -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o ./bin/hump ./cmd/hump'
     deps: ['hump-tower:build']
-    inputs: ['@group(sources)', '@group(embedded)', 'scripts/ldflags.sh']
+    inputs: ['@group(sources)', '@group(embedded)']
     outputs: ['bin/hump']
     options:
       # Stamps commit and date; in CI it also forces the UI rebuild for the embed drift check.
@@ -32,7 +34,7 @@ tasks:
       runInCI: true
   run:
     description: 'Run hump against the dev environment (start it with moon run root:dev-up)'
-    script: 'exec go run -ldflags "$(sh ./scripts/ldflags.sh)" ./cmd/hump -f ../../dev/hump.yaml'
+    script: 'exec go run -ldflags "-s -w -X hump/pkg/version.Version=${VERSION:-0.0.0} -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/hump -f ../../dev/hump.yaml'
     deps: ['hump-tower:build']
     preset: 'server'
     # Fallbacks only: task env does not override the caller's environment.
@@ -50,7 +52,7 @@ tasks:
       RABBITMQ_STREAM_URL: 'rabbitmq-stream://hump:hump@localhost:5552/%2F'
   run-cleanup:
     description: 'Remove hump replication artifacts from the dev database'
-    script: 'exec go run -ldflags "$(sh ./scripts/ldflags.sh)" ./cmd/hump -f ../../dev/hump.yaml --cleanup'
+    script: 'exec go run -ldflags "-s -w -X hump/pkg/version.Version=${VERSION:-0.0.0} -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/hump -f ../../dev/hump.yaml --cleanup'
     preset: 'utility'
     env:
       DATABASE_URL: 'postgres://hump:hump@localhost:5437/hump?sslmode=disable'
@@ -66,11 +68,34 @@ tasks:
     preset: 'utility'
   test-cover:
     description: 'Run all tests with -coverpkg=./... and open the HTML coverage report'
-    script: 'bash ./scripts/cover.sh "$PWD" -coverpkg=./... ./...'
+    # Writes the report to $TMPDIR/hump-cover.html and opens it; test-file-cover repeats this.
+    # MSYS_NO_PATHCONV keeps Git Bash from rewriting /c into a drive path.
+    script: |
+      set -euo pipefail
+      trap 'rm -f cover.out' EXIT
+      report="${TMPDIR:-/tmp}/hump-cover.html"
+      go tool gotestsum --format testdox -- -coverprofile=cover.out -coverpkg=./... ./...
+      go tool gocov convert cover.out | go tool gocov-html >"$report"
+      case "$(uname -s)" in
+        Darwin) open "$report" ;;
+        MINGW* | MSYS* | CYGWIN*) MSYS_NO_PATHCONV=1 cmd /c start "" "$(cygpath -w "$report")" ;;
+        *) xdg-open "$report" ;;
+      esac
     preset: 'utility'
   test-file-cover:
     description: 'Coverage report for the package in the directory moon was started from'
-    script: 'bash ./scripts/cover.sh "$MOON_WORKING_DIR"'
+    script: |
+      set -euo pipefail
+      cd "$MOON_WORKING_DIR"
+      trap 'rm -f cover.out' EXIT
+      report="${TMPDIR:-/tmp}/hump-cover.html"
+      go tool gotestsum --format testdox -- -coverprofile=cover.out
+      go tool gocov convert cover.out | go tool gocov-html >"$report"
+      case "$(uname -s)" in
+        Darwin) open "$report" ;;
+        MINGW* | MSYS* | CYGWIN*) MSYS_NO_PATHCONV=1 cmd /c start "" "$(cygpath -w "$report")" ;;
+        *) xdg-open "$report" ;;
+      esac
     preset: 'utility'
   lint:
     description: 'golangci-lint with .golangci.yml'
@@ -94,8 +119,8 @@ tasks:
       runInCI: true
   ci-lint:
     description: 'CI: golangci-lint with a SARIF report in .ci/hump'
-    script: 'bash ./scripts/ci.sh lint'
-    inputs: ['@group(sources)', '.golangci.yml', 'scripts/ci.sh']
+    script: 'bash $workspaceRoot/scripts/hump-ci.sh lint'
+    inputs: ['@group(sources)', '.golangci.yml', '/scripts/hump-ci.sh']
     options:
       cache: false
       runInCI: 'only'
@@ -104,8 +129,8 @@ tasks:
       allowFailure: true
   ci-vulncheck:
     description: 'CI: govulncheck with a SARIF report in .ci/hump'
-    script: 'bash ./scripts/ci.sh vulncheck'
-    inputs: ['@group(sources)', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', 'scripts/ci.sh']
+    script: 'bash $workspaceRoot/scripts/hump-ci.sh vulncheck'
+    inputs: ['@group(sources)', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', '/scripts/hump-ci.sh']
     options:
       cache: false
       runInCI: 'only'
@@ -114,8 +139,8 @@ tasks:
       allowFailure: true
   ci-dep-age:
     description: 'CI: 7-day minimum release age of every Go module, the tool modules included'
-    script: 'bash ./scripts/ci.sh dep-age'
-    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', 'scripts/ci.sh']
+    script: 'bash $workspaceRoot/scripts/hump-ci.sh dep-age'
+    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', '/scripts/hump-ci.sh']
     options:
       cache: false
       runInCI: 'only'
@@ -124,10 +149,10 @@ tasks:
       allowFailure: true
   ci-test:
     description: 'CI: tests with -race, coverage and JUnit in .ci/hump'
-    script: 'bash ./scripts/ci.sh test'
+    script: 'bash $workspaceRoot/scripts/hump-ci.sh test'
     env:
       CGO_ENABLED: '1'
-    inputs: ['@group(sources)', 'scripts/ci.sh']
+    inputs: ['@group(sources)', '/scripts/hump-ci.sh']
     options:
       cache: false
       runInCI: 'only'

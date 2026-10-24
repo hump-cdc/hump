@@ -1,4 +1,4 @@
-<!-- For a vulnerability, don't open a PR. Use https://github.com/sergeyzwezdin/hump/security/advisories/new -->
+<!-- For a vulnerability, don't open a PR. Use https://github.com/hump-cdc/hump/security/advisories/new -->
 
 Related issues: <!-- Closes #123 -->
 

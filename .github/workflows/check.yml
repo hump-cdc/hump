@@ -47,10 +47,11 @@ jobs:
                   cache: false
 
             # Runs every task with runInCI in the projects affected since the base commit: workflow
-            # lint, go mod tidy, Go lint, vulnerability scan, build and tests, the OpenAPI spec and
-            # the embedded hump-tower build, biome, knip, type check and tests. Reports and
-            # annotations go to .ci/ and are read by the steps below: moon prefixes task output,
-            # so workflow commands printed by a task do not become annotations. The ci-* tasks are
+            # lint, go mod tidy, Go lint, vulnerability scan, Go dependency age check, build and
+            # tests, the OpenAPI spec and the embedded hump-tower build, biome, knip, type check and
+            # tests. Reports and annotations go to .ci/ and are read by the steps below: moon
+            # prefixes task output, so workflow commands printed by a task do not become
+            # annotations. The ci-* tasks are
             # allowed to fail and are checked by a later step; this step fails on the others
             # (go mod tidy, the OpenAPI spec, the builds).
             # A push whose 'before' commit is unknown (zero SHA, force push) compares against the

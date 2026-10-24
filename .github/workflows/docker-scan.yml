@@ -1,0 +1,27 @@
+name: "Docker: scan"
+
+# Builds the release image for linux/amd64 and linux/arm64 on every PR and push to main and scans
+# it with Trivy, the same way publish.yml scans a release. Nothing is pushed. No paths filter:
+# the job is a required check on main, and a required check that does not run blocks the PR.
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    # The status check is named 'Docker image / Build and scan' (caller job / called job); the
+    # main ruleset lists it as a required check, so rename it only together with the ruleset.
+    image:
+        name: Docker image
+        # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+        uses: ./.github/workflows/scan-image.yml # zizmor: ignore[self-repository]
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning (read-only on fork and Dependabot PRs)

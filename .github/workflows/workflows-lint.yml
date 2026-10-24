@@ -13,16 +13,27 @@ concurrency:
 jobs:
     zizmor:
         name: Security
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
         permissions:
             contents: read # checkout
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
-            - name: Audit outbound network traffic of the runner
+            # Block mode: only the endpoints below are reachable. They were collected from the
+            # audit runs of this job (StepSecurity insights). The agent also allows GitHub's
+            # Actions service endpoints (*.actions.githubusercontent.com, codeload.github.com, the
+            # results storage, the cache host) and its own StepSecurity API implicitly
+            # (addImplicitEndpoints in step-security/agent). When a step fails on a blocked
+            # connection, open the insights link this step prints in the log and add the
+            # endpoint here.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      pypi.org:443
+                      files.pythonhosted.org:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -29,11 +29,24 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
 
 ## Runner hardening
 
-- The first step of every job is `step-security/harden-runner` with `egress-policy: audit`.
-  Audit mode only records the outbound connections of the job. Once the audit runs show which
-  endpoints each job needs, the policy switches to `block` with an `allowed-endpoints` list per
-  job. A new job gets the same first step. Composite actions under `.github/actions` are not
-  jobs and don't get it.
+- The first step of every job, including the jobs of reusable workflows, is
+  `step-security/harden-runner`. It starts in `egress-policy: audit`, which only records the
+  outbound connections of the job. Once the audit runs (StepSecurity insights) show which
+  endpoints a job needs, the job switches to `egress-policy: block` with an `allowed-endpoints`
+  list (`host:443`) and the step is renamed to `Restrict outbound network traffic of the runner
+  to the allowed endpoints`. A new job gets the audit step. Composite actions under
+  `.github/actions` are not jobs and don't get it.
+- In `block`: `check.yml` (job `Check`) and `workflows-lint.yml` (job `Security`). In `audit`,
+  until their audit runs are collected: `security-scan.yml`, `scorecard.yml` and the reusable
+  `scan-image.yml` and `publish-image.yml` (`docker-scan.yml` and `publish.yml` only call them
+  and have no steps of their own).
+- The agent allows GitHub's Actions service endpoints (`*.actions.githubusercontent.com`,
+  `codeload.github.com`, the results storage, the cache host) and the StepSecurity API on its
+  own; don't list them. List only what the audit runs show. Telemetry is turned off rather than
+  allowed: `telemetry` in `.prototools` and `.moon/workspace.yml`, `disable_telem: true` on
+  every `codecov/codecov-action` step. When a step fails on a blocked
+  connection, open the insights link that the harden-runner step prints in the log and add the
+  endpoint to that job's list.
 
 ## Naming
 
@@ -46,6 +59,8 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   (`Repository: check / Check`): `Check`, `Security`, `Security report`; not `zizmor`.
 - Step: the full action and its subject: `Lint workflow syntax, expressions and shell scripts`,
   not `Run actionlint`.
+- A job that calls a reusable workflow shows as `caller job / called job`, so the check of
+  `docker-scan.yml` is `Docker image / Build and scan`; renaming either job renames the check.
 - Job names are the status-check names that the branch ruleset on `main` lists as required
   checks. Renaming a job requires updating the ruleset.
 - The ruleset matches a required check by job name alone, so two jobs must not share a name
@@ -93,16 +108,36 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   Ubuntu hosted runner and uses only `actions/checkout`, `actions/upload-artifact`,
   `github/codeql-action/upload-sarif`, `ossf/scorecard-action` and
   `step-security/harden-runner`. Don't add `run:` steps or other actions to it.
+- `scan-image.yml` (`Docker: build and scan`, reusable, job `Build and scan`) builds
+  `apps/hump/Dockerfile` for linux/amd64 and linux/arm64 without pushing (no environment, no
+  secrets, no cache), exports each platform to a docker-archive tarball and scans it with Trivy
+  (fixable CRITICAL/HIGH, vuln scanner only). It uploads SARIF under categories
+  `trivy-linux-amd64` and `trivy-linux-arm64` and fails on findings; exceptions go to
+  `.trivyignore` with a reason and a review date. On a PR from a fork or from Dependabot the
+  token is read-only, so the upload is skipped there and the findings are only in the log. A
+  PR and a release call the same workflow, so both are scanned the same way.
+- `docker-scan.yml` (`Docker: scan`) calls `scan-image.yml` on every PR and push to `main`, with
+  no paths filter. Its check `Docker image / Build and scan` (caller job / called job) is a
+  required check of the `main` ruleset.
 - `publish.yml` (`Docker: publish`) runs only on a published release with a `v*` tag. Job `Scan`
-  builds the linux/amd64 image locally (no environment, no secrets), scans it with Trivy, uploads
-  SARIF under category `trivy` and fails on fixable CRITICAL/HIGH findings; exceptions go to
-  `.trivyignore` with a reason and a review date. Job `Publish` runs in environment `production`
-  (secret `DOCKERHUB_TOKEN`, variable `DOCKERHUB_USERNAME`) and pushes `docker.io/humpcdc/hump`
-  for linux/amd64 and linux/arm64 with an SBOM and `mode=max` provenance, then adds a keyless
-  cosign signature and GitHub build provenance and SBOM attestations (`actions/attest`). No
-  moon, no repository scripts and no cache in this workflow. Dependabot does not bump the
-  `version` input of `aquasecurity/trivy-action` or the `cosign-release` input of
-  `sigstore/cosign-installer`; raise them by hand to releases at least 7 days old.
+  calls `scan-image.yml`. Job `Publish` calls `publish-image.yml` (`Docker: publish image`,
+  reusable, job `Build, push, sign and attest`), which runs in environment `production` (secret
+  `DOCKERHUB_TOKEN`, variable `DOCKERHUB_USERNAME`, both environment-scoped, so the caller passes
+  no secrets) and pushes `docker.io/humpcdc/hump` for linux/amd64 and linux/arm64 with an SBOM
+  and `mode=max` provenance, then adds a keyless cosign signature and GitHub build provenance
+  and SBOM attestations (`actions/attest`). Signing in a reusable workflow gives SLSA Build L3:
+  the Sigstore identity of the signature and the attestations is
+  `hump-cdc/hump/.github/workflows/publish-image.yml@refs/tags/v*`, so don't rename or move the
+  file without updating the verification docs. A caller's permissions are the ceiling of the
+  called workflow, so the `Publish` job grants the same `contents: read`, `id-token: write` and
+  `attestations: write`. No moon, no repository scripts and no cache in these workflows.
+  Dependabot does not bump the `version` input of `aquasecurity/trivy-action` or the
+  `cosign-release` input of `sigstore/cosign-installer`; raise them by hand to releases at least
+  7 days old.
+- Reusable workflows are called by the local path (`uses: ./.github/workflows/...`) with
+  `# zizmor: ignore[self-repository]`, because actionlint v1.7.12 does not support the `$/...`
+  form yet. They set their own `permissions: {}`, `defaults` and job `timeout-minutes` and no
+  `concurrency` (the caller's group applies).
 - The bun and Go versions in the `FROM` lines of `apps/hump/Dockerfile` must match
   `.moon/toolchains.yml`. Dependabot updates only the Dockerfile, so align them by hand.
 - moon prefixes task output in CI, so a workflow command (`::error ...`) printed by a task does

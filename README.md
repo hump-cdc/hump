@@ -66,6 +66,39 @@ It uses the built-in `pgoutput` plugin, so PostgreSQL needs no extensions. Your 
 
 Every change to `public.users` now lands in the `public.users` topic. See the [documentation](https://hump.dev/docs/getting-started) for all options.
 
+## Docker image
+
+The image is `docker.io/humpcdc/hump`, built for linux/amd64 and linux/arm64. Each release gets three tags: the full version (`1.2.3`), `major.minor` (`1.2`) and `major` (`1`, skipped for 0.x). Pre-releases do not move `latest`.
+
+Pin the image by digest, e.g. `docker.io/humpcdc/hump:1.2.3@sha256:<digest>`. To get the digest:
+
+```sh
+docker buildx imagetools inspect docker.io/humpcdc/hump:<version>
+```
+
+### Verifying the image
+
+Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/publish-image.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well.
+
+Check the signature:
+
+```sh
+cosign verify docker.io/humpcdc/hump@sha256:<digest> \
+  --certificate-identity-regexp '^https://github\.com/hump-cdc/hump/\.github/workflows/publish-image\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Check the build provenance. `--signer-workflow` accepts only attestations signed by the release workflow, so one made by another workflow in the repository fails the check. Add `--source-ref refs/tags/v<version>` to also pin the release tag:
+
+```sh
+gh attestation verify oci://docker.io/humpcdc/hump@sha256:<digest> \
+  --repo hump-cdc/hump \
+  --signer-workflow hump-cdc/hump/.github/workflows/publish-image.yml \
+  --deny-self-hosted-runners
+```
+
+To check the SBOM attestation, run the same command with `--predicate-type https://spdx.dev/Document/v2.3`.
+
 ## Documentation
 
 The full documentation is at [hump.dev/docs](https://hump.dev/docs/getting-started). It covers configuration, sinks, templating, delivery guarantees, snapshots and observability.

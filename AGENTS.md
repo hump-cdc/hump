@@ -83,6 +83,9 @@ the 7-day Dependabot cooldown in `.github/dependabot.yml`.
   exact version: no `^`, `~`, `*` or `latest`. `install.exact` in the root `bunfig.toml` makes
   `bun add` / `bun update` save exact versions, but it does not check what you type into
   `package.json` by hand, so write those exact too.
+  No dependency runs install scripts: `"trustedDependencies": []` in the root `package.json`
+  replaces Bun's default allow list (it blocks e.g. esbuild's `postinstall`). To allow one, review
+  its script and list that package there explicitly.
 - Go: enforced in CI by `hump:ci-dep-age`. It fails when any module in the full build list
   (`go list -m all`, direct and transitive, with `GOWORK=off`) of `apps/hump/go.mod`,
   `apps/hump/tools/actionlint/go.mod` or `apps/hump/tools/govulncheck/go.mod` was published

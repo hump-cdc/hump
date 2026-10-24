@@ -1,6 +1,8 @@
 package funcs
 
 import (
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -45,3 +47,21 @@ func TestYAMLTemplateErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestYAMLTemplateMarshalError(t *testing.T) {
+	for _, src := range []string{`{{ yaml false .Value }}`, `{{ yaml true .Value }}`} {
+		_, err := render(t, src, V(failingYAML{}))
+		if err == nil || !strings.Contains(err.Error(), errYAMLMarshal.Error()) {
+			t.Errorf("%s error = %v, want %v", src, err, errYAMLMarshal)
+		}
+	}
+}
+
+// errYAMLMarshal is what failingYAML fails to marshal with.
+var errYAMLMarshal = errors.New("yaml marshal failed")
+
+// failingYAML is a value whose MarshalYAML always fails.
+type failingYAML struct{}
+
+// MarshalYAML returns errYAMLMarshal.
+func (failingYAML) MarshalYAML() (any, error) { return nil, errYAMLMarshal }

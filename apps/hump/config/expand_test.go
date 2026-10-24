@@ -612,7 +612,7 @@ func TestCanonicalYAML_StableForEquivalentMaps(t *testing.T) {
 }
 
 func TestCanonicalYAML_QuotesStringsGoccyCannotReadBack(t *testing.T) {
-	for _, value := range []string{"\t", "\t\t", "a\t", "\n", "\n0", "plain"} {
+	for _, value := range []string{"\t", "\t\t", "a\t", "\t -", "\n", "\n0", "plain"} {
 		out, err := canonicalYAML(yaml.MapSlice{{Key: "v", Value: value}})
 		if err != nil {
 			t.Fatalf("canonicalYAML(%q): %v", value, err)

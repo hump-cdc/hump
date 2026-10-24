@@ -203,3 +203,12 @@ func TestDictTemplate_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestOmitWithoutArgs(t *testing.T) {
+	if got := tmplOmit(); got != nil {
+		t.Fatalf("omit() = %v, want nil", got)
+	}
+	if m, rest, ok := dictArgs(nil); m != nil || rest != nil || ok {
+		t.Fatalf("dictArgs(nil) = %v, %v, %v, want nil, nil, false", m, rest, ok)
+	}
+}

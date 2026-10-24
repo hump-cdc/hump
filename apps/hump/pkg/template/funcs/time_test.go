@@ -111,3 +111,21 @@ func TestTimeTemplates_DateModify(t *testing.T) {
 		t.Fatalf("expected time parse error")
 	}
 }
+
+func TestTimeTemplates_AsTimeInputs(t *testing.T) {
+	tt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	cases := []struct {
+		name string
+		v    any
+		want string
+	}{
+		{"time pointer", &tt, "1704164645"},
+		{"nil time pointer", (*time.Time)(nil), ""},
+		{"unsupported type", 1.5, ""},
+	}
+	for _, tc := range cases {
+		if got := mustRender(t, `{{ unixepoch .Value }}`, V(tc.v)); got != tc.want {
+			t.Errorf("unixepoch(%s) = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

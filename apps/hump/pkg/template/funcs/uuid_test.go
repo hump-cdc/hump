@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 )
@@ -18,5 +19,13 @@ func TestUUIDv4Template(t *testing.T) {
 			t.Fatalf("duplicate uuid: %q", got)
 		}
 		seen[got] = struct{}{}
+	}
+}
+
+func TestUUIDv4TemplatePropagatesRandError(t *testing.T) {
+	withFailingRand(t)
+
+	if _, err := render(t, `{{ uuidv4 }}`, nil); !errors.Is(err, errRandFailed) {
+		t.Fatalf("uuidv4 error = %v, want errRandFailed", err)
 	}
 }

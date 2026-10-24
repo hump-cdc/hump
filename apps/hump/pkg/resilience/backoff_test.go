@@ -115,6 +115,15 @@ func TestBackoffDelayFunc(t *testing.T) {
 			attempts:    []uint{1 << 40},
 			wantAtLeast: 1 * time.Second,
 		},
+		"linear at an attempt past the int64 range": {
+			backoff: Backoff{
+				Type:      BackoffTypeLinear,
+				Initial:   time.Second,
+				Increment: time.Second,
+			},
+			attempts: []uint{math.MaxUint},
+			want:     []time.Duration{math.MaxInt64},
+		},
 		"linear with huge increment": {
 			backoff: Backoff{
 				Type:      BackoffTypeLinear,

@@ -2,6 +2,7 @@ package funcs
 
 import (
 	"math"
+	"reflect"
 	"strconv"
 	"testing"
 	"unicode/utf8"
@@ -183,4 +184,28 @@ func FuzzJSONRoundTrip(f *testing.F) {
 			t.Fatalf("fromjson(json(%q)) = %q", value, got)
 		}
 	})
+}
+
+func TestJSONNonFiniteFallback(t *testing.T) {
+	got := mustRender(t, `{{ json .Value }}`, V([]any{math.NaN(), map[string]float64(nil)}))
+	if got != "[null,null]" {
+		t.Fatalf("json = %q, want [null,null]", got)
+	}
+
+	if _, err := render(t, `{{ json .Value }}`, V(map[int]float64{1: math.Inf(1)})); err == nil {
+		t.Fatal("json of a non-string-keyed map with +Inf: expected error")
+	}
+}
+
+func TestFiniteJSONValueInvalid(t *testing.T) {
+	if got := finiteJSONValue(reflect.Value{}, 0); got != nil {
+		t.Fatalf("finiteJSONValue(invalid) = %v, want nil", got)
+	}
+}
+
+func TestInt64ClampsHugeUint(t *testing.T) {
+	got := mustRender(t, `{{ int64 .Value }}`, V(uint64(math.MaxUint64)))
+	if want := strconv.FormatInt(math.MaxInt64, 10); got != want {
+		t.Fatalf("int64 MaxUint64 = %q, want %q", got, want)
+	}
 }

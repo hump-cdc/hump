@@ -2,6 +2,7 @@ package funcs
 
 import (
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -112,4 +113,36 @@ func FuzzDecryptAES(f *testing.F) {
 			t.Fatalf("tmplDecryptAES(%q) = %d bytes, more than the %d-byte ciphertext minus the IV", ciphertext, len(got), len(raw))
 		}
 	})
+}
+
+func TestPkcs7Unpad(t *testing.T) {
+	block := func(last byte, fill byte) []byte {
+		b := []byte(strings.Repeat(string(fill), 15))
+		return append(b, last)
+	}
+	cases := []struct {
+		name string
+		in   []byte
+	}{
+		{"empty", nil},
+		{"not block-aligned", []byte{1, 2, 3}},
+		{"zero pad", block(0, 0)},
+		{"pad over block size", block(17, 17)},
+		{"inconsistent pad", block(2, 'x')},
+	}
+	for _, tc := range cases {
+		if _, err := pkcs7Unpad(tc.in, 16); err == nil {
+			t.Errorf("pkcs7Unpad(%s): expected error", tc.name)
+		}
+	}
+}
+
+func TestCryptoTemplatesPropagateRandError(t *testing.T) {
+	withFailingRand(t)
+
+	for _, src := range []string{`{{ randbytes 4 }}`, `{{ aes_encrypt "k" "p" }}`} {
+		if _, err := render(t, src, nil); !errors.Is(err, errRandFailed) {
+			t.Errorf("%s error = %v, want errRandFailed", src, err)
+		}
+	}
 }

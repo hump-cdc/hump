@@ -362,7 +362,7 @@ func TestMarshalYAML_QuotesSourceGoccyCannotReadBack(t *testing.T) {
 		Tmpl Template `yaml:"tmpl"`
 	}
 
-	for _, src := range []string{"\t", "a\t", "\n", "\n0", "plain"} {
+	for _, src := range []string{"\t", "a\t", "\t -", "\n", "\n0", "plain"} {
 		tmpl, err := New(src)
 		if err != nil {
 			t.Fatalf("New: %v", err)

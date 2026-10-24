@@ -1,6 +1,8 @@
 package funcs
 
 import (
+	"crypto/rand"
+	"errors"
 	"strings"
 	"testing"
 	"text/template"
@@ -33,3 +35,21 @@ func mustRender(t *testing.T, src string, data any) string {
 
 // V wraps a single value as `.Value` for pipeline-style template tests.
 func V(v any) map[string]any { return map[string]any{"Value": v} }
+
+// errRandFailed is what the reader withFailingRand installs fails with.
+var errRandFailed = errors.New("rand failed")
+
+// withFailingRand replaces crypto/rand.Reader with one that always fails, for
+// the duration of the test.
+func withFailingRand(t *testing.T) {
+	t.Helper()
+	orig := rand.Reader
+	rand.Reader = failingReader{}
+	t.Cleanup(func() { rand.Reader = orig })
+}
+
+// failingReader is an io.Reader that always returns errRandFailed.
+type failingReader struct{}
+
+// Read returns errRandFailed.
+func (failingReader) Read([]byte) (int, error) { return 0, errRandFailed }

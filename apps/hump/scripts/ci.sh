@@ -5,13 +5,10 @@
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump. A failure appends a fix
 # hint as a workflow command to .ci/annotations/hump-<check>.txt (moon prefixes task output, so
 # workflow commands printed here would not become annotations) and creates the marker
-# .ci/failed/hump-<check>. .github/workflows/check.yml prints those files, fails on the markers and
-# reads the reports after 'moon ci'.
+# .ci/failed/hump-<check>. .github/workflows/ci-check.yml prints those files, fails on the markers and
+# reads the reports after 'moon ci'; .github/workflows/main-security-scan.yml does the same for vulncheck.
 
 set -euo pipefail
-
-# Dependabot does not bump this version.
-GOVULNCHECK_VERSION="v1.9.0"
 
 # Minimum age of a Go module version, matching the Dependabot cooldown in .github/dependabot.yml.
 MIN_AGE_DAYS=7
@@ -51,21 +48,29 @@ lint() {
     return "$status"
 }
 
-# vulncheck installs govulncheck rather than starting it with go run, which turns every non-zero
-# exit into 1 and would hide exit code 3 (the code calls a vulnerable symbol). The SARIF run always
-# exits 0 and only feeds the job summary; the text run fails the check and prints the call traces.
+# vulncheck builds govulncheck from the separate tool module tools/govulncheck (outside go.work,
+# so GOWORK=off) rather than starting it with go run, which turns every non-zero exit into 1 and
+# would hide exit code 3 (the code calls a vulnerable symbol). The SARIF run always exits 0 and only
+# feeds the job summary and code scanning, with its paths made repository-relative; the text run
+# fails the check and prints the call traces.
 vulncheck() {
-    local package="golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
     local govulncheck="$REPORTS/bin/govulncheck"
-    GOBIN="$REPORTS/bin" go install "$package"
+    if ! GOWORK=off go -C tools/govulncheck build -o "$govulncheck" golang.org/x/vuln/cmd/govulncheck; then
+        annotate vulncheck "::error file=apps/hump/tools/govulncheck/go.mod,title=Vulnerability scan did not complete::Building govulncheck from apps/hump/tools/govulncheck failed; see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+        return 1
+    fi
     "$govulncheck" -format sarif ./... >"$REPORTS/govulncheck.sarif"
+    local rewritten=0
+    relative_sarif_paths "$REPORTS/govulncheck.sarif" || rewritten=1
 
     local status=0
     "$govulncheck" ./... || status=$?
-    if [[ "$status" -eq 3 ]]; then
-        annotate vulncheck "::error file=apps/hump/go.mod,title=Code calls known vulnerabilities::Upgrade the modules or the Go version in apps/hump/go.mod to the 'Fixed in' versions from the log (go get <module>@<version> or go mod edit -go=<version>, then moon run hump:tidy) and commit go.mod and go.sum. Reproduce locally in apps/hump with: go run ${package} ./..."
+    if [[ "$status" -eq 0 ]]; then
+        status="$rewritten"
+    elif [[ "$status" -eq 3 ]]; then
+        annotate vulncheck "::error file=apps/hump/go.mod,title=Code calls known vulnerabilities::Upgrade the modules or the Go version in apps/hump/go.mod to the 'Fixed in' versions from the log (go get <module>@<version> or go mod edit -go=<version>, then moon run hump:tidy) and commit go.mod and go.sum. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
     elif [[ "$status" -ne 0 ]]; then
-        annotate vulncheck "::error file=apps/hump/go.mod,title=Vulnerability scan did not complete::govulncheck exited with status ${status}; see the log for the cause. Reproduce locally in apps/hump with: go run ${package} ./..."
+        annotate vulncheck "::error file=apps/hump/go.mod,title=Vulnerability scan did not complete::govulncheck exited with status ${status}; see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
     fi
     return "$status"
 }
@@ -97,11 +102,11 @@ run_tests() {
 }
 
 # dep_age fails when a module version was published less than MIN_AGE_DAYS days ago: every module
-# in the build list (direct and transitive) of apps/hump/go.mod and of the separate
-# tools/actionlint/go.mod, and the govulncheck release that vulncheck installs. GOWORK=off gives
-# each go.mod its own build list instead of the go.work one. Publish times come from the module
-# proxy; modules without one (replaced by a local directory) are skipped. A version exactly
-# MIN_AGE_DAYS old passes, so Dependabot's own PRs, opened after its cooldown, pass too.
+# in the build list (direct and transitive) of apps/hump/go.mod and of the separate tool modules
+# tools/actionlint/go.mod and tools/govulncheck/go.mod. GOWORK=off gives each go.mod its own build
+# list instead of the go.work one. Publish times come from the module proxy; modules without one
+# (replaced by a local directory) are skipped. A version exactly MIN_AGE_DAYS old passes, so
+# Dependabot's own PRs, opened after its cooldown, pass too.
 dep_age() {
     local format="2006-01-02T15:04:05Z"
     local template="{{if and (not .Main) .Time}}{{.Path}} {{.Version}} {{.Time.UTC.Format \"${format}\"}} {{(.Time.AddDate 0 0 ${MIN_AGE_DAYS}).UTC.Format \"${format}\"}}{{end}}"
@@ -116,9 +121,9 @@ dep_age() {
     check_ages apps/hump/tools/actionlint/go.mod "$cutoff" \
         "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then in apps/hump/tools/actionlint run 'GOWORK=off go get <module>@<version>' and 'moon run hump:tidy' and commit go.mod and go.sum" \
         env GOWORK=off go -C tools/actionlint list -m -f "$template" all || status=1
-    check_ages apps/hump/scripts/ci.sh "$cutoff" \
-        "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then set GOVULNCHECK_VERSION in apps/hump/scripts/ci.sh to it" \
-        go list -m -f "$template" "golang.org/x/vuln@${GOVULNCHECK_VERSION}" || status=1
+    check_ages apps/hump/tools/govulncheck/go.mod "$cutoff" \
+        "list versions with 'go list -m -versions <module>', check the publish time (Time) of one with 'go list -m -json <module>@<version>', then in apps/hump/tools/govulncheck run 'GOWORK=off go get <module>@<version>' and 'moon run hump:tidy' and commit go.mod and go.sum" \
+        env GOWORK=off go -C tools/govulncheck list -m -f "$template" all || status=1
     return "$status"
 }
 
@@ -156,6 +161,21 @@ check_ages() {
         young=1
     done <<<"$listing"
     return "$young"
+}
+
+# relative_sarif_paths makes the paths in a govulncheck SARIF report repository-relative. govulncheck
+# writes them relative to the module (go.mod, internal/...) with the base %SRCROOT%; code scanning
+# and the links in the job summary resolve them from the repository root, so they get the
+# apps/hump/ prefix. %GOROOT% paths (standard library frames) are left as they are.
+relative_sarif_paths() {
+    local file="$1" tmp
+    tmp="$(mktemp)"
+    if ! jq '(.. | objects | select(.uriBaseId? == "%SRCROOT%" and (.uri | type) == "string" and (.uri | startswith("apps/hump/") | not)) | .uri) |= "apps/hump/" + .' "$file" >"$tmp"; then
+        rm -f "$tmp"
+        annotate vulncheck "::error file=apps/hump/scripts/ci.sh,title=Go vulnerability report could not be rewritten::jq failed to make the paths in .ci/hump/govulncheck.sarif repository-relative (invalid JSON or jq missing); see the log for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+        return 1
+    fi
+    mv "$tmp" "$file"
 }
 
 # cutoff_time prints the time MIN_AGE_DAYS days ago in RFC 3339 UTC. date -d is GNU (CI), date -r

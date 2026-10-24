@@ -6,14 +6,10 @@ logic of its own — each controller binds a transport (WAL listener, HTTP port)
 elsewhere. Request mapping, status codes and DTOs belong to the per-use-case `Controller` in
 `internal/application/...`; this package only decides which path and which port they answer on.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `process.go` | `ProcessController` — the WAL listener, `db.Listen(ctx, process)` |
-| `observability.go` | `ObservabilityController` — health probes and the Prometheus scrape on `TELEMETRY_PORT` |
-| `hump_tower.go` | `HumpTowerController` — the web UI API and the embedded SPA on `WEB_PORT` |
-| `hump_tower/` | the built hump-tower SPA, embedded through `//go:embed hump_tower` — a build artifact, see below |
+`ProcessController` (`process.go`) is the WAL listener; `ObservabilityController`
+(`observability.go`) serves health and the Prometheus scrape on `TELEMETRY_PORT`;
+`HumpTowerController` (`hump_tower.go`) serves the web UI API and the SPA embedded from
+`hump_tower/` on `WEB_PORT`.
 
 ## Three controllers, two runner lanes
 
@@ -104,5 +100,3 @@ client cannot parse (payload as text rather than base64, duration as whole milli
 as `{}` rather than `null`), plus the window semantics and huma's 422s. `Serve`, the static handler
 wiring, `observability.go` and `process.go` have no tests here; `middleware.Static` and `Cors` are
 tested in `pkg/middleware`.
-
-Helpers live below the last test function — see the `go` skill.

@@ -6,16 +6,8 @@ loaded list that needs virtualization, column resizing or expandable rows pick
 `@/shared/ui/data-table`.
 Storybook: `Content/Table`.
 
-Parts (`index.ts`):
-
-| Export | Kind | Role |
-|---|---|---|
-| `Table` | component | frame, optional header and toolbar, the column header row, then `children` |
-| `TableRow` | component | one row; reads the variant from the enclosing `Table` |
-| `TableRowHeader` | component | the column titles; `Table` renders it itself |
-| `TableRowColumn<T>`, `MobileZone` | types | column definition |
-| `TableVariant` | type | `'default' \| 'bordered'` |
-| `SelectableProps` | type | the `selectable` object of `TableRow` |
+Exports: `Table`, `TableRow`, `TableRowHeader` (`Table` renders it itself), and the types
+`TableRowColumn<T>`, `MobileZone`, `TableVariant`, `SelectableProps`.
 
 ## Usage
 
@@ -60,46 +52,17 @@ Selectable rows — selection state is the caller's:
 
 ## Props
 
-### Table
+Typed in `table.tsx`, `table-row.tsx` and `table.types.ts`. Not obvious from the types:
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `columns` | `TableRowColumn<T>[]` | required | Columns of the header row |
-| `variant` | `'default' \| 'bordered'` | `'default'` | `default` — no frame; `bordered` — wrapped in a `Card` |
-| `selectable` | `boolean` | — | Reserves the checkbox slot in the header row |
-| `header` | `ReactNode` | — | Title area above the table |
-| `headerAside` | `ReactNode` | — | Right side of the title area |
-| `toolbar` | `ReactNode` | — | Strip between the title area and the column header |
-| `children` | `ReactNode` | required | The `TableRow`s |
-| `className` | `string` | — | On the `Card` (`bordered`) or the wrapper `div` (`default`) |
-
-The title area is rendered only when `header` or `headerAside` is set.
-
-### TableRow
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `row` | `T` | required | Row data handed to the column renderers |
-| `columns` | `TableRowColumn<T>[]` | required | |
-| `selectable` | `{ id: string; checked: boolean; onToggle: () => void }` | — | Makes the row a `<label>` with a `Checkbox`; `id` must be unique on the page |
-| `mobileZoneClasses` | `Partial<Record<MobileZone, string>>` | — | Extra classes per mobile zone |
-
-### TableRowHeader
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `columns` | `TableRowColumn<T>[]` | required | |
-| `selectable` | `boolean` | — | Adds the checkbox-sized spacer |
-
-### TableRowColumn<T>
-
-| Field | Type | Description |
-|---|---|---|
-| `key` | `string` | Stable id, used as the React key |
-| `header` | `string` | Column title; an empty cell with `className` is rendered when omitted |
-| `className` | `string` | Width / alignment of the header cell and the `lg` body cell |
-| `cell` | `(row: T) => ReactNode` | Body cell on `lg` and up |
-| `mobile` | `{ zone: MobileZone; className?: string; render: (row: T) => ReactNode }` | Below `lg`: which zone the column goes to and what it renders |
+- `Table` `variant`: `default` has no frame, `bordered` wraps the table in a `Card`. `className`
+  goes to the `Card` or to the wrapper `div`.
+- The title area is rendered only when `header` or `headerAside` is set; `toolbar` sits between it
+  and the column header.
+- `Table` `selectable` only reserves the checkbox slot in the header row; each `TableRow` still
+  needs its own `selectable` object. That object turns the row into a `<label>` around a
+  `Checkbox` with `id`, so `id` must be unique on the page.
+- A column without `header` gets an empty header cell that still carries its `className`.
+- `mobileZoneClasses` adds classes per mobile zone.
 
 ## Layout
 
@@ -112,20 +75,13 @@ The title area is rendered only when `header` or `headerAside` is set.
 
 ## Semantic styles
 
-Every part follows the `Table` `variant`, passed down through context. The default title area,
-column header and row are `cva` variants; frame and toolbar are ternaries in `table.tsx`:
+Every part follows the `Table` `variant`, passed down through context (`table-context.ts`). The
+title area, column header and row are cva variants; frame and toolbar are ternaries in
+`table.tsx`. `bordered` adds the `Card` frame, `px-4` padding on the header and rows, a
+`bg-surface-2` column header and a rounded last row.
 
-| Part | `default` | `bordered` |
-|---|---|---|
-| frame | `div`, `text-ink` | `Card` (`bg-surface-1`, `border-hairline`, `rounded-xl`) with `overflow-visible` |
-| title area | `pb-2` | `CardHeader` |
-| toolbar | `py-4`, `border-hairline` bottom | `p-4`, `border-hairline` bottom |
-| column header | `py-2.5` | `py-2.5`, plus `bg-surface-2 px-4` |
-| row | `py-3` | `py-3 px-4`, last row `rounded-b-xl` |
+Column titles are `text-ink-subtle text-xs font-semibold uppercase`. Rows are separated by
+`border-hairline`, none after the last.
 
-Column titles are `text-ink-subtle text-xs font-semibold uppercase tracking-wide`. Rows are
-separated by `border-hairline`, none after the last. Mobile zone `meta` is
-`font-mono text-sm text-ink-subtle`.
-
-States, selectable rows only: hover `bg-surface-2`, checked `bg-primary-soft/40`,
-`cursor-pointer`. Plain rows have no hover state.
+States, selectable rows only: hover `bg-surface-2`, checked `bg-primary-soft/40`. Plain rows have
+no hover state.

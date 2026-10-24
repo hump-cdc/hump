@@ -19,5 +19,5 @@ const meta: Meta<StoryArgs> = {
 export default meta
 
 export const Default: StoryObj<StoryArgs> = {
-    name: 'CopyButton',
+    name: 'Copy Button',
 }

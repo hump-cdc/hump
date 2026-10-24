@@ -10,29 +10,24 @@ application layer keyed by the *configured* table.
 |---|---|
 | `postgres.go` | `New` and `configure`, which orders the whole bootstrap |
 | `postgres_streaming.go` | `Listen`: bootstrap, then the lag poller and the WAL stream, each on a session of its own |
-| `postgres_cleanup.go` | `Cleanup`: drops the publication and the replication slot |
-| `postgres_snapshot.go` | `ValidateWhere`, `StartSnapshot`, `FinishSnapshot`, `ReadSnapshot`: one-line entry points into `snapshot` |
-| `postgres_metadata.go` | getters for what `New` was given: database name, host and port, publication, slot |
+| `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
+| `tables.go` | `GetTables`: on a session of its own per call; tables missing from the database are skipped |
 | `bootstrapper.go` | server-side DDL: publication, replication slot, `REPLICA IDENTITY FULL` |
 | `introspector.go` | catalog reads; resolves an incoming relation to the configured table that owns it |
 | `introspector_registry.go` | in-memory config: configured tables plus the partition→parent index |
 | `wal.go` | pgoutput stream: relation cache, row decoding, standby keepalive |
-| `replication_lag.go` | polls `pg_replication_slots` on its own session for the `replication_lag_bytes` gauge |
-| `connection.go` | self-healing `pgconn` session with retry/backoff |
-| `connection_config.go` | `connectionOptions`: connection string parsing, the replication flag, the retry policy and its options |
-| `table.go` | `tableType` / `tableMetadata`, the param builders (`tableArrayParams`, `tableScalarParams`, `textParam`) and `quoteIdentifier` / `quoteLiteral` / `qualifiedTableName` |
-| `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the catalog query for tables with their partitions |
-| `metrics.go` | the `replication_lag_bytes` gauge and the `processed_rows_duration_seconds` histogram, with its cached per-table observers |
-| `errors.go` | `ErrTableIgnored` and the package-internal sentinels `errIntrospectionRequired`, `errEmptyCopyData`, `errEmptyWalRecord`; three more are declared in the file that uses them: `errEmptyRowCount` (`postgres_row_count.go`), `errEmptySnapshotId` (`snapshot.go`), `errCopyRow` (`snapshot_export_parser.go`) |
-| `logger.go` | `log.Scope("postgres")` |
-| `postgres_row_count.go` | `GetRowCount`: planner estimate then exact `count(*)`, each in a `READ ONLY` transaction under `statement_timeout`, on a session of its own per call |
-| `tables.go` | `GetTables`: two catalog queries per call (a TimescaleDB probe, then the columns query), on its own session, describing each requested table's type and columns; tables missing from the database are skipped |
-| `snapshot_where_suggester.go` | `snapshotWhereSuggester`: picks the temporal column most likely to track recency (time key → updated → created → event-time names → sole `now()` default) and suggests the last 7 days of it |
-| `snapshot_where_parser.go` | lexer + recursive-descent parser for the `GetRowCount`/snapshot filter; re-renders it with every identifier and literal quoted, so the raw string never reaches the server |
 | `wal_gate.go` | `walGate`: pauses delivery to the WAL handler while a snapshot is active |
-| `snapshot.go` | `snapshot`, built once in `New`: `ValidateWhere`; `Start` / `Finish` and the holder session that keeps an exported snapshot alive; `Read`: leaves + columns inside the snapshot, then `COPY` chunks by `ctid` page range |
-| `snapshot_export_parser.go` | `snapshotExportParser`: parser for the `COPY … TO STDOUT` text format, decoding fields with the same `decodeText` WAL uses |
+| `connection.go` | self-healing `pgconn` session with retry/backoff |
+| `table.go` | param builders and `quoteIdentifier` / `quoteLiteral` |
+| `table_metadata.go` | `tableMetadataLoader`: the TimescaleDB probe and the tables-with-partitions query |
+| `snapshot.go` | `snapshot`, built once in `New`: the holder session, `Read` by `ctid` page range |
+| `snapshot_where_parser.go` | parser for the row filter; re-renders it with every identifier and literal quoted, so the raw string never reaches the server |
+| `snapshot_where_suggester.go` | suggests a "last 7 days" filter on the column most likely to track recency |
+| `snapshot_export_parser.go` | `COPY … TO STDOUT` text parser, decoding fields with the same `decodeText` WAL uses |
 | `sql/` | every statement, one file each, pulled in with `//go:embed` |
+
+The rest (`postgres_cleanup.go`, `postgres_snapshot.go`, `postgres_metadata.go`, `connection_config.go`,
+`replication_lag.go`, `metrics.go`, `errors.go`, `logger.go`) are named after what they hold.
 
 ## Conventions
 
@@ -49,7 +44,6 @@ application layer keyed by the *configured* table.
 - **Tests talk to a real socket** against `fakeServer` (`postgres_test.go`), whose responders
   dispatch on substrings of the SQL. A new query therefore needs a distinctive marker in its
   text — the leading `--` comment is the intended hook — and a case in the shared responders.
-  Test helpers live below the last test function; see the `go` skill.
 
 ## The TimescaleDB constraint everything else follows from
 
@@ -100,7 +94,7 @@ protocol would run a batch as one implicit transaction and hold every `AccessExc
 until the last one commits.
 
 **What `replica: unmanaged` costs at decode time.** FULL is what makes `decodeRow` able to fill
-in an unchanged TOAST column (`'u'`) — `ExtractReplicaIdentity` flattens the old tuple, so it
+in an unchanged TOAST column (`'u'`) — the server's `ExtractReplicaIdentity` flattens the old tuple, so it
 arrives as `'t'` with the real value. Without FULL the old tuple is either absent or key-only
 (`'K'`), and a key-only tuple nulls out every column outside the replica identity. Those nulls
 are absences, not values, so `decodeRow` reports them — and any `'u'` it cannot resolve — as
@@ -166,5 +160,5 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   (`beginProcessing`/`endProcessing`), reporting the position the loop held on entry; otherwise
   the upstream walsender times the session out. Outside `processMessage` the receive loop is the
   session's only user, and `endProcessing` waits out a flush the worker has in flight.
-- See `docs/TRACE_ID.md` before enabling streaming — the `pendingTrace` map it proposes (not
+- See the repo-root `docs/TRACE_ID.md` before enabling streaming — the `pendingTrace` map it proposes (not
   implemented) is keyed by xid and would need `StreamAbortMessageV2` handling.

@@ -33,13 +33,10 @@ Card                              Card
 
 ## Props
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `children` | `ReactNode` | required | The controls; one row on desktop, inside the `Sheet` on mobile |
-| `actions` | `ReactNode` | — | Controls kept out of the mobile `Sheet`: below the trigger on mobile, trailing the row on desktop |
-| `label` | `string` | `'Filters'` | Mobile trigger label and `Sheet` title |
-| `className` | `string` | — | Merged into the `CardContent` classes, not the `Card` |
-| `ref` | `Ref<HTMLDivElement>` | — | Forwarded to the `Card` |
+- `actions`: controls kept out of the mobile `Sheet`: below the trigger on mobile, trailing the row
+  on desktop.
+- `label` (default `'Filters'`): the mobile trigger label and the `Sheet` title.
+- `className` goes to `CardContent`, not the `Card`; `ref` goes to the `Card`.
 
 The children must be direct elements, not wrapped in one container: on mobile every direct child
 gets `w-full` (`*:w-full`), both the stacked controls in the `Sheet` and the trigger and `actions`
@@ -49,12 +46,6 @@ The `Sheet`'s open state is internal; there is no prop to control it.
 
 ## Semantic styles
 
-No cva variants; the surface comes from `Card` and `CardContent` (`@/shared/ui/card`), the mobile
-trigger from `Button variant="outline"`, the panel from `Sheet side="right"` (`@/shared/ui/sheet`).
-
-| Part | Classes |
-|---|---|
-| `CardContent` | `px-4 pt-2.5 pb-3` |
-| desktop row | `flex items-center gap-2` |
-| mobile column | `flex flex-col gap-2` |
-| controls inside the `Sheet` | `flex flex-col gap-3 p-4` |
+No cva variants and no tokens of its own: the surface comes from `Card` / `CardContent`
+(`@/shared/ui/card`), the mobile trigger from `Button variant="outline"`, the panel from
+`Sheet side="right"` (`@/shared/ui/sheet`).

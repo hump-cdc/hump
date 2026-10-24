@@ -2,6 +2,10 @@ $schema: './cache/schemas/workspace.json'
 
 versionConstraint: '>=2.6.1'
 
+# No usage reports or new-version checks (launch.moonrepo.app): CI blocks that endpoint
+# (harden-runner in .github/workflows/check.yml).
+telemetry: false
+
 projects:
   globs:
     # Match the moon.yml, not the folder: a folder glob also matches files,

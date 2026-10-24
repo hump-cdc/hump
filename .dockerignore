@@ -1,0 +1,26 @@
+# Build context of apps/hump/Dockerfile (the repo root).
+
+# VCS, CI and tooling state
+.git
+.github
+.ci
+.moon/cache
+.moon/docker
+.claude
+.zed
+.env
+**/.DS_Store
+
+# Dependencies and local build output
+**/node_modules
+apps/*/bin
+apps/hump-tower/storybook-static
+apps/hump/tools
+
+# The committed UI build: the ui stage rebuilds it, so stale hashed files never get embedded.
+apps/hump/internal/controller/hump_tower
+
+# Not needed for the build
+dev
+docs
+**/*.md

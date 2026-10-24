@@ -7,7 +7,7 @@ proto:
   version: '0.63.1'
 
 go:
-  version: '1.26.9'
+  version: '1.26.10'
   # One Go module for now; turn on when packages/ gets Go modules that import each other.
   inferRelationships: false
   # Go downloads modules on demand. Skips moon's `go work sync` / `go mod download`, which could

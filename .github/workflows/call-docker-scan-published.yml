@@ -1,0 +1,168 @@
+name: "Docker: scan published image"
+
+# Reusable: scans the published image by digest with Trivy, after a release
+# (release-docker-publish.yml) and for the latest release on every run of main-security-scan.yml. No
+# environment and no secrets.
+on:
+    workflow_call:
+        inputs:
+            digest:
+                description: Digest of the multi-arch image index of docker.io/humpcdc/hump (sha256:...); empty scans the image of the latest GitHub release
+                type: string
+                required: false
+                default: ""
+
+permissions: {}
+
+defaults:
+    run:
+        shell: bash
+
+# No cache anywhere (no trivy cache), as in call-docker-scan.yml.
+jobs:
+    # One job for both platforms, so the caller has a single check.
+    scan:
+        name: Scan
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning
+        env:
+            IMAGE: docker.io/humpcdc/hump
+        steps:
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            # Only for .trivyignore, which Trivy reads from the repository root.
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # Without a digest: the version tag (no leading 'v') of the latest stable release; no
+            # stable release ends the job with a notice.
+            - name: Resolve the digest of the published image
+              id: resolve
+              env:
+                  INPUT_DIGEST: ${{ inputs.digest }}
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  digest="$INPUT_DIGEST"
+                  if [[ -z "$digest" ]]; then
+                      # releases/latest skips drafts and pre-releases and answers 404 when no stable
+                      # release exists; only the latest release is supported (SECURITY.md).
+                      err="${RUNNER_TEMP}/latest-release.err"
+                      if ! tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>"$err"); then
+                          cat "$err" >&2
+                          if grep -q 'HTTP 404' "$err"; then
+                              echo "::notice title=No stable release to scan::${GITHUB_REPOSITORY} has no stable (non-draft, non-pre-release) GitHub release yet, so there is no published image to scan."
+                              echo "skip=true" >> "$GITHUB_OUTPUT"
+                              exit 0
+                          fi
+                          echo "::error file=.github/workflows/call-docker-scan-published.yml,title=Cannot read the latest release::The GitHub API call 'gh api repos/${GITHUB_REPOSITORY}/releases/latest' failed (error above). This is usually a transient API or token problem: re-run this workflow; if it persists, check the GitHub status page and the job's contents: read permission."
+                          exit 1
+                      fi
+                      version="${tag#v}"
+                      echo "Latest release: ${tag}, image ${IMAGE}:${version}"
+                      if ! digest=$(docker buildx imagetools inspect "${IMAGE}:${version}" --format '{{json .Manifest}}' | jq -r .digest); then
+                          digest=""
+                      fi
+                      if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                          echo "::error file=.github/workflows/call-docker-publish.yml,title=Image of release ${tag} not found::Could not read the index digest of ${IMAGE}:${version} from Docker Hub (got '${digest}'). Check that the 'Docker: publish' run of release ${tag} pushed the image and re-run it if not; inspect with: docker buildx imagetools inspect ${IMAGE}:${version}"
+                          exit 1
+                      fi
+                  elif [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                      echo "::error file=.github/workflows/call-docker-scan-published.yml,title=Invalid image digest input::The 'digest' input '${digest}' is not a sha256:<64 hex> digest. Pass the index digest that call-docker-publish.yml outputs, or leave it empty to scan the latest release."
+                      exit 1
+                  fi
+                  echo "Scanning ${IMAGE}@${digest}"
+                  {
+                      echo "digest=${digest}"
+                      echo "skip=false"
+                  } >> "$GITHUB_OUTPUT"
+
+            # Same inputs as in call-docker-scan.yml, but by digest; Trivy reads TRIVY_PLATFORM from
+            # the step env (the action has no platform input).
+            - name: Scan the published linux/amd64 image for fixable CRITICAL and HIGH vulnerabilities
+              if: ${{ steps.resolve.outputs.skip == 'false' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              env:
+                  TRIVY_PLATFORM: linux/amd64
+              with:
+                  version: "v0.76.0"
+                  cache: false
+                  scan-type: image
+                  image-ref: ${{ env.IMAGE }}@${{ steps.resolve.outputs.digest }}
+                  scanners: vuln
+                  severity: CRITICAL,HIGH
+                  ignore-unfixed: true
+                  limit-severities-for-sarif: true
+                  format: sarif
+                  output: trivy-published-linux-amd64.sarif
+                  exit-code: "0"
+
+            - name: Scan the published linux/arm64 image for fixable CRITICAL and HIGH vulnerabilities
+              if: ${{ steps.resolve.outputs.skip == 'false' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              env:
+                  TRIVY_PLATFORM: linux/arm64
+              with:
+                  version: "v0.76.0"
+                  cache: false
+                  scan-type: image
+                  image-ref: ${{ env.IMAGE }}@${{ steps.resolve.outputs.digest }}
+                  scanners: vuln
+                  severity: CRITICAL,HIGH
+                  ignore-unfixed: true
+                  limit-severities-for-sarif: true
+                  format: sarif
+                  output: trivy-published-linux-arm64.sarif
+                  exit-code: "0"
+
+            # Separate categories keep the pre-publish scan results. Callers never run on
+            # pull_request, so the upload always works.
+            - name: Upload published linux/amd64 image vulnerability findings to the Security tab
+              if: ${{ !cancelled() && steps.resolve.outputs.skip == 'false' && hashFiles('trivy-published-linux-amd64.sarif') != '' }}
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: trivy-published-linux-amd64.sarif
+                  category: trivy-published-linux-amd64
+
+            - name: Upload published linux/arm64 image vulnerability findings to the Security tab
+              if: ${{ !cancelled() && steps.resolve.outputs.skip == 'false' && hashFiles('trivy-published-linux-arm64.sarif') != '' }}
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: trivy-published-linux-arm64.sarif
+                  category: trivy-published-linux-arm64
+
+            - name: Check that the published image has no fixable CRITICAL or HIGH vulnerabilities
+              if: ${{ !cancelled() && steps.resolve.outputs.skip == 'false' }}
+              env:
+                  DIGEST: ${{ steps.resolve.outputs.digest }}
+              run: |
+                  set -euo pipefail
+                  ref="${IMAGE}@${DIGEST}"
+                  status=0
+                  for platform in linux-amd64 linux-arm64; do
+                      sarif="trivy-published-${platform}.sarif"
+                      reproduce="Reproduce locally: trivy image --platform ${platform/-//} --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed ${ref}"
+                      if ! jq -e '.runs' "$sarif" >/dev/null 2>&1; then
+                          echo "::error file=apps/hump/Dockerfile,title=Vulnerability scan of the published ${platform/-//} image did not complete::Trivy wrote no valid ${sarif} for ${ref}; see the log of the scan step for ${platform/-//} for the cause. ${reproduce}"
+                          status=1
+                          continue
+                      fi
+                      count=$(jq '[.runs[].results[]?] | length' "$sarif")
+                      if (( count > 0 )); then
+                          echo "Findings for ${platform/-//} of ${ref}:"
+                          jq -r '.runs[].results[]? | "  \(.ruleId)  \(.locations[0].physicalLocation.artifactLocation.uri // "-")  \(.message.text | split("\n")[0])"' "$sarif"
+                          echo "::error file=apps/hump/Dockerfile,title=The published ${platform/-//} image has ${count} fixable CRITICAL or HIGH vulnerabilities::Image ${ref}. The findings are above and in the Security tab (category trivy-published-${platform}). ${reproduce}. Fix: update the base image digest in apps/hump/Dockerfile or the affected Go module in apps/hump/go.mod and publish a new release; for a finding that does not apply, add its ID to .trivyignore with a comment (reason and review date)."
+                          status=1
+                      fi
+                  done
+                  exit "$status"

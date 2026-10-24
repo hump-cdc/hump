@@ -6,15 +6,6 @@ with retries, a per-attempt timeout, a failure policy, metrics and — when some
 one operations log entry per sink. `Process` returns only after every sink has finished, which is
 what lets the caller advance its position on a nil.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `usecase.go` | `UseCase`: builds the bindings and the worker pool, `Process` fans one row out |
-| `binding.go` | `binding` — one (table, sink) pair, its delivery chain, hooks and scratch record |
-| `controller.go` | `Controller`, a pass-through whose `Process` matches `database.ProcessMessageHandler` |
-| `logger.go` | `log.Scope("application/process_operation")` |
-
 ## Two callers, one use case, one goroutine at a time
 
 `cmd/hump/main.go` builds a single `UseCase` and hands `Controller.Process` to both producers:
@@ -28,8 +19,9 @@ what lets the caller advance its position on a nil.
 `pkg/worker_pool`'s batch API is single-goroutine only. `Process` returns the error of
 `BeginBatch` wrapped as `begin batch: …`, so a second concurrent caller fails with
 `ErrAlreadyInFlight` and delivers nothing; it is not queued behind the first. Keeping callers from
-overlapping is still the job of the code outside: the snapshot pauses WAL delivery (`walGate`), and
-serializes its own table readers with `processMu`. Any new caller has to take part in that.
+overlapping is still the job of the code outside: a snapshot pauses WAL delivery (`walGate` in
+`adapter/postgres/wal_gate.go`, taken by `StartSnapshot`), and `adapter/snapshot` serializes its
+own table readers with `processMu`. Any new caller has to take part in that.
 
 A call after shutdown fails the same way: `BeginBatch` returns `ErrWorkerPoolClosed`, and `Process`
 returns it wrapped without submitting anything.
@@ -109,8 +101,7 @@ sink that succeeded for that row before a sibling failed sees it twice.
 Both metrics are declared without a prefix; the factory from `pkg/observability/metric` adds `hump_`,
 and `db` is a constant label. The `host` and `target` labels come from `cfg.Sink.Metadata` rendered **once, at construction**,
 from the schema and table alone. They are the configured target, not what a templated topic or URL
-renders to per row, and they have to match what the dashboard's topology computes —
-`adapter/metrics_collector/AGENTS.md` explains why byte for byte.
+renders to per row, and they have to match the dashboard's topology (see `port/sink/AGENTS.md`).
 
 ## `Observer` and `OperationLog` are declared here
 
@@ -171,16 +162,9 @@ and normally no batch is open. `Shutdown` takes the pool mutex that `BeginBatch`
 
 ## Tests
 
-`binding_test.go` covers the binding in isolation: the nil observer, one observer call per outcome,
-and `accepts`. `operation_log_test.go` drives a whole chain through `newBinding` with a scripted
-sink: no record and no capture while disconnected, one record per delivery whatever the retries,
-the attempt status matrix, the capture filled on a failed delivery, `TargetKey` against the
-rendered `Target`, the terminal error, two deliveries in a row (which does not pin the rebind, see
-above), buffer reuse across a hundred deliveries, and
-the counters still firing while logging.
-
-Nothing tests `UseCase.Process` — the fan-out, the pool sizing and the error precedence are
-unpinned.
+`binding_test.go` covers the binding in isolation; `operation_log_test.go` drives a whole chain
+through `newBinding` with a scripted sink. Nothing tests `UseCase.Process` — the fan-out, the pool
+sizing and the error precedence are unpinned.
 
 The benchmarks are a contract with `adapter/operations_collector`, which cites them by name:
 `BenchmarkBindingProcessWithoutLog` (nil log) is the control for `BenchmarkBindingProcessIdle`
@@ -188,11 +172,7 @@ The benchmarks are a contract with `adapter/operations_collector`, which cites t
 proof a disconnected log costs nothing. `BenchmarkBindingProcessLogged` is the connected path and
 is not allocation free by design.
 
-`newTestBinding` builds a binding over a private registry with a `fakeSink` that fails the first
-`len(errs)` attempts; `newTestContext` is one row by id; `deliver` runs row `"a"` and tolerates
-`errBoom`. `fakeOperationLog` copies what it is handed, because the real collector swaps the
-buffers away, and with `recycle` hands buffers back like a ring with populated slots;
-`benchOperationLog` swaps and keeps nothing. Helpers live below the last test function — see the
-`go` skill — except `fakeObserver`, which sits in `binding_test.go` right after
-`TestBindingRecordsEveryOutcome`. `TestBindingKeepsCountersWhileLogging` in `operation_log_test.go`
-uses it too.
+`fakeOperationLog` copies what it is handed, because the real collector swaps the buffers away
+(which is also why it cannot catch a missing `rebind`); with `recycle` it hands buffers back like a
+ring with populated slots. `fakeObserver` sits right after `TestBindingRecordsEveryOutcome` in
+`binding_test.go` rather than below the last test, and `operation_log_test.go` uses it too.

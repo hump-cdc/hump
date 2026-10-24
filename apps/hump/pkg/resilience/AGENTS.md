@@ -5,18 +5,6 @@ Four decorators over one function type. `Handler[T]` is "do this to one item", a
 knows nothing about sinks; `process_operation/binding.go` is the one place that composes them, once
 per binding, at construction time.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `handler.go` | `Handler[T]` |
-| `timeout.go` | `WithTimeout` — a derived context per call |
-| `retry.go` | `WithRetry`, `RetryHooks`, the pooled backoff timer |
-| `backoff.go` | `Backoff` and `DelayFunc` — the linear and exponential curves, the jitter |
-| `status.go` | `WithStatus`, `StatusHooks` — the terminal outcome |
-| `failure.go` | `WithFailureMode`, `SkipHooks` — crash or skip |
-| `errors.go` | `ErrRetryAborted` |
-
 ## The order they are composed in
 
 From the inside out, as `newBinding` builds it:
@@ -26,13 +14,13 @@ WithFailureMode( WithStatus( withOperation( WithRetry( withAttempt( WithTimeout(
 ```
 
 `withOperation` and `withAttempt` belong to `process_operation`, and `withAttempt` is only in the
-logged branch; see `process_operation/AGENTS.md` for the full chain.
+logged branch; see `internal/application/processing/process_operation/AGENTS.md` for the full chain.
 
 Each position is deliberate, and the hooks mean what they mean only in this order:
 
 - **`WithTimeout` is inside the retry**, so `attemptTimeout` bounds one attempt, not the delivery.
 - **`WithStatus` is outside the retry**, so `OnSuccess`/`OnFailure` fire once per delivery with the
-  terminal outcome, while `OnDuration` fires once per **attempt**, failed ones included.
+  terminal outcome, while `WithRetry`'s `OnDuration` fires once per **attempt**, failed ones included.
   `adapter/metrics_collector/AGENTS.md` notes that the sink-duration metric's help text claims
   otherwise.
 - **`WithFailureMode` is outermost**, so a skipped failure has already been counted by `OnFailure`
@@ -100,7 +88,3 @@ both declarations together.
 `BenchmarkResilience` measures `WithStatus(WithRetry(fn))` with and without retries; the
 `WithTimeout` line is commented out and `WithFailureMode` is not in the chain, so the per-attempt
 context allocation its doc comment mentions is not measured.
-
-Helpers here sit above the tests that use them (`countingHooks` in `retry_test.go`,
-`recordingStatusHooks` in `status_test.go`, `noopHooks` in `bench_test.go`); only
-`recordingSkipHooks` is below the tests in `failure_test.go`.

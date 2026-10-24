@@ -1,0 +1,64 @@
+name: "Repository: OpenSSF Scorecard"
+
+# The Scorecard API rejects results that break
+# https://github.com/ossf/scorecard-action#workflow-restrictions: no top-level env/defaults or write
+# permissions; id-token only in the job, which has no env/defaults/container/services, no run steps
+# and uses only checkout, upload-artifact, upload-sarif, scorecard-action and harden-runner.
+# workflow_dispatch is experimental.
+on:
+    push:
+        branches:
+            - main
+    schedule:
+        - cron: "0 6 * * 4"
+    workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    scorecard:
+        name: Scorecard report
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        # Public repository: the extra reads that private repositories need are not granted.
+        permissions:
+            contents: read # checkout and the Scorecard checks
+            security-events: write # upload SARIF to code scanning
+            id-token: write # OIDC token that signs the results published to the Scorecard API
+        steps:
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Run the OpenSSF Scorecard checks and publish the results
+              uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+              with:
+                  results_file: results.sarif
+                  results_format: sarif
+                  publish_results: true
+
+            # Downloadable by anyone for 5 days; the Security tab needs write access.
+            - name: Upload the Scorecard SARIF report as a workflow artifact
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: scorecard-sarif
+                  path: results.sarif
+                  retention-days: 5
+
+            - name: Upload Scorecard findings to the Security tab
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: results.sarif
+                  category: scorecard

@@ -1,32 +1,17 @@
 # shared/theme — how this module hangs together
 
 Light/dark theming: one class on `<html>`, a persisted choice, and a React context around both.
-The colours themselves are not here — they are CSS custom properties in `app/styles.css`. FSD
-layer: `shared`; the module imports nothing from the app, only `react`.
+The colours themselves are not here — they are CSS custom properties in `app/styles.css`. The
+module imports nothing from the app, only `react`.
 
-Consumers: `src/app/providers.tsx` mounts `ThemeProvider`; `widgets/sidebar`
-(`app-sidebar-theme.tsx`) calls `useTheme`; `.storybook/preview.tsx` wraps stories in
-`ThemeProvider`; `rsbuild.config.ts` imports `theme-script.ts` by relative path.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `types.ts` | `Theme` = `'light' \| 'dark' \| 'system'`, `ResolvedTheme` = `'light' \| 'dark'` |
-| `constants.ts` | storage key, default theme, class names, transition length, media query |
-| `theme-script.ts` | `themeInitScript`: the pre-paint script, as a string |
-| `theme-script.test.ts` | runs the script string against injected `localStorage`/`matchMedia`/`document` stand-ins: stored value, `system`, default, storage failure |
-| `theme-provider.tsx` | `ThemeProvider`, `ThemeContext`, reading/persisting/applying the theme |
-| `use-theme.ts` | `useTheme`: the context, or a throw outside a provider |
-| `index.ts` | `ThemeProvider`, `useTheme`, and the type `Theme` |
-
-The constants, `ThemeContext` and `themeInitScript` are not part of the public contract.
+The public contract is `ThemeProvider`, `useTheme` and the type `Theme`. Outside `index.ts`,
+`rsbuild.config.ts` imports `theme-script.ts` by relative path, and `.storybook/preview.tsx`
+wraps stories in `ThemeProvider`.
 
 ## How a theme reaches the screen
 
-`app/styles.css` defines semantic tokens (`--canvas`, `--ink`, …) on `:root` for light and
-re-points them under `.dark`; `@theme inline` exposes them as utilities (`bg-canvas`, `text-ink`).
-`@custom-variant dark (&:where(.dark, .dark *))` ties Tailwind's `dark:` to the same class, and
+`app/styles.css` re-points the semantic tokens under `.dark`, and
+`@custom-variant dark (&:where(.dark, .dark *))` ties Tailwind's `dark:` to the same class;
 `color-scheme` flips with it. So the whole job of this module is to put `dark` on
 `document.documentElement`, or take it off. There is no `light` class and no data attribute.
 
@@ -56,9 +41,9 @@ Two things are still written twice: the list of valid stored values (`light`/`da
 anything else → default) is repeated in `readStoredTheme`, and the `theme === 'dark'` comparison
 in the script assumes the dark theme is named `dark`.
 
-The file is also imported by `rsbuild.config.ts`, i.e. it is loaded by the build tool, outside the
-app bundle. Its only import is `constants.ts`, which imports nothing but a type; keep both free of
-anything the build tool cannot load (React, `@/` aliases, browser globals at module level).
+The file is also loaded by the build tool, outside the app bundle. Its only import is
+`constants.ts`, which imports nothing but a type; keep both free of anything the build tool
+cannot load (React, `@/` aliases, browser globals at module level).
 
 ## Behaviour worth knowing
 

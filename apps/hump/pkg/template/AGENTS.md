@@ -4,7 +4,7 @@ The string type behind every templated sink setting. A `Template` is either a pl
 parsed Go `text/template`, decided once when the config is loaded; sinks call `Render` per row
 without knowing which. `funcs/` is the function map every parsed template gets.
 
-The user-facing reference — render context, syntax, every function with examples — is
+The user-facing reference (render context, syntax, every function with examples) is
 `docs/template.md`. This file covers what the code depends on.
 
 ## Layout
@@ -12,14 +12,12 @@ The user-facing reference — render context, syntax, every function with exampl
 | File | Role |
 |---|---|
 | `template.go` | `Template`, `New`, the YAML (un)marshalling, the static/dynamic dispatch |
-| `template_static.go` | the plain-string variant |
 | `template_renderable.go` | the parsed variant; wraps execution errors with `ErrRender` |
-| `errors.go` | `ErrRender` |
-| `funcs/funcs.go` | `Funcs` — the one `template.FuncMap` |
+| `funcs/funcs.go` | `Funcs`, the one `template.FuncMap` |
 | `funcs/builtins.go` | the stdlib builtins with logic (`and`, `or`, `not`, `call`, `index`, `slice`, `len`, the comparisons), copied from `text/template` |
 | `funcs/unavailable.go` | the `unavailable` hook into `eq`, `ne` and `empty` |
-| `funcs/args.go` | `strArg` — nil-tolerant string coercion |
-| `funcs/<category>.go` | one file per group: `case`, `strings`, `convert`, `yaml`, `regex`, `encoding`, `crypto`, `time`, `dict`, `list`, `math`, `filepath`, `url`, `uuid`, `flow`, `traceparent` |
+| `funcs/args.go` | `strArg`, nil-tolerant string coercion |
+| `funcs/<category>.go` | one file per function group (`case`, `strings`, `dict`, `traceparent`, …) |
 
 ## Static or dynamic, and it never fails
 
@@ -36,7 +34,7 @@ Other edges:
 
 - A **nil** `*Template` is usable: `Render` returns `""`, `Source` `""`, `IsDynamic` false. Optional
   config fields rely on that.
-- A **zero** `Template{}` is not — its inner variant is nil and every method panics. Build one with
+- A **zero** `Template{}` is not: its inner variant is nil and every method panics. Build one with
   `New` or by unmarshalling.
 - `UnmarshalYAML` accepts only a string scalar. A YAML number or bool in a templated field is
   rejected with `should be string` rather than converted.
@@ -47,19 +45,19 @@ Other edges:
 ## `ErrRender`
 
 Every execution failure is returned as `ErrRender` wrapping the engine's error. It marks a failure
-that comes from the template source or the shape of the data and will not go away on retry — every
-sink's `wrapError` classifies it as permanent (`adapter/sink/AGENTS.md`). Note what that marker does
-and does not do today: the retry layer retries on any error.
+that comes from the template source or the shape of the data and will not go away on retry; every
+sink's `wrapError` classifies it as permanent (`adapter/sink/AGENTS.md`). The retry layer still
+retries on any error, so today the marker does not stop retries.
 
-Functions that return `(value, error)` — `required`, `fail`, `fromjson`, `todate`, the regex
-family — are how a template raises one deliberately.
+Functions that return `(value, error)` (`required`, `fail`, `fromjson`, `todate`, the regex
+family) are how a template raises one deliberately.
 
 ## Why the builtins are re-implemented
 
 `Funcs` contains `and`, `or`, `eq`, `index`, `len` and the rest of the stdlib set. The ones in
 `builtins.go` are copied from `text/template`; `html`, `js`, `urlquery` and `print*` are the
-stdlib functions themselves. A `FuncMap` entry overrides the builtin of the same name, and the override is needed
-for one reason: **unavailable values**.
+stdlib functions themselves. A `FuncMap` entry overrides the builtin of the same name, and the
+override is needed for one reason: **unavailable values**.
 
 A column the WAL stream did not carry is `domain.UnavailableValue`. It renders as `""`, but it is a
 struct, and the stock `eq` refuses to compare a struct with a string. So here:
@@ -74,39 +72,32 @@ struct, and the stock `eq` refuses to compare a struct with a string. So here:
 `internal/domain`, which is what keeps `pkg/` free of project imports. The test doubles `undelivered`
 and `delivered` exist to prove the check calls the method instead of only looking for it.
 
-The copy went through a mechanical rename, so a few engine error strings read oddly — `tmplIndex out
-of range`, `should be 1 tmplOr 2`. They are user-visible in render errors.
+The copy went through a mechanical rename, so a few engine error strings read oddly (`tmplIndex out
+of range`, `should be 1 tmplOr 2`). They are user-visible in render errors.
 
 ## Conventions in `funcs`
 
-- Every implementation of its own is `tmpl<Name>` in the file of its category, and is registered
-  in `Funcs` under a **lowercase, unseparated** name: `kebabcase`, `hasprefix`, `regexreplaceall`.
-  The name exceptions are `aes_encrypt`, `aes_decrypt`, `trace_id` and `span_id`. A few
-  implementations break `tmpl<Name>`: `len` is `tmplLength`, `lower`/`upper` are
-  `tmplLowerCase`/`tmplUpperCase`, `aes_encrypt`/`aes_decrypt` are `tmplEncryptAES`/`tmplDecryptAES`, `adler32`/`sha256` are
-  `tmplAdler32Sum`/`tmplSHA256Sum`. Stdlib functions
-  are registered as they are: `html`, `js`, `urlquery` (the `text/template` escapers), `print`,
-  `printf`, `println` (`fmt.Sprint*`), `env` and `hostname` (`os`).
+- Each function of our own is `tmpl<Name>` in the file of its category, registered in `Funcs` under
+  a **lowercase, unseparated** name (`kebabcase`, `hasprefix`, `regexreplaceall`). Exceptions to the
+  name rule: `aes_encrypt`, `aes_decrypt`, `trace_id`, `span_id`. Some implementations do not match
+  their registered name (`len` → `tmplLength`, `lower` → `tmplLowerCase`); look them up in `Funcs`.
 - The subject comes **last**, so it can be piped: `{{ .Next.name | trimprefix "x-" }}`. `get`, `set`,
   `unset`, `haskey`, `pick` and `omit` accept the dict first or last (`dictArgs`); the classic
-  dict-first form wins when both ends are maps. The other dict functions have fixed signatures:
-  `pluck` takes the key first, then the dicts; `merge` and `mergeoverwrite` take the `dst` map first;
-  `dig` parses its own args, sprig's way, with the dict last (`dig k1 k2 … fallback dict`); `keys` and
-  `values` take the dict alone.
+  dict-first form wins when both ends are maps.
 - String helpers that should tolerate a missing field take `any` and go through `strArg`, which
   turns nil into `""`.
-- The names follow sprig but the behaviour is not always sprig's. **`lower` and `upper` are case
-  converters over split words** — `{{ lower "FooBar" }}` is `foo bar`, not `foobar`.
-- Conversions and integer math coerce silently: an unparseable value is `0`, division by zero is `0`.
+- The names follow sprig but the behaviour is not always sprig's: `lower` and `upper` split words
+  (`FooBar` → `foo bar`), and conversions and integer math coerce silently (unparseable → `0`,
+  division by zero → `0`).
 - `htpasswd`, `derivePassword`, `semver` and the TOML helpers are deliberately absent; each would
   add a module dependency.
-- `env` and `hostname` are plain `os.Getenv` and `os.Hostname` — a template can read any variable of
+- `env` and `hostname` are plain `os.Getenv` and `os.Hostname`: a template can read any variable of
   the process. `now`, `uuidv4`, `shuffle` and the `rand*` family differ on every render, so the same
   row retried renders a different message.
 
 `trace_id` and `span_id` validate strictly (lowercase hex, no `ff` version, no all-zero ids) and
 disagree on failure: `trace_id` returns its input unchanged, `span_id` returns `""`. The parser the
-logger uses is a different, more lenient one — see `pkg/observability/AGENTS.md`.
+logger uses is a different, more lenient one; see `pkg/observability/AGENTS.md`.
 
 ## Adding a function
 
@@ -125,10 +116,7 @@ logger uses is a different, more lenient one — see `pkg/observability/AGENTS.m
 `mustRender` run a source through `text/template` with `Funcs`, and `V` wraps a value as `.Value`.
 The per-category tests go through those rather than calling `tmpl*` functions directly, so a broken
 signature surfaces as a parse or execution error. The exception is `unavailable_test.go`, which
-also calls `tmplUnavailable`, `tmplEmpty`, `tmplCoalesce`, `tmplRequired`, `tmplEq` and `tmplNe`
-directly on the `undelivered` / `delivered` doubles.
+also calls the `tmpl*` functions directly on the `undelivered` / `delivered` doubles.
 
-`template_test.go` owns the wiring — static/dynamic dispatch, nil receiver, YAML — and leaves
+`template_test.go` owns the wiring (static/dynamic dispatch, nil receiver, YAML) and leaves
 function edge cases to `funcs`.
-
-Within a test file, helpers live below the last test function — see the `go` skill.

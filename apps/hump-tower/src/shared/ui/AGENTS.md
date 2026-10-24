@@ -7,13 +7,11 @@ Rules for defining components in the UI kit. Follow them for every new component
 - Build on **shadcn/ui + Radix UI** primitives. Pick the Radix primitive that fits the
   component (e.g. `@radix-ui/react-slot`, `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`).
   **If unsure which primitive is appropriate, ask before implementing.** Exceptions: `combobox/`
-  is built on Base UI (`@base-ui/react/combobox`), `where-input/` uses Base UI's popover
-  (`@base-ui/react/popover`) for its suggestion list and `prism-react-editor` for the editor, and
-  `charts/area-chart`, `charts/bar-chart` and `charts/chart` are built on `@tanstack/charts`
-  (`charts/progress-chart` is not). Other components wrap a library of their own: `flow`,
-  `flow-detailed` and `flow-summary` use `@xyflow/react`, `code` uses `@tanstack/highlight`,
-  `number-flow` uses `@number-flow/react`, `toast` uses `sonner`, and `data-table` uses
-  `@tanstack/react-table` with `@tanstack/react-virtual`.
+  is built on Base UI (`@base-ui/react/combobox`), and `where-input/` uses Base UI's popover for
+  its suggestion list and `prism-react-editor` for the editor. Other components wrap a library of
+  their own: `@tanstack/charts` (`charts/*` except `progress-chart`), `@xyflow/react` (`flow*`),
+  `@tanstack/highlight` (`code`), `@number-flow/react`, `sonner` (`toast`),
+  `@tanstack/react-table` + `@tanstack/react-virtual` (`data-table`).
 - Variants are defined with **`cva`** (`class-variance-authority`).
 - Compose class names with **`cn()`** from `@/shared/utils` (clsx + tailwind-merge).
 - Prefer standard Tailwind utilities over arbitrary values (`gap-2`, not `gap-[7px]`).
@@ -23,8 +21,7 @@ Rules for defining components in the UI kit. Follow them for every new component
 
 ## Folder structure
 
-One folder per component, kebab-case name; the file matches the folder. No
-`shared/ui/index.ts` barrel — import each component from its own folder.
+One folder per component; the main file matches the folder.
 
 ```
 shared/ui/
@@ -34,65 +31,46 @@ shared/ui/
     index.ts                      // export * from './<component-name>'
 ```
 
-- Folder/file: **kebab-case** (`filter-dropdown/filter-dropdown.tsx`).
-- Exceptions to the layout above: `charts/` is a group folder with no `index.ts` of its own;
-  each chart lives in a subfolder (`area-chart`, `bar-chart`, `chart`, `progress-chart`) and is
-  imported as `@/shared/ui/charts/<name>`. `charts/chart/` has no `chart.tsx`, only `chart-*`
-  files. `error/` has no `error.tsx`: its main file is `error-terminal.tsx`.
-- `index.ts` re-exports with `export * from './<file>'`, one line per component or part file.
-  Exceptions: `elapsed-time`, `mark`, `toast`, `where-input` and `charts/chart` use named
-  exports; `multi-combo-box` adds `export type * from './multi-combo-box.types'`; `table` also
-  re-exports `./table.types` and adds `export type { TableVariant } from './table-context'`;
-  `data-table` also re-exports `./data-table.types`; `combobox` also re-exports
-  `./combobox.helpers`; `sidebar` also re-exports `./constants`.
-- Exported component: **PascalCase** (`FilterDropdown`).
+- `charts/` is a group folder with no `index.ts`, `AGENTS.md` or `CLAUDE.md` of its own; each
+  chart lives in a subfolder and is imported as `@/shared/ui/charts/<name>`.
+- `index.ts` re-exports with `export * from './<file>'`, one line per public file. A few folders
+  use named exports or add `export type` lines; check the folder's `index.ts`.
 - Keep `cva` variants, the props `type`, and the component in one `.tsx` file. A larger
   component splits into several files, and each file holds the variants, props and component
   of its own part:
-  - compound parts: `<component>-<part>.tsx` (`sheet/sheet-content.tsx`,
-    `tabs/tabs-trigger.tsx`; also `card`, `dropdown-menu`, `sidebar`, `table`, `tooltip`, `header`, `error`
-    (`error-line.tsx`, `error-prompt.tsx`) and `charts/chart` (`chart-*`));
+  - compound parts: `<component>-<part>.tsx` (`sheet/sheet-content.tsx`, `tabs/tabs-trigger.tsx`);
   - internal pieces and non-component code: `<component>.<part>.ts(x)`
     (`data-table/data-table.row.tsx`, `flow/flow.helpers.ts`, `*.types.ts`, `*.consts.ts`).
-    `combobox` is the exception: all its `combobox.<part>` files (`combobox.item.tsx` etc., plus
-    `combobox.helpers.ts`) are public, re-exported from `index.ts`. Most context files use the
-    hyphen form instead (`card/card-context.ts`, `table/table-context.ts`,
-    `sidebar/sidebar-context.tsx`, `charts/chart/chart-context.ts`), and so does the internal
-    `tabs/tabs-list-indicator.tsx`; `flow-detailed/flow-detailed.context.ts` keeps the dot form;
-  - the remaining files use other names: `card/{area-chart,bar-chart,info,metric}-card.tsx`,
-    `flow/{metric-hint,node.label,node.table,sink-icon}.tsx`, `flow/node.ts`,
-    `flow-detailed/node.{ghost,sink,sink.target}.tsx`, `flow-summary/node.sink.tsx`,
-    `number-flow/duration-flow.tsx`, `placeholder/no-payload-placeholder.tsx`,
-    `sidebar/constants.ts`.
+    Exception: every `combobox.<part>` file is public and re-exported from `index.ts`.
 
-  Only `data-table` keeps its component props type outside the `.tsx`: `DataTableProps<T>` is in
-  `data-table.types.ts`.
+  Some existing files deviate (most context files use the hyphen form, `flow*/node.*.tsx`,
+  `card/*-card.tsx`, `error/error-terminal.tsx` as the main file); follow the scheme above for
+  new files.
 - Every component folder carries its own `AGENTS.md` (plus a `CLAUDE.md` holding only
-  `@AGENTS.md`; the `charts/` group folder has neither, its subfolders do) with four parts: what the component is for and its Storybook path, **Usage**,
-  **Props**, **Semantic styles** (variants and the design tokens behind them). Keep it in
-  sync when props or variants change.
+  `@AGENTS.md`) with four parts: what the component is for and its Storybook path, **Usage**,
+  **Props**, **Semantic styles**. Do not copy the types into them:
+  - **Props** covers only what the types don't make obvious: closed props, where `className`
+    and `aria-*` land, controlled/uncontrolled rules, defaults that have a reason.
+  - **Semantic styles** covers which variant to use when and token choices that aren't obvious,
+    not class lists.
+
+  Keep it in sync when props or variants change.
 
 ## Component rules
 
 - Component is a **`React.FC`** with a `type` props alias. Generic components cannot be an
-  `FC`: `DataTable` is a generic arrow function returning `ReactElement` (its internal
-  `DataTableHeader` and `HeaderCell` are generic arrows returning `ReactNode`;
-  `DataTableRow` is a `memo` of a generic arrow, cast to `<T>(props) => ReactNode`),
-  `Table`, `TableRow` and `TableRowHeader` generic `function`s returning `ReactNode`. The flow
-  node configs `TableNode` (`flow/node.table.tsx`), `SinkNode` (`flow-detailed/node.sink.tsx`,
-  `flow-summary/node.sink.tsx`) and `GhostNode` (`flow-detailed/node.ghost.tsx`) are
-  `Object.assign((_props) => null, { flowNodeType })`: declarative elements that render nothing.
-  `Combobox` and `ComboboxValue` are not components of their own: they re-export Base UI's
-  `Combobox.Root` and `Combobox.Value`.
+  `FC`: they are generic arrow functions or `function`s (`DataTable`, `Table`). The flow node
+  configs (`TableNode`, `SinkNode`, `GhostNode`) are `Object.assign((_props) => null,
+  { flowNodeType })`: declarative elements that render nothing.
 - **Do not export** the `cva` variants object or the props type — keep them module-private.
-  Exceptions: `DataTableProps<T>` (`data-table/data-table.types.ts`, re-exported from
-  `index.ts`) and `SelectableProps` (`table/table-row.tsx`) are exported.
+  Exceptions: `DataTableProps<T>` (`data-table/data-table.types.ts`) and `SelectableProps`
+  (`table/table-row.tsx`).
 - Props `type` = element attributes `& VariantProps<typeof xVariants>` (+ extras like
   `asChild`, `ref`).
 - Use Radix **`Slot`** for an `asChild` escape hatch when the component renders an element.
 - Always pass `className` through `cn(xVariants({ ...variant, className }))`.
 
-### Example (`button/button.tsx`)
+### Example (abridged from `button/button.tsx`)
 
 ```tsx
 import type { ButtonHTMLAttributes, FC, Ref } from 'react'
@@ -127,12 +105,6 @@ export const Button: FC<ButtonProps> = ({ className, variant, asChild = false, .
 }
 ```
 
-`index.ts`:
-
-```ts
-export * from './button'
-```
-
 ## Storybook
 
 Every component ships a story, except `flow/` and `charts/chart/`: neither renders on its own
@@ -147,9 +119,7 @@ Infer the story shape from `button/button.stories.tsx`:
   `argTypes` + `args` and a single `render`.
 - Export one story `Default` whose `name` repeats the last segment of `meta.title`
   (`'Actions/Button'` → `'Button'`), so a single-story component shows no extra nesting under its
-  title. Four stories use the PascalCase component name instead: `CopyButton`, `DropdownMenu`,
-  `OperationBadge`, `OperationStatusBadge`. `placeholder/placeholder.stories.tsx` also exports
-  `NoPayload` (`'No Payload'`) for `NoPayloadPlaceholder`.
+  title.
 
 ### Groups
 
@@ -159,14 +129,14 @@ in `.storybook/preview.tsx`, which fixes the sidebar order of the groups.
 
 | Group | Holds |
 |---|---|
-| `Actions` | Things the user clicks to do something: `Button`, `Copy Button` |
-| `Inputs` | Form controls that take a value: `Checkbox`, `Combobox`, `Multi Combo Box`, `Text Input`, `Where Input` |
-| `Content` | Presentation of data: `Badge`, `Card` (plus `Card/Area`, `Card/Bar`, `Card/Info`, `Card/Metric`), `Code`, `Data Table`, `Elapsed Time`, `Mark`, `Number Flow`, `Operation Badge`, `Operation Status Badge`, `Sink`, `Table` |
-| `Charts` | Charts: `Area Chart`, `Bar Chart`, `Progress Chart` |
-| `Placeholders` | What stands in for content that is absent, failed or still loading: `Error Terminal`, `Placeholder`, `Progress Bar` |
-| `Overlays` | Layers above the page: `Dropdown Menu`, `Sheet`, `Toast`, `Tooltip` |
-| `Layout` | Page structure and navigation within it: `Header`, `Sidebar`, `Tabs`, `Toolbar` |
-| `Flows` | The flow diagrams: `Flow Detailed`, `Flow Summary` |
+| `Actions` | Things the user clicks to do something (`Button`) |
+| `Inputs` | Form controls that take a value (`Combobox`, `Text Input`) |
+| `Content` | Presentation of data (`Badge`, `Card`, `Data Table`) |
+| `Charts` | Charts |
+| `Placeholders` | What stands in for content that is absent, failed or still loading (`Error Terminal`, `Progress Bar`) |
+| `Overlays` | Layers above the page (`Sheet`, `Tooltip`) |
+| `Layout` | Page structure and navigation within it (`Header`, `Sidebar`) |
+| `Flows` | The flow diagrams |
 
 `Colors` (`colors.mdx`) sits at the top level, outside any group. `storySort.order` also lists
 `Widgets` after `Flows`; no story uses it yet.

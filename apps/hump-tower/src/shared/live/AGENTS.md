@@ -5,23 +5,10 @@ delivery batches out to listeners, exposes the connection status and the snapsho
 the affected TanStack Query caches stale. The stream holds **no React state** — listeners are
 called imperatively, so an event costs no render unless a component asked for one.
 
-FSD layer `shared`: it imports nothing from upper layers. From its neighbours it takes the
-generated client and event types (`@/shared/api`), `sleep` (`@/shared/utils`) and the two
-invalidation helpers (`@/shared/state`).
-
-## Layout
-
-| File | Role |
-|---|---|
-| `stream.ts` | `createLiveStream`: the reconnect loop, the four listener sets, `retain`/`stop`; the `liveStream` singleton |
-| `backoff.ts` | `createBackoff` and the three timing constants |
-| `types.ts` | status, snapshot and listener types; `LiveOperation` / `LiveSnapshot` alias the generated models |
-| `live-updates.tsx` | `LiveUpdates`: holds the connection and turns events into query invalidations |
-| `use-live-operations.ts` | `useLiveOperations(handler)` — batches, no re-render |
-| `use-live-status.ts` | `useLiveStatus()` — `LiveStatus` through `useSyncExternalStore` |
-| `use-live-snapshot.ts` | `useLiveSnapshot()` — `LiveSnapshot \| undefined` through `useSyncExternalStore` |
-| `index.ts` | the public contract: everything above, including the constants, the factory and its types |
-| `stream.fake.ts` | test-only: `fakeLiveStream` and the happy-dom helpers; not exported from `index.ts` |
+`stream.ts` holds `createLiveStream` and the `liveStream` singleton; `LiveUpdates` turns events
+into invalidations; the hooks `useLiveOperations` (no re-render), `useLiveStatus` and
+`useLiveSnapshot` (`useSyncExternalStore`) are the consumer API. `stream.fake.ts` is test-only
+and not exported from `index.ts`.
 
 ## Who holds the connection
 
@@ -35,15 +22,6 @@ timer — that is what lets a StrictMode remount (`app/main.tsx`) reuse the conn
 opening a second one. `stop()` zeroes the holds, aborts, drops the snapshot and goes `idle`; it is
 for teardown (tests, and the `import.meta.webpackHot` dispose at the bottom of `stream.ts`), not
 for consumers. It does not clear the listener sets.
-
-Consumers, all in `entities`:
-
-- `useLiveOperations` — `flows/flows/ui/flows.summary.tsx` and `flows.detailed.tsx` (animate the
-  table → sink edge per operation), `operations/list/model/use-operations.ts` and
-  `flows/inspector/model/use-recent-operations.ts` (refetch);
-- `useLiveStatus` — `config/state/ui/live-status.tsx`; it shows both `idle` and `reconnecting` as
-  "offline";
-- `useLiveSnapshot` — `config/state/ui/snapshot-status.tsx`.
 
 ## One attempt, and why reconnecting lives here
 
@@ -103,9 +81,8 @@ Events in the gap are lost for good, so this is the signal to refetch.
 - a reconnect → `invalidateForLiveReconnect`: `metrics` with `refetchType: 'all'`, plus the
   `operations` prefix.
 
-Both pass `cancelRefetch: false`; at a couple of events a second the default would restart a
-slower request forever. Snapshot events invalidate nothing. Which queries a signal touches is
-decided in `shared/state`, not here.
+Both pass `cancelRefetch: false`. Snapshot events invalidate nothing. Which queries a signal
+touches is decided in `shared/state`, not here.
 
 ## The wire contract
 
@@ -115,16 +92,14 @@ batching window, lossy fan-out), `apps/hump/internal/port/live_stream/AGENTS.md`
 is only schema, table, sink, host, target).
 
 The server names its events `welcome`, `operations`, `snapshot`, but **the client never sees the
-names**: `flattenSSESchema` in `apps/hump/cmd/openapi/main.go` reduces the documented response to a
-`oneOf` of payloads, and the transport yields only the parsed `data`. `GetApiLiveResponse` is
-therefore a plain union, validated per event by `zGetApiLiveResponse`, and told apart by shape —
-`isSnapshot` is `'state' in event`, operations is `'operations' in event`.
+names**: the spec flattens them into a union of payloads (see "SSE responses are unions without
+event names" in `shared/api/AGENTS.md`), so events are told apart by shape — `isSnapshot` is
+`'state' in event`, operations is `'operations' in event`.
 
 When the backend adds an event or changes a payload:
 
 1. Backend: `dto.go`, `Events()` and the `flattenSSESchema` list for `/api/live`; then
-   `moon run hump-tower:openapi` rewrites `shared/api/openapi.json` and `bun run generate:openapi`
-   (also run by `predev` / `prebuild`) regenerates the client.
+   `moon run hump-tower:openapi` and `bun run generate:openapi` regenerate the spec and the client.
 2. Here: add a branch in the `run` loop **before** the operations fallthrough — an unhandled
    payload is silently treated as an empty batch. A new kind of data also needs its alias in
    `types.ts`, a listener set with `subscribe*` / `get*` on `LiveStream`, a hook, and the exports
@@ -142,25 +117,19 @@ state and the whole percent, enough for the badge every page shows.
 
 ## Tests
 
-`bun test` in `apps/hump-tower` (the `test` script; `bun:test`).
-
-- `use-live-status.test.tsx`, `use-live-snapshot.test.tsx`, `use-live-operations.test.tsx`,
-  `live-updates.test.tsx` — the hooks and `LiveUpdates` rendered with `@testing-library/react`
-  against `fakeLiveStream` from `stream.fake.ts`: a hand-driven `LiveStream` (`emit`, `setStatus`,
-  `setSnapshot`, `reconnect`) that also counts holds and listeners. Importing `stream.fake.ts`
-  swaps the `liveStream` singleton through `mock.module('./stream', …)` and leaves the rest of the
-  module real. The mock is process-wide, hence one shared fake that each test `reset()`s.
-- Those four files call `registerDom` / `unregisterDom` (happy-dom) in `beforeAll` / `afterAll`.
+- The hook tests and `live-updates.test.tsx` render against `fakeLiveStream` from
+  `stream.fake.ts`: a hand-driven `LiveStream` (`emit`, `setStatus`, `setSnapshot`, `reconnect`)
+  that also counts holds and listeners. Importing `stream.fake.ts` swaps the `liveStream`
+  singleton through `mock.module('./stream', …)` and leaves the rest of the module real. The mock
+  is process-wide, hence one shared fake that each test `reset()`s.
+- Those files call `registerDom` / `unregisterDom` (happy-dom) in `beforeAll` / `afterAll`.
   There is deliberately no preload: happy-dom replaces `fetch`, and the integration test below
   needs the runtime's own.
-- `backoff.test.ts` — doubling, the cap, the default constants, `reset`.
-- `stream.test.ts` — `createLiveStream` through `LiveStreamDeps`: `open` returns a test-driven
-  `Channel` per attempt (`push` / `end` / `fail`), `sleep` records the delay and advances a fake
-  clock instead of waiting, `now` reads that clock, and the harness sets `lingerMs` to 0. Covers
-  fan-out, reconnection and backoff growth/reset, the status walk, the snapshot value and the
-  linger. `tick()` flushes microtasks and zero-delay timers; the retain tests use real delays.
-- `stream.integration.test.ts` — the generated `Live.stream` against a `Bun.serve` on port 0 that
-  writes SSE frames and closes. It pins what `stream.ts` relies on from the transport: named
-  frames arrive as bare payloads, a server close ends the iteration, and a rejected payload
-  yields nothing and calls `onSseError` once. It needs the Bun runtime and the generated client,
-  and no backend.
+- `stream.test.ts` drives `createLiveStream` through `LiveStreamDeps`: `open` returns a
+  test-driven `Channel` per attempt (`push` / `end` / `fail`), `sleep` records the delay and
+  advances a fake clock instead of waiting, and the harness sets `lingerMs` to 0. `tick()` flushes
+  microtasks and zero-delay timers; the retain tests use real delays.
+- `stream.integration.test.ts` runs the generated `Live.stream` against a `Bun.serve` on port 0.
+  It pins what `stream.ts` relies on from the transport: named frames arrive as bare payloads, a
+  server close ends the iteration, and a rejected payload yields nothing and calls `onSseError`
+  once. It needs the generated client, and no backend.

@@ -38,15 +38,15 @@ signature):
    `readyChan` before it renders), but every rendered field goes through `template.Template`.
 3. Publish **synchronously**. The application layer is what retries, times out and counts, so
    an adapter never retries internally and never outlives the call.
-4. Fill `capture` — after the publish, on **both** the success and the error path. A failed
-   delivery is the one whose payload a reader wants. `capture` is nil unless a client is
-   watching the operations log; its buffers belong to the caller and are reused, so write
-   through `SetPayload`/`Set`, never replace the fields.
+4. Fill `capture` as its doc comment in `port/sink/capture.go` says: after the publish, on
+   **both** paths, through `SetPayload`/`Set`.
 5. Return through `wrapError`.
 
-Shared conventions inside that: headers land on the capture under a `header.` prefix, an
-empty rendered header is dropped rather than sent, and `template.ErrRender` is permanent in
-every sink (`pkg/template` wraps every execution failure with it).
+Shared conventions inside that: headers land on the capture under a `header.` prefix, the
+other `Metadata` keys are unprefixed (`method`, `status`, `key`, `stream`, `sequence`,
+`routingKey`) — everything sink-specific goes into that one map, so a new sink type never needs
+the port widened; an empty rendered header is dropped rather than sent, and `template.ErrRender` is
+permanent in every sink (`pkg/template` wraps every execution failure with it).
 
 **Adding a sink** touches six places: a `SinkType<Name>` constant and the `SinkTypes` list in
 `internal/port/sink/sink_type.go` (which is what drives `getSinkType`, so the YAML
@@ -55,8 +55,8 @@ discriminator needs no further edit), a `config/sink/config_<name>.go` implement
 case in `unmarshalSink` and an entry in `crossValidators` (both `config/sink/config_sinks.go`),
 a case in `sink.go`, and the subpackage above.
 
-`Definition.Metadata` renders the `(host, target)` pair that becomes the Prometheus labels —
-see `adapter/metrics_collector/AGENTS.md` for why those strings have to match byte for byte.
+`Definition.Metadata` renders the `(host, target)` pair that becomes the Prometheus labels;
+its contract is in `port/sink/AGENTS.md`.
 
 ## `ErrSinkPermanent` is a marker nobody reads yet
 

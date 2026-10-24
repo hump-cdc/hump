@@ -28,7 +28,7 @@ node_modules/
 # moon
 .moon/cache/
 .moon/docker/
-# CI artifacts of moon tasks (SARIF, coverage, JUnit, annotations), read by .github/workflows/check.yml
+# CI artifacts of moon tasks (SARIF, coverage, JUnit, annotations), read by .github/workflows/ci-check.yml
 /.ci/
 
 # Editor / IDE

@@ -23,41 +23,24 @@ import { BarChart } from '@/shared/ui/charts/bar-chart'
 />
 ```
 
-- `data` is wide: one row per x step, one column per series `dataKey`. Rows are plotted by
-  index; `xAxisKey` names the column shown as the tooltip heading. When its values are unique,
-  they also key the marks, so a mark follows its label across updates; otherwise marks are keyed
-  by index.
+- The shape of `data` and `series` follows `charts/chart` ("Data").
 - The size is `h-40 w-full` unless `className` overrides it (`MetricCard` passes `h-8`,
   `h-20` or `h-32`).
 - Memoize `data` and `series`: the chart definition is rebuilt when either changes identity.
 
 ## Props
 
-Plus the `div` attributes and `ref`, passed to the container.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `data` | `ChartDataRow[]` (`Record<string, number \| string>[]`) | — | the rows; a missing or non-numeric series value counts as `0` |
-| `series` | `ChartSeries[]` (`{ dataKey: string; label?: string; variant }`) | — | the plotted columns, in stacking order; `label` falls back to `dataKey`. May be empty |
-| `xAxisKey` | `string` | — | column with the x label, shown in the tooltip |
-| `stacked` | `boolean` | `true` | stacks the series in one bar; `false` puts them side by side |
-| `tooltip` | `boolean` | `false` | shows the tooltip for the focused x step; stays off while `series` is empty |
-| `tooltipValue` | `ChartTooltipValue` (`{ kind?; suffix? }` of `NumberFlow`) | — | how tooltip values are rendered; `kind` falls back to `integer` or `decimal` by value |
-| `legend` | `boolean` | `false` | shows the legend under the plot |
+| Prop | Description |
+|---|---|
+| `stacked` | Default `true`, one bar per step; `false` puts the series side by side |
+| `series` | May be empty: the tooltip then stays off even with `tooltip` |
+| `tooltip`, `legend` | Both off by default; `BarChartCard` and `MetricCard` turn the tooltip on, and `BarChartCard` draws its own legend in the header |
 
 ## Semantic styles
 
-No cva variants. The colour of a series is its `variant`:
-
-| `variant` | Token |
-|---|---|
-| `success` | `--success` |
-| `primary` | `--primary` |
-| `danger` | `--danger` |
-| `amber` | `--amber` |
+No cva variants; series colours, tooltip and legend come from `charts/chart`.
 
 - Bars are rounded on the outer end only.
 - A step that is empty or shorter than a pixel gets a one-pixel stand-in bar, so it stays
   visible: in the first series' colour, or `--hairline-strong` when there is no series.
-- Hover and keyboard focus select a whole x step: a band in `--surface-2` sits behind it.
-- Tooltip and legend styling comes from `charts/chart`.
+- Hover and keyboard focus select a whole x step: a `--surface-2` band behind it.

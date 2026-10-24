@@ -1,19 +1,10 @@
 # application/hump_tower/get_snapshot_estimates — how this package hangs together
 
-`POST /api/snapshot/estimate` (`snapshot.estimate`, registered in
-`internal/controller/hump_tower.go`), an SSE stream despite the verb: the body lists tables with
-their filters, and row counts come back as they arrive — for each table the planner's estimate first
-(`rough: true`), then the exact count, which is dropped silently if it fails or times out. It feeds
-the snapshot dialog while the user is still editing filters, so it is independent of any run and
-safe to call at any time.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `usecase.go` | `Estimate`: one goroutine per table, a slot semaphore, one shared channel |
-| `controller.go` | the SSE handler, `Events()`, request and event conversion |
-| `dto.go` | `EstimatesRequest` and the three event payloads — the wire contract |
+`POST /api/snapshot/estimate` (`snapshot.estimate`), an SSE stream despite the verb: the body lists
+tables with their filters, and row counts come back as they arrive — for each table the planner's
+estimate first (`rough: true`), then the exact count, which the adapter drops silently if it fails
+or times out. It feeds the snapshot dialog while the user is still editing filters, so it is
+independent of any run and safe to call at any time.
 
 ## Concurrency
 
@@ -46,34 +37,23 @@ drains the channel, which closes, and then attempts `done` anyway.
 ## Failures are events, not a failed stream
 
 A table that cannot be counted does not end the stream. Both an error from `GetRowCount` itself (an
-invalid filter, a missing table) and a `RowCount.Error` arriving mid-stream (a failed query) become
-an `error` event for that table, and the other tables carry on.
+invalid filter, a missing table) and a `RowCount.Error` arriving mid-stream (a failed planner
+estimate) become an `error` event for that table, and the other tables carry on.
 
 `schema` and `table` are echoed **as requested**, not as resolved: an empty schema resolves through
 `search_path` on the server and stays empty in the event, since the client matches events to its
 rows by what it sent.
 
-A nil database closes the channel at once, so the stream is a lone `done`. That path exists for
-`cmd/openapi`, which builds the use case with nil to register the route, and for tests.
+A nil database closes the channel at once, so the stream is a lone `done`.
 
-## Changing an event touches two places
+## Events
 
-`Events()` maps names to payload types for huma, but `cmd/openapi/main.go` separately lists the
-three schema names for this route in `flattenSSESchema`, which rewrites the documented response
-into a `oneOf` of payloads for the generated TypeScript client. Two consequences:
-
-- A new or renamed event must be added there too, or the client never sees its type.
-  `TestEventsNamesEveryPayload` pins the `Events()` map, not that list.
-- The flattened spec **drops event names**, so payloads have to stay distinguishable by shape:
-  `count` + `rough`, versus `error`, versus the empty `done`.
+A new or renamed event goes into `Events()` **and** the `flattenSSESchema` call for this route in
+`cmd/openapi/main.go`; `TestEventsNamesEveryPayload` pins only the `Events()` map. The flattened
+spec drops event names, so payloads must stay distinguishable by shape: `count` + `rough`, versus
+`error`, versus the empty `done`.
 
 ## Tests
 
-`usecase_test.go` drives `Estimate` against `fakeDatabase`, which scripts counts and errors per
-table name, can `delay` or `block` a count, and tracks the peak number of concurrent calls for
-`TestEstimateCapsConcurrentCounts`. `controller_test.go` drives the handler through `fakeSender`
-(`failAfter` simulates a client that left) and `serve`, which fails a test that runs past five
-seconds. Assertions on events use `sameElements` — arrival order across tables is not a contract.
-Both files share one package, so helpers such as `scriptTables`, `identifier`, `waitFor` and
-`collect` are defined once, in `usecase_test.go`. Helpers live below the last test function — see
-the `go` skill.
+Arrival order across tables is not a contract, so event assertions use `sameElements`. Both test
+files share one package; shared helpers are defined once, in `usecase_test.go`.

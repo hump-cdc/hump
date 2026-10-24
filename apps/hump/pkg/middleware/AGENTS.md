@@ -5,13 +5,6 @@ variable, and the handler that serves the embedded single-page application. Its 
 `internal/controller/hump_tower.go`, which installs `Cors()` with `router.Use` and `Static` as the
 router's `NotFound` handler — so `Static` sees every request the API routes did not claim.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `cors.go` | `Cors` — go-chi/cors configured from the `CORS` environment variable |
-| `static.go` | `Static` — assets, the SPA shell fallback, the route manifest |
-
 ## CORS
 
 `Cors` reads `CORS` **when it is called**, once, as a comma-separated list of origins; blanks are
@@ -33,7 +26,12 @@ Resolution order for a request, first match wins:
    there, so anything unhashed must live elsewhere. Directories are never listed.
 2. **The shell.** Anything else gets `index.html` with `Cache-Control: no-cache`. The **status** is
    what varies: `200` for `/` and for a path listed in `routes.json`, `404` otherwise. A wrong URL
-   still renders the app's own not-found page, but with an honest status code.
+   still renders the app's own not-found page, but with an honest status code. The shell also
+   carries a `Content-Security-Policy`, built once with the handler from `index.html`:
+   `script-src 'self'` plus a `sha256-` hash per inline `<script>`, so editing the theme script
+   needs no manual update; `style-src 'self' 'unsafe-inline'`, because UI libraries inject styles
+   at runtime; everything else `'self'`, with `object-src` and `frame-ancestors` `'none'`. Files
+   get no CSP.
 3. A plain `404`, only if `index.html` itself is missing.
 
 `routes.json` is the client router's route list, emitted by the web build

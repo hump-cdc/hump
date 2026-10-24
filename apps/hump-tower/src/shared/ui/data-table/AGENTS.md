@@ -5,9 +5,8 @@ detail rows, on TanStack Table (columns) and TanStack Virtual (rows). Use it for
 loaded lists; for a short, fully loaded list pick `@/shared/ui/table`.
 Storybook: `Content/Data Table`.
 
-`index.ts` exports the `DataTable` component and the types `DataTableColumn<T>`,
-`DataTableProps<T>`, `DataTableRange`, `DetailComponent<T>`. The other `data-table.*` files
-(header, row, expand button, skeleton, sizing, column model, column state, consts) are internal.
+`index.ts` exports `DataTable` and the types of `data-table.types.ts`; the other `data-table.*`
+files are internal.
 
 ## Usage
 
@@ -51,46 +50,18 @@ rows from `onVisibleRangeChange`.
 
 ## Props
 
-### DataTable
+The props and column fields are documented in `data-table.types.ts`. What they do together:
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `columns` | `DataTableColumn<T>[]` | required | Left to right |
-| `getRowId` | `(row: T) => string` | required | Stable unique id; expansion and selection follow it |
-| `rowCount` | `number` | required | Total rows; sizes the scrollbar |
-| `getRow` | `(index: number) => T \| undefined` | required | `undefined` while the row is not loaded |
-| `id` | `string` | — | When set, resized column widths are saved to localStorage and restored on mount |
-| `onVisibleRangeChange` | `(range: DataTableRange) => void` | — | Rendered index range, overscan included; `end` is inclusive |
-| `isLoading` | `boolean` | `false` | With `rowCount === 0`: 20 skeleton rows instead of `emptyMessage` |
-| `getDetail` | `ComponentType<{ row: T }>` | — | Detail component under an expanded row; its presence adds the expand column |
-| `isRowExpandable` | `(row: T) => boolean` | every row | Narrows which rows get the chevron |
-| `detailHeight` | `number \| ((row: T) => number)` | `200` | Detail panel height, px |
-| `selectedRowId` | `string \| null` | — | Highlighted row |
-| `onRowSelect` | `(id: string, row: T) => void` | — | Row click; its presence makes rows selectable and the body focusable |
-| `onClearSelection` | `() => void` | — | Click in the body outside any row |
-| `rowHeight` | `number` | `44` | px, bottom border included |
-| `headerHeight` | `number` | `38` | px, bottom border excluded |
-| `overscan` | `number` | `10` | Rows rendered beyond each edge |
-| `className` | `string` | — | Wrapper classes |
-| `height` | `number \| string` | — | Explicit wrapper height, alternative to a height class |
-| `emptyMessage` | `ReactNode` | `'No Rows To Show'` | Shown when there are no rows |
-
-### DataTableColumn<T>
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `field` | `keyof T & string` | — | Row property shown when `render` is omitted |
-| `header` | `string` | — | Header label |
-| `width` | `number` | — | px. Fixed width when any column sets `flex`; flex basis when none does |
-| `minWidth` | `number` | — | Floor for flexing and resizing |
-| `maxWidth` | `number` | — | Cap for flexing and resizing |
-| `flex` | `number` | — | Weight for sharing the remaining width; overrides `width` |
-| `resizable` | `boolean` | `true` | Shows the grip on the right border |
-| `cellClass` | `string` | — | Extra classes on the cell |
-| `headerClass` | `string` | — | Extra classes on the header cell |
-| `render` | `(row: T) => ReactNode` | — | Cell body; called only for loaded rows |
-
-A column with neither `render` nor `field` renders an empty cell.
+- `getRowId` must be stable and unique: expansion and selection follow it.
+- `id` turns on width persistence (see Resizing).
+- `onVisibleRangeChange` gets the rendered range, overscan included; `end` is inclusive.
+- `isLoading` with `rowCount === 0` shows 20 skeleton rows instead of `emptyMessage`.
+- `getDetail` adds the expand column; `isRowExpandable` narrows which rows get the chevron.
+- `onRowSelect` makes rows selectable and the body focusable; `onClearSelection` fires on a
+  click in the body outside any row.
+- `rowHeight` includes the row's bottom border, `headerHeight` excludes it.
+- A column with neither `render` nor `field` renders an empty cell; `render` is called only for
+  loaded rows.
 
 ## Constraints
 
@@ -118,19 +89,10 @@ A column with neither `render` nor `field` renders an empty cell.
 
 ## Semantic styles
 
-No cva variants. Tokens and what they signal:
+No cva variants.
 
-| Element | Tokens |
-|---|---|
-| wrapper | `bg-surface-1`, `border-hairline`, `rounded-xl`, `text-ink text-base` |
-| header row | `bg-surface-2`, `border-hairline` bottom; titles `text-ink-subtle text-xs font-semibold uppercase tracking-caps` |
-| resize grip | short `bg-hairline` divider; `cursor-ew-resize` only where resizing works |
-| body row | `bg-surface-1`, `border-hairline` bottom |
-| skeleton cell | `bg-surface-3`, `animate-pulse` |
-| expand chevron | `text-ink-tertiary`; `text-ink-muted` on hover and when expanded |
-| detail panel | `bg-surface-2` gutter around a `bg-canvas`, `border-hairline`, rounded box |
-| scrollbar | thin, thumb `--hairline-strong` |
-
-States: row hover `bg-surface-2`; selected row `bg-primary-soft/40` (kept on hover); rows show
-`cursor-pointer` only when `onRowSelect` is set. There is no focus ring on the body
-(`outline-none`).
+- Selected row: `bg-primary-soft/40`, kept on hover (other rows hover `bg-surface-2`).
+- Rows show `cursor-pointer` only when `onRowSelect` is set; the resize grip shows
+  `cursor-ew-resize` only where resizing works.
+- The detail panel is a `bg-canvas` box in a `bg-surface-2` gutter.
+- There is no focus ring on the body (`outline-none`).

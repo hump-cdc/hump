@@ -85,9 +85,9 @@ tasks:
     script: 'go tool golangci-lint fmt'
     preset: 'utility'
   tidy:
-    description: 'go mod tidy for hump and for the separate actionlint tool module'
-    script: 'go mod tidy && GOWORK=off go -C tools/actionlint mod tidy'
-    inputs: ['@group(sources)', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum']
+    description: 'go mod tidy for hump and for the separate actionlint and govulncheck tool modules'
+    script: 'go mod tidy && GOWORK=off go -C tools/actionlint mod tidy && GOWORK=off go -C tools/govulncheck mod tidy'
+    inputs: ['@group(sources)', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum']
     options:
       # CI diffs the result in a later workflow step.
       cache: false
@@ -105,7 +105,7 @@ tasks:
   ci-vulncheck:
     description: 'CI: govulncheck with a SARIF report in .ci/hump'
     script: 'bash ./scripts/ci.sh vulncheck'
-    inputs: ['@group(sources)', 'scripts/ci.sh']
+    inputs: ['@group(sources)', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', 'scripts/ci.sh']
     options:
       cache: false
       runInCI: 'only'
@@ -113,9 +113,9 @@ tasks:
       # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
       allowFailure: true
   ci-dep-age:
-    description: 'CI: 7-day minimum release age of every Go module and of govulncheck'
+    description: 'CI: 7-day minimum release age of every Go module, the tool modules included'
     script: 'bash ./scripts/ci.sh dep-age'
-    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'scripts/ci.sh']
+    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', 'scripts/ci.sh']
     options:
       cache: false
       runInCI: 'only'

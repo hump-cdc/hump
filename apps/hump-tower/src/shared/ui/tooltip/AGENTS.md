@@ -7,14 +7,8 @@ Storybook: `Overlays/Tooltip`.
 
 ## Parts
 
-| Part | Renders | Role |
-|---|---|---|
-| `TooltipProvider` | Tooltip `Provider` | shared open delay for the tooltips below it |
-| `Tooltip` | Tooltip `Root` | one tooltip: `open` / `onOpenChange` / `defaultOpen` |
-| `TooltipTrigger` | Tooltip `Trigger` | the element the hint belongs to; `asChild` to wrap an existing one |
-| `TooltipContent` | Tooltip `Portal` + `Content` | the bubble, always rendered through a portal |
-
-Every part forwards the props of its Radix primitive and sets `data-slot`.
+One part per Radix primitive: `TooltipProvider`, `Tooltip` (`Root`), `TooltipTrigger`,
+`TooltipContent`. `TooltipContent` always renders through a portal.
 
 ## Usage
 
@@ -34,20 +28,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 ## Props
 
-`TooltipContent` — Tooltip `Content` props (`side`, `align`, `hidden`, …) plus:
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `variant` | `'default' \| 'primary'` | `'default'` | colour of the bubble |
-| `sideOffset` | `number` | `4` | gap between trigger and bubble, px |
-
-`TooltipProvider` — Tooltip `Provider` props, with one default changed:
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `delayDuration` | `number` | `0` | delay before a tooltip opens, ms |
-
-`Tooltip` and `TooltipTrigger` have no props of their own.
+- `TooltipContent`: `variant` (`'default'` or `'primary'`) and `sideOffset` (default `4` px), plus
+  the Radix `Content` props.
+- `TooltipProvider`: `delayDuration` defaults to `0` (Radix's own default is not used).
 
 ## Semantic styles
 
@@ -56,6 +39,5 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 | `default` | `bg-ink`, `text-canvas` | neutral hint, inverted against the page |
 | `primary` | `bg-primary`, `text-on-primary` | emphasised hint; the operations list uses it for the error text |
 
-Common to both: `rounded-md`, `text-xs`, `font-medium`, `select-none`, `shadow-md` (Tailwind
-default, not a project token). The bubble fades and zooms in, sliding 1 unit away from the
-trigger according to Radix `data-side`; `data-state=closed` reverses it.
+Both are `text-xs font-medium` with `shadow-md` (Tailwind default, not a project token). The
+bubble fades and zooms in, sliding away from the trigger by Radix `data-side`.

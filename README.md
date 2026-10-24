@@ -9,6 +9,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/hump-cdc/hump)](https://github.com/hump-cdc/hump/releases)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/hump-cdc/hump/badge)](https://scorecard.dev/viewer/?uri=github.com/hump-cdc/hump)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](#verifying-the-image)
 
 [Website](https://hump.dev) · [Documentation](https://hump.dev/docs/getting-started)
 
@@ -64,6 +66,39 @@ It uses the built-in `pgoutput` plugin, so PostgreSQL needs no extensions. Your 
    ```
 
 Every change to `public.users` now lands in the `public.users` topic. See the [documentation](https://hump.dev/docs/getting-started) for all options.
+
+## Docker image
+
+The image is `docker.io/humpcdc/hump`, built for linux/amd64 and linux/arm64. Each release gets three tags: the full version (`1.2.3`), `major.minor` (`1.2`) and `major` (`1`, skipped for 0.x). Pre-releases do not move `latest`.
+
+Pin the image by digest, e.g. `docker.io/humpcdc/hump:1.2.3@sha256:<digest>`. To get the digest:
+
+```sh
+docker buildx imagetools inspect docker.io/humpcdc/hump:<version>
+```
+
+### Verifying the image
+
+Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/call-docker-publish.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week.
+
+Check the signature:
+
+```sh
+cosign verify docker.io/humpcdc/hump@sha256:<digest> \
+  --certificate-identity-regexp '^https://github\.com/hump-cdc/hump/\.github/workflows/call-docker-publish\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Check the build provenance. `--signer-workflow` accepts only attestations signed by the release workflow, so one made by another workflow in the repository fails the check. Add `--source-ref refs/tags/v<version>` to also pin the release tag:
+
+```sh
+gh attestation verify oci://docker.io/humpcdc/hump@sha256:<digest> \
+  --repo hump-cdc/hump \
+  --signer-workflow hump-cdc/hump/.github/workflows/call-docker-publish.yml \
+  --deny-self-hosted-runners
+```
+
+To check the SBOM attestation, run the same command with `--predicate-type https://spdx.dev/Document/v2.3`.
 
 ## Documentation
 

@@ -1,9 +1,8 @@
 # port/snapshot — how this package hangs together
 
 The snapshot run as the web UI sees it: `Request` going in, `State` streaming out, and the
-`Runner` that owns one run at a time. One file, `snapshot.go`, importing `domain` and the
-standard library. `adapter/snapshot` is the only implementation; how a run actually proceeds is
-in `adapter/snapshot/AGENTS.md`.
+`Runner` that owns one run at a time. One file, `snapshot.go`. `adapter/snapshot` is the only
+implementation; how a run actually proceeds is in `adapter/snapshot/AGENTS.md`.
 
 Not to be confused with `metricscollector.Snapshot` (one metrics dump) or the database snapshot
 of `port/database` (`StartSnapshot` / `ReadSnapshot`), which the adapter drives.
@@ -11,16 +10,13 @@ of `port/database` (`StartSnapshot` / `ReadSnapshot`), which the adapter drives.
 ## Who calls what
 
 `start_snapshot` → `Start`, `stop_snapshot` → `Stop`, `stream_snapshot` and `stream_updates` →
-`Subscribe` / `Unsubscribe`. **Nil is a valid `Runner`**: it is wired only when the web UI is
-enabled and the process is not in cleanup mode, and all four use cases nil-check it.
+`Subscribe` / `Unsubscribe`. The `Runner` is nil in cleanup mode too, not only without the web UI.
 
 ## `State` is sent whole, and lossily
 
 Every change publishes the complete `State`, never a diff, and a subscriber that falls behind
 gets the latest one rather than every one. A consumer must therefore render from the state it
-holds and never accumulate across messages. `Subscribe` returns the current state together with
-the channel, so there is no gap between reading and subscribing; a closed runner answers a
-closed channel.
+holds and never accumulate across messages.
 
 ## The status literals are wire formats
 
@@ -35,11 +31,6 @@ failed" — there is no error status while processing, so `Table.Error` is what 
 apart. Once the run is done, `done` without an error becomes `success`, `done` with one becomes
 `error`, and a table the run never finished ends as `error` too.
 
-## `Stop` does two things
-
-It ends a run in progress, **or** clears a finished one back to `idle` — the UI's "dismiss".
-Only an already idle runner answers `ErrNotRunning`.
-
 ## Errors
 
 | Sentinel | From | HTTP |
@@ -51,8 +42,7 @@ Only an already idle runner answers `ErrNotRunning`.
 
 `ErrInvalidWhere` here is a different value from `port/database.ErrInvalidWhere` with the same
 message. The adapter joins the database's error into this one, so a controller matches this
-package's sentinel and still shows the parser's text. `Start` validates every filter before
-anything starts: one bad filter fails the whole request.
+package's sentinel and still shows the parser's text.
 
 ## `Sink` here is a progress row
 

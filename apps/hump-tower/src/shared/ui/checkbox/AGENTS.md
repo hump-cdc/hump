@@ -26,36 +26,17 @@ The component renders only the box. The caller supplies the label (`<label htmlF
 
 ## Props
 
-Plus every prop of Radix `Checkbox.Root` (`checked`, `defaultChecked`, `onCheckedChange`,
-`disabled`, `required`, `name`, `value`, `id`, …), passed through. Controlled or uncontrolled as
-Radix defines it.
+Every prop of Radix `Checkbox.Root` passes through; controlled or uncontrolled as Radix defines it.
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `invalid` | `boolean` | `false` | Error styling; also sets `aria-invalid` on the root |
-| `className` | `string` | — | Merged through `cn` after the variant classes |
-| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the root `<button>` |
+| Prop | Description |
+|---|---|
+| `invalid` | Error styling; also sets `aria-invalid` on the root |
 
 `checked="indeterminate"` shows a `Minus` instead of the `Check`.
 
 ## Semantic styles
 
-Base: `size-4.5`, `rounded-[5px]`, 1px border, `bg-transparent`.
-
-| `invalid` | Meaning | Tokens |
-|---|---|---|
-| `false` | normal | `border-hairline-strong` |
-| `true` | the value fails validation | `border-danger`, focus ring `ring-danger` |
-
-| State (`data-state`) | Tokens |
-|---|---|
-| `unchecked` | border from the `invalid` variant, no fill, no icon |
-| `checked` | `bg-primary`, `border-primary`, icon in `text-on-primary` |
-| `indeterminate` | `bg-surface-3`, `border-hairline-strong`, icon in `text-ink-muted` |
-
-Other states:
-
-- focus-visible: `ring-2 ring-primary` with `ring-offset-2 ring-offset-canvas`.
-- disabled: `opacity-50`, `pointer-events-none`.
-
-The root carries the `peer` class, so a sibling can style itself from the checkbox state.
+- `invalid` — the value fails validation: `border-danger` and a `ring-danger` focus ring.
+- `indeterminate` is deliberately quieter than `checked`: `bg-surface-3` with a `text-ink-muted`
+  icon, against `bg-primary` for checked.
+- The root carries the `peer` class, so a sibling can style itself from the checkbox state.

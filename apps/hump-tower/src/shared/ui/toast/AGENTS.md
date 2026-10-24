@@ -5,22 +5,13 @@ kit's tokens, and sonner's `toast` function re-exported unchanged. Use it for th
 action; for a state that stays on the page use `Placeholder` (`placeholder`).
 Storybook: `Overlays/Toast`.
 
-Parts (`index.ts`):
-
-- `Toaster` — the host that renders the toasts. Mounted once, in `src/app/providers.tsx`;
-  without it `toast()` shows nothing.
-- `toast` — sonner's API: `toast()`, `toast.success()`, `toast.error()`, `toast.warning()`,
-  `toast.info()`, `toast.loading()`.
+`Toaster` is mounted once, in `src/app/providers.tsx`; without it `toast()` shows nothing.
 
 ## Usage
 
 ```tsx
-import { Toaster, toast } from '@/shared/ui/toast'
+import { toast } from '@/shared/ui/toast'
 
-// once, at the app root
-<Toaster />
-
-// from any slice
 toast.error('Failed to start the snapshot', { description: errorMessage(error) })
 
 toast('Sink reconnected', {
@@ -31,15 +22,9 @@ toast('Sink reconnected', {
 
 ## Props
 
-`Toaster` — the props of sonner's `Toaster`, except `closeButton`.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `position` | sonner's `position` | `'bottom-center'` | where the toasts stack |
-| `style` | sonner's `style` | — | merged over the token variables below |
-| `toastOptions` | sonner's `toastOptions` | — | `classNames` are merged over the kit's own, per key |
-
-`toast` takes sonner's arguments; nothing is added or removed.
+`Toaster` takes sonner's `Toaster` props except `closeButton`. `position` defaults to
+`'bottom-center'`; `style` is merged over the token variables; `toastOptions.classNames` are merged
+over the kit's own, per key. `toast` takes sonner's arguments unchanged.
 
 ## Semantic styles
 
@@ -52,9 +37,7 @@ The cva `variant` is internal: the toast type picks it.
 | `toast.error()` | `danger` | `--danger-soft` | `--danger` at 30% |
 | `toast.warning()` | `amber` | `--amber-soft` | `--amber` at 30% |
 
-- Text `--ink`; title `font-medium text-ink`; description `text-ink-subtle`.
-- Action button `bg-primary text-on-primary`, hover `bg-primary-hover`; cancel button
+- Description `text-ink-subtle`; action button `bg-primary text-on-primary`, cancel button
   `bg-surface-3 text-ink-muted`.
-- Icons: only `loading` has one (a spinning `LoaderCircle`, `text-ink-subtle`); the success,
-  info, warning and error icons are removed, so the type shows through colour alone.
-- Hover background `--surface-2`; radius `0.5rem`.
+- Icons: only `loading` has one (a spinning `LoaderCircle`); the success, info, warning and error
+  icons are removed, so the type shows through colour alone.

@@ -4,18 +4,6 @@ A fixed set of goroutines that runs work in **batches**: open a batch, submit ta
 them. Its one user is `process_operation.UseCase`, where a batch is "one row, delivered to every
 sink of its table" — the row is not acknowledged until the batch is flushed.
 
-The directory is `worker_pool`, the package is `workerpool`.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `worker_pool.go` | `WorkerPool[T]`: `New`, the batch API, `Shutdown`, the workers |
-| `config.go` | the options, their defaults and their validation |
-| `backpressure.go` | `BackpressurePolicy` |
-| `errors.go` | the sentinel errors and `WorkerPanicError` |
-| `task.go` | the queued unit: context, function, payload |
-
 ## The batch API belongs to one goroutine
 
 `BeginBatch → Submit… → FlushBatch`, in that order, from a single goroutine. It is not thread-safe
@@ -91,11 +79,6 @@ table has.
 
 ## Tests
 
-`background` runs a call on a goroutine and returns its result channel; `awaitErr` reads it with a
-deadline. `gate` is a task that reports it started and then blocks until released. `drainErrors`
-collects `Errors()` in the background and returns a snapshot function plus a wait.
-`sinkTask`/`failingSinkTask` simulate a sink write of a given duration.
-
 `TestWorkerPool_shutdown_concurrentWithBatchLoop` fires `Shutdown` at fifty different offsets into a
 batch loop and requires that no task is lost and nothing hangs; it is the test to run under `-race`
 after changing the locking.
@@ -103,6 +86,3 @@ after changing the locking.
 `worker_pool_bench_test.go` benchmarks the pool, and `worker_pool_baseline_bench_test.go` runs the
 same workload on a bare `WaitGroup`, an `errgroup` and a semaphore for comparison.
 
-Helpers live below the last test function — see the `go` skill. The exceptions are in
-`worker_pool_bench_test.go`: the `sinkCounts` and `taskDurations` vars and the `benchPayload` type,
-declared above `BenchmarkWorkerPool`.

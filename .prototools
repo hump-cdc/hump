@@ -1,5 +1,11 @@
 moon = "2.6.1"
+# Without this pin, 'proto install' (auto-install of moonrepo/setup-toolchain) reads the
+# 'go 1.26.10' directive of go.mod / go.work as the range ^1.26.10 and installs the newest Go
+# (CI got 1.27.3). Must match go.version in .moon/toolchains.yml.
+go = "1.26.10"
 
 [settings]
 # Install a missing pinned version on first run instead of failing.
 auto-install = true
+# No usage reports to launch.moonrepo.app: CI blocks that endpoint (harden-runner in ci-check.yml).
+telemetry = false

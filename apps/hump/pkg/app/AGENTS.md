@@ -6,19 +6,6 @@ process-global registry of teardown hooks that long-lived workers, cached sink c
 HTTP servers register with (see the stage table; of the adapters, only the `adapter/sink` registry and
 the HTTP sink register nothing).
 
-## Layout
-
-| File | Role |
-|---|---|
-| `runner.go` | `Runner`: `New`, `Run`, `Serve`, `Wait` |
-| `signal.go` | `signals` — a context cancelled by SIGINT/SIGTERM, with the signal as its cause |
-| `errors.go` | `ErrShutdown`, `ErrDrainTimeout` |
-| `options/types.go` | the `Options` struct (go-flags tags) and the errors `Parse` returns |
-| `options/parser.go` | `Parse` and the config source resolution |
-| `shutdown/shutdown.go` | the stages and the global API: `OnShutdown`, `Shutdown`, `Drain`, `Draining` |
-| `shutdown/registry.go` | the registry: stage ordering, the per-hook timeout |
-| `shutdown/errors.go` | `ErrShutdownTimeout` |
-
 ## Workers and servers are different things
 
 `Run` launches **workers**, `Serve` launches **servers**, and `Wait` treats them differently:
@@ -50,7 +37,6 @@ What ends up in the result:
   timed-out hook does not change the exit code.
 
 `New` returns `*Runner` and the `release` func for the signal hook, which the caller defers.
-`main.go` holds the runner by inference; nothing outside `app` names the type.
 
 ## The shutdown registry
 
@@ -118,5 +104,3 @@ same reason; the other registry tests build a `registry{}` of their own.
 The options tests mutate `os.Args`, the environment and `os.Stdin` through `setup` and `setStdin`,
 so they cannot run in parallel. `setup` points stdin at `/dev/null` on purpose: it is a character
 device, which `Parse` does not read config from.
-
-Helpers live below the last test function — see the `go` skill.

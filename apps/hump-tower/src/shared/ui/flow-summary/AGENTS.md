@@ -5,13 +5,9 @@ right. Pick it for the overview; pick `FlowDetailed` (`@/shared/ui/flow-detailed
 land on individual targets (topics, queues) inside a sink.
 Storybook: `Flows/Flow Summary`.
 
-Parts:
-
-- `FlowSummary` — the canvas, built on `Flow` (`@/shared/ui/flow`).
-- `FlowSummaryTable` — config element for a table node (`TableNode` of `@/shared/ui/flow`).
-- `FlowSummarySink` — config element for a sink node.
-- Types: `FlowSummaryRef`, `TableNodeData`, `SinkNodeData`, `TableNodeSelectHandler`,
-  `SinkNodeSelectHandler`, `EdgeSelectHandler`, `ClearSelectionHandler`.
+Exports: `FlowSummary` (the canvas, built on `Flow` of `@/shared/ui/flow`), the config elements
+`FlowSummaryTable` (flow's `TableNode`) and `FlowSummarySink`, and the data, handler and
+`FlowSummaryRef` types.
 
 ## Usage
 
@@ -30,16 +26,7 @@ const [selected, setSelected] = useState<string>()
     onEdgeSelect={(id) => setSelected(id)}
     onClearSelection={() => setSelected(undefined)}
 >
-    <FlowSummaryTable
-        id="t-users"
-        name="public.users"
-        ops={{
-            insert: { count: 842, p95: 11 },
-            update: { count: 311, p95: 8 },
-            delete: { count: 47, p95: 19 },
-            truncate: { count: 0 },
-        }}
-    />
+    <FlowSummaryTable id="t-users" name="public.users" ops={ops} />
     <FlowSummarySink
         id="s-kafka"
         name="kafka"
@@ -55,65 +42,26 @@ const [selected, setSelected] = useState<string>()
 flowRef.current?.animate('t-users', 's-kafka')
 ```
 
-- `FlowSummaryTable` and `FlowSummarySink` render nothing; `FlowSummary` reads them from its direct
-  children and lays them out in declaration order: tables in the left column, sinks in the right,
-  each column captioned `TABLES` / `SINKS`. Callers supply no coordinates. Any other child passes
-  through to the canvas as an overlay.
-- Selection is controlled: `selected` is the id of a node or an edge; the component only reports
-  clicks. A click on the selected item or on the empty pane calls `onClearSelection`.
-- The selected item is panned into view (`revealId` is set to `selected`).
-- Edge weight is the caller's: put `opacity` / `strokeWidth` into each edge's `style`.
-- The parent must have a height, and a `TooltipProvider` must sit above (see `@/shared/ui/flow`).
+Layout, controlled selection, edge `style`, the parent height and `TooltipProvider` follow the
+contract in `@/shared/ui/flow` (its `AGENTS.md`, "Usage"). `selected` is a node or edge id; the
+selected item is panned into view (`revealId` is set to `selected`).
 
 ## Props
 
-`FlowSummary` — plus the props of `Flow` (`viewportInsets`, `controls`, `className`, any `ReactFlow`
-prop) except `nodes`.
+`FlowSummary` takes the props of `Flow` except `nodes` (so `viewportInsets`, `controls`, any
+`ReactFlow` prop) plus its own, typed in `flow-summary.types.ts`.
+`ref.animate(tableId, sinkId, durationMs?)` is a no-op when there is no such edge.
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `edges` | `Edge[]` (xyflow) | — | `source` is a table id, `target` a sink id |
-| `selected` | `string` | — | id of the selected node or edge |
-| `onTableNodeSelect` | `(id: string, data: TableNodeData) => void` | — | a table node was clicked |
-| `onSinkNodeSelect` | `(id: string, data: SinkNodeData) => void` | — | a sink node was clicked |
-| `onEdgeSelect` | `(id: string, edge: { source: string; target: string }) => void` | — | an edge was clicked |
-| `onClearSelection` | `() => void` | — | the selected item or the empty pane was clicked |
-| `ref` | `Ref<FlowSummaryRef>` | — | imperative handle |
-
-`FlowSummaryRef`
-
-| Method | Description |
-|---|---|
-| `animate(tableId, sinkId, durationMs?)` | dashes the edge from `tableId` to `sinkId` as marching ants for `durationMs` (default 1300), then reverts; no-op if there is no such edge |
-
-`FlowSummaryTable` — `id`, `name`, `ops`; see `TableNode` in `@/shared/ui/flow`.
-
-`FlowSummarySink`
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `id` | `string` | required | node id, referenced by edges and `selected` |
-| `name` | `string` | required | sink name |
-| `type` | `string` | required | sink type (`kafka`, `rabbitmq`, …); picks the header logo |
-| `host` | `string` | — | connection host, shown under the name |
-| `operations` | `number` | required | total operations delivered |
-| `p95` | `number` | — | p95 delivery latency, ms |
-| `successRate` | `number` | — | success rate, 0–100 |
-| `health` | `'ok' \| 'error'` | required | colours the success rate |
+`FlowSummarySink`: `operations` is the total delivered; `p95` (ms) and `successRate` (0–100) render a
+dash when absent; `health` colours the success rate.
 
 ## Semantic styles
 
 Canvas, table node and sink icon styles come from `@/shared/ui/flow`.
 
-**Sink node** — cva `selected`, on a `bg-surface-1` card:
-
-| `selected` | Classes |
-|---|---|
-| `true` | `border-primary shadow-glow shadow-primary/40` |
-| `false` (default) | `border-hairline`, hover `border-hairline-strong shadow-glow shadow-ink-subtle/30` |
-
-Metric cells (`OPERATIONS`, `P95`, `SUCCESS`): label `text-ink-tertiary`, value `text-ink`. The
-`SUCCESS` value is coloured by data:
+**Sink node** — cva `selected`: `border-primary` with a primary glow when selected,
+`border-hairline` otherwise. Metric cells `OPERATIONS`, `P95`, `SUCCESS`; the `SUCCESS` value is
+coloured by data:
 
 | Condition | Token |
 |---|---|

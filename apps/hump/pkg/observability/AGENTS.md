@@ -1,22 +1,9 @@
 # pkg/observability — how this package hangs together
 
-Three independent packages and no code at this level: logging, health probes and the Prometheus
-registry. `cmd/hump/main.go` builds the health and metric objects once and hands them to the
-adapters. `log` is imported directly by 16 of the module's 51 packages: `cmd/hump`,
-`internal/controller`, both `processing` use cases, nine of the eleven adapter packages (all but
-`adapter/sink` and `adapter/sink/http`), `pkg/app`, `pkg/app/shutdown` and `pkg/middleware`.
-`domain`, the ports, `config` and the `hump_tower` use cases do not import it.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `log/log.go` | the slog default handler (set in `init`), `Scope`, `WithScope`, `WithTraceparent` |
-| `log/traceparent.go` | the traceparent parser behind `WithTraceparent` |
-| `health/health.go` | `Health` — the health-go instance and its two checks |
-| `health/health_check.go` | `Check` — one flag a component flips |
-| `health/errors.go` | `ErrNotOperational` |
-| `metric/metric.go` | `New` — the registry, its factory and its handler |
+Three independent packages and no code at this level: logging (`log`), health probes (`health`) and
+the Prometheus registry (`metric`). `cmd/hump/main.go` builds the health and metric objects once and
+hands them to the adapters. `domain`, the ports, `config` and the `hump_tower` use cases do not
+import `log`.
 
 There are no tests under this directory.
 

@@ -38,5 +38,5 @@ const meta: Meta<StoryArgs> = {
 export default meta
 
 export const Default: StoryObj<StoryArgs> = {
-    name: 'OperationStatusBadge',
+    name: 'Operation Status Badge',
 }

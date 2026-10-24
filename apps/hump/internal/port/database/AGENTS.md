@@ -2,24 +2,12 @@
 
 The CDC source as the rest of the process sees it: one `Database` that streams row changes,
 describes and counts tables, and reads them through an exported snapshot. `adapter/postgres` is
-the only implementation; its mechanics are in `adapter/postgres/AGENTS.md`. This package imports
-`domain` and the standard library, nothing else.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `database.go` | the `Database` interface and `ProcessMessageHandler` |
-| `errors.go` | every sentinel the adapter wraps its failures with |
-| `row_count.go` | `RowCount` — one element of the `GetRowCount` stream |
-| `table_description.go` | `TableType`, `TableColumn`, `TableDescription` — what `GetTables` returns |
+the only implementation; its mechanics are in `adapter/postgres/AGENTS.md`.
 
 ## One wide interface, on purpose
 
 `Database` is not split per consumer. `cmd/hump/main.go` builds one value and hands the whole
-interface to `controller/process.go`, `get_config`, `get_snapshot_tables`,
-`get_snapshot_estimates` and `adapter/snapshot`, and to `cleanup_database` in cleanup mode;
-each uses the few methods it needs. Nothing
+interface to every consumer; each uses the few methods it needs. Nothing
 asserts `var _ Database = (*T)(nil)` — the typed `var db databasePort.Database = …` in `main.go`
 is the only compile-time proof. The test fakes (`fakeDatabase` in `adapter/snapshot`,
 `processing/cleanup_database` and the `hump_tower` use case packages) **embed** `database.Database` and override only what the test reads,
@@ -33,8 +21,7 @@ when the API is only described, never served, and answers a closed channel.
 
 WAL rows (`Listen`) and snapshot rows (`adapter/snapshot`) reach the processing use case through
 this one signature, which is why sinks, operation filters and the operations log cannot tell them
-apart. Its parameters are the fields of `port/sink.Context` minus `Version`; a field added
-to one belongs in the other. A snapshot row is an `insert` with nil `prev` and no headers.
+apart. A snapshot row is an `insert` with nil `prev` and no headers.
 
 The handler is not safe for concurrent calls — `StartSnapshot` pauses WAL delivery precisely so
 the snapshot runner is its only caller.
@@ -64,10 +51,8 @@ lone rough one, or rough then exact.
 
 The sentinels are wrapped by `adapter/postgres` only. **No production code matches them with
 `errors.Is`** — they classify the log line and the error text, which `get_snapshot_estimates`
-forwards to the client as is. The one that decides an HTTP status is `ErrInvalidWhere`, and not
-directly: `adapter/snapshot` joins it into `port/snapshot.ErrInvalidWhere`, which is what
-`start_snapshot` maps to 422. The two sentinels share a message and are different values; match
-the one of the port you called.
+forwards to the client as is. The one that decides an HTTP status is `ErrInvalidWhere`, and only
+indirectly, through `port/snapshot.ErrInvalidWhere`; see `port/snapshot/AGENTS.md`.
 
 ## `TableType` is a wire format
 

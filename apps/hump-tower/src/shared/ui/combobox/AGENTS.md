@@ -85,48 +85,20 @@ Constraints:
 
 ## Props
 
-Every part takes the props of its Base UI part, passed through, with `className` merged by `cn`.
-Own props and changed defaults:
+Every part takes the props of its Base UI part, passed through. Own props and changed defaults:
 
-### ComboboxChip
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `showRemove` | `boolean` | `true` | Renders the remove button (`aria-label="Remove"`); `false` also evens the right padding |
-
-### ComboboxContent
-
-Takes the `Popup` props plus five picked from the `Positioner`:
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `side` | Base UI `Positioner` `side` | `'bottom'` | |
-| `align` | Base UI `Positioner` `align` | `'start'` | |
-| `sideOffset` | Base UI `Positioner` `sideOffset` | `6` | |
-| `alignOffset` | Base UI `Positioner` `alignOffset` | `0` | |
-| `anchor` | Base UI `Positioner` `anchor` | — | The element the popup is positioned against and sized to |
-
-`className` and the remaining props go to the `Popup`, not the `Positioner`.
+- `ComboboxChip` `showRemove` (default `true`): renders the remove button
+  (`aria-label="Remove"`); `false` also evens the right padding.
+- `ComboboxContent` takes the `Popup` props plus `side` (default `'bottom'`), `align`
+  (`'start'`), `sideOffset` (`6`), `alignOffset` (`0`) and `anchor` from the `Positioner`.
+  `className` and the remaining props go to the `Popup`, not the `Positioner`.
 
 ## Semantic styles
 
-No cva variants. Each styled part sets a `data-slot` (`combobox-chips`, `combobox-chip`,
-`combobox-chip-remove`, `combobox-chips-input`, `combobox-clear`, `combobox-content`,
-`combobox-list`, `combobox-item`, `combobox-empty`).
+No cva variants. Each styled part sets a `data-slot` (`combobox-<part>`, plus
+`combobox-chip-remove`).
 
-| Part | Tokens |
-|---|---|
-| `ComboboxChips` | `h-9 w-full`, `border-hairline`, `bg-canvas`, `rounded-lg`; one line, overflow hidden |
-| `ComboboxChip` | `bg-primary-soft`, `text-primary`, `h-5.5`, `rounded-md`; remove button `text-primary/70`, hover `text-primary` |
-| `ComboboxChipsInput` | `text-ink`, placeholder `text-ink-tertiary` |
-| `ComboboxClear` | `text-ink-subtle`, hover `text-ink-muted`, focus-visible `ring-primary/40` |
-| `ComboboxContent` | `border-hairline`, `bg-canvas`, `rounded-xl`, `shadow-lg`, `z-50`; fade + zoom in and out |
-| `ComboboxList` | `max-h-80`, scrolls vertically, `p-1.5` |
-| `ComboboxItem` | `rounded-md`, `text-md`; highlighted `bg-surface-1`; disabled `opacity-50` |
-| `ComboboxEmpty` | `text-ink-subtle`, centred, `py-6` |
-
-States of the field box (`ComboboxChips`), the same as `TextInput`:
-
-- focus-within: `ring-2 ring-primary` with `ring-offset-2 ring-offset-canvas`.
-- `aria-invalid`: `border-danger`, focus ring `ring-danger`.
-- disabled (`has-data-disabled`): `opacity-50`, `pointer-events-none`.
+- `ComboboxChips` has the same states as `TextInput`: focus-within ring, `aria-invalid` →
+  `border-danger` with a `ring-danger` focus ring, disabled (`has-data-disabled`) →
+  `opacity-50`.
+- Selected chips are `bg-primary-soft` / `text-primary`; the highlighted item is `bg-surface-1`.

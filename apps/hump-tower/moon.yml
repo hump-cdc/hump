@@ -72,6 +72,12 @@ tasks:
   knip:
     description: 'Unused files, exports, types and dependencies'
     command: 'bun run knip'
+  audit:
+    description: 'Known vulnerabilities in the npm packages of the root bun.lock (bun audit)'
+    command: 'bun audit'
+    # The advisories change without any change here, so the result is never cached. Unlike
+    # ci-audit, it also lists the advisories in AUDIT_IGNORES (scripts/ci.sh).
+    preset: 'utility'
   ci-knip:
     description: 'CI: knip with GitHub annotations in .ci/annotations'
     script: 'bash ./scripts/ci.sh knip'
@@ -86,6 +92,8 @@ tasks:
   ci-biome:
     description: 'CI: biome with a SARIF report in .ci/hump-tower'
     script: 'bash ./scripts/ci.sh biome'
+    # biome sees the freshly generated API client.
+    deps: ['build']
     options:
       cache: false
       runInCI: 'only'
@@ -95,6 +103,8 @@ tasks:
   ci-test:
     description: 'CI: tests with lcov coverage and JUnit in .ci/hump-tower'
     script: 'bash ./scripts/ci.sh test'
+    # The tests see the freshly generated API client.
+    deps: ['build']
     options:
       cache: false
       runInCI: 'only'
@@ -104,6 +114,28 @@ tasks:
   ci-typecheck:
     description: 'CI: TypeScript type check with a fix hint in .ci/annotations'
     script: 'bash ./scripts/ci.sh typecheck'
+    # tsc sees the freshly generated API client.
+    deps: ['build']
+    options:
+      cache: false
+      runInCI: 'only'
+      # The workflow fails on .ci/failed markers instead: a failed task would abort the
+      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
+      allowFailure: true
+  ci-audit:
+    description: 'CI: bun audit of the root bun.lock and a check that every package comes from registry.npmjs.org, with a fix hint in .ci/annotations'
+    script: 'bash ./scripts/ci.sh audit'
+    # The root bun.lock covers every workspace; GitHub's dependency graph sees only the direct npm
+    # dependencies, so Dependabot alerts miss the transitive ones.
+    inputs:
+      - 'package.json'
+      - 'bunfig.toml'
+      - 'scripts/ci.sh'
+      - '/package.json'
+      - '/bun.lock'
+      - '/bunfig.toml'
+      - '/apps/*/package.json'
+      - '/packages/*/package.json'
     options:
       cache: false
       runInCI: 'only'

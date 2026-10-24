@@ -1,81 +1,104 @@
 # .github — rules for workflows
 
-Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
+Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`. moon conventions (`ci-*` tasks,
+the `.ci/` output contract, `tool` directives), the dependency age rule and adding a Go module are
+in the root `AGENTS.md`.
 
-## Pinning action versions
+## Workflows
 
-- Every `uses:` points to a full 40-character commit SHA, followed by a comment with the exact
-  release tag. Tags and branches are mutable and are never used as refs.
+| File | Name | Purpose |
+|---|---|---|
+| `ci-check.yml` | `Repository: check` | Every lint, build and test task through `moon ci` |
+| `pr-workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
+| `main-security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
+| `main-scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
+| `call-docker-scan.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
+| `ci-docker-scan.yml` | `Docker: scan` | Calls `call-docker-scan.yml` on every PR and push to `main` |
+| `release-docker-publish.yml` | `Docker: publish` | On a `v*` release: calls `call-docker-scan.yml`, `call-docker-publish.yml`, then `call-docker-scan-published.yml` on the pushed digest |
+| `call-docker-publish.yml` | `Docker: publish image` | Reusable: pushes, signs and attests `docker.io/humpcdc/hump` |
+| `call-docker-scan-published.yml` | `Docker: scan published image` | Reusable: scans the pushed image by digest (or the latest release image) with Trivy |
 
-  ```yaml
-  uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  ```
+Don't break these:
 
-- Resolve the SHA from the release tag: `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`. If the
-  returned object is an annotated tag (`"type": "tag"`), dereference it to the commit with
-  `gh api repos/<owner>/<repo>/git/tags/<sha>`. Change the comment whenever you change the SHA.
-- Dependabot (the `github-actions` ecosystem in `.github/dependabot.yml`) bumps the SHA and the
-  comment together. Don't bypass it with a mutable ref.
-- zizmor is pinned through the `version` input of `zizmorcore/zizmor-action`. The action accepts
-  only zizmor versions it ships a lockfile for, so raise `version` only to a version the pinned
-  action release supports. Dependabot does not bump this input.
-- actionlint is pinned as a Go tool in its own module, `apps/hump/tools/actionlint/go.mod`. It
-  can't live in `apps/hump/go.mod` because its dependencies conflict with golangci-lint's, so the
-  module stays out of `go.work`. Run it with `moon run root:actionlint`, which calls
-  `GOWORK=off go -C apps/hump/tools/actionlint tool actionlint` (`-modfile` is rejected in
-  workspace mode).
-- A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, an
-  `apps/*/scripts` or `packages/*/scripts` script or `.github`. `check.yml` fails on an unused one in `apps/hump/go.mod`.
+- `main-scorecard.yml` follows the Scorecard [restrictions](https://github.com/ossf/scorecard-action#workflow-restrictions),
+  or the API rejects its results: no top-level `env`/`defaults`, no workflow-level write
+  permissions, `id-token: write` only in the Scorecard job. That job has no `env`, `defaults`,
+  `container` or `services`, runs on an Ubuntu hosted runner and uses only `actions/checkout`,
+  `actions/upload-artifact`, `github/codeql-action/upload-sarif`, `ossf/scorecard-action` and
+  `step-security/harden-runner`. No `run:` steps.
+- The path of `call-docker-publish.yml` is the Sigstore signer identity (SLSA Build L3),
+  `hump-cdc/hump/.github/workflows/call-docker-publish.yml@refs/tags/v*`. Rename or move it only
+  together with the verification docs.
+- Caller permissions cap the called workflow, so the `Publish` job grants `contents: read`,
+  `id-token: write` and `attestations: write`. Secrets are scoped to environment `production`;
+  the caller passes none. Docker workflows use no moon, no repository scripts and no cache.
+- Reusable workflows are called by local path with `# zizmor: ignore[self-repository]`
+  (actionlint v1.7.12 lacks `$/...`). They set their own `permissions: {}`, `defaults` and job
+  `timeout-minutes`, and no `concurrency` (the caller's group applies).
+- Fork and Dependabot PRs get a read-only token, so the Trivy SARIF upload is skipped there.
+  Trivy exceptions go to `.trivyignore` in the repo root (Trivy picks it up on its own; create it
+  when needed), each with a reason and a review date.
+- Dependabot doesn't bump these inputs; raise them by hand to releases at least 7 days old:
+  `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`,
+  `codecov/codecov-action` `version`. zizmor-action has no `version` input set: its default
+  `latest` is the zizmor version the action locks with hashes, so it follows the action SHA.
+- Drift checks are steps after `moon ci`: they diff regenerated files and fail with an `::error`
+  naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
+  `hump-tower:openapi`, the builds) fail `moon ci` directly.
+- The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
+  `pr-workflows-lint.yml` (PRs) and `main-security-scan.yml` (`main`) both upload zizmor SARIF with
+  category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
+  or high alerts. A fork PR can't upload, so there `pr-workflows-lint.yml` runs zizmor without SARIF
+  and fails on findings; its required `Security` check blocks the merge.
+- A new `gomod` entry in `dependabot.yml` copies the cooldown and group of the existing ones.
+
+## Pinning actions
+
+- Every `uses:` is a full 40-character commit SHA plus a comment with the exact release tag.
+  Never use a tag or branch as the ref:
+  `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`.
+- Resolve the SHA with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`. For an annotated tag
+  (`"type": "tag"`), dereference it with `gh api repos/<owner>/<repo>/git/tags/<sha>`. Change the
+  tag comment together with the SHA. Dependabot bumps both; don't bypass it with a mutable ref.
+- Lint workflows locally with `moon run root:actionlint`.
+
+## Runner hardening
+
+- `step-security/harden-runner` is the first step of every job, reusable workflows included.
+  Composite actions under `.github/actions` are not jobs and don't get it.
+- A new job starts with `egress-policy: audit`. Once audit runs show its endpoints, switch to
+  `egress-policy: block` with `allowed-endpoints` (`host:443`) and rename the step to `Restrict
+  outbound network traffic of the runner to the allowed endpoints`. Current state:
+  `grep -n egress-policy .github/workflows/*.yml`.
+- List only what the audit runs show. The agent allows GitHub Actions and StepSecurity endpoints
+  itself. Telemetry is disabled, not allowed: `telemetry` in `.prototools` and
+  `.moon/workspace.yml`, `disable_telem: true` on every `codecov/codecov-action` step.
+- A job running proto or moon under `block` sets job-level `env: PROTO_OFFLINE: "0"`, or proto's
+  dropped connectivity probes break tool installs. Don't allow the probe hosts (`google.com`,
+  `clients3.google.com`, `detectportal.firefox.com`).
+- On a blocked connection, open the insights link the harden-runner step prints in the log and
+  add the endpoint to that job's list.
 
 ## Naming
 
-- Every workflow, job and step has an explicit `name:`. Don't use the tool name or a generic verb
-  on its own.
-- Workflow: `Area: action`, a short area, a colon and a short lowercase action:
-  `Repository: check`, `Workflows: lint`, `Workflows: security report`; not
-  `GitHub Actions workflows lint`.
-- Job: a short action without the area, because GitHub shows checks as `Workflow / Job`
-  (`Repository: check / Check`): `Check`, `Security`, `Security report`; not `zizmor`.
-- Step: the full action and its subject: `Lint workflow syntax, expressions and shell scripts`,
-  not `Run actionlint`.
-- Job names are the status-check names that the branch ruleset on `main` lists as required
-  checks. Renaming a job requires updating the ruleset.
-- The ruleset matches a required check by job name alone, so two jobs must not share a name
-  unless they are meant to count as one check.
+- Every workflow, job and step has an explicit `name:`, never a bare tool name or generic verb.
+- Workflow: `Area: action` (`Repository: check`, `Workflows: lint`). Job: a short action without
+  the area, since GitHub shows `Workflow / Job` (`Check`, `Security report`; not `zizmor`). Step:
+  the full action and subject (`Lint workflow syntax, expressions and shell scripts`, not `Run
+  actionlint`).
+- Job names are the required checks of the `main` ruleset; renaming a job means updating it. A
+  reusable call shows as `caller job / called job`. Required: `Check`, `Docker image / Build and
+  scan` and `Security`; the ruleset has no bypass actors.
+- The ruleset matches checks by job name alone, so two jobs share a name only if they should
+  count as one check.
 
 ## Failure messages
 
-- Every failure a workflow raises must tell the developer what is wrong and how to fix it, so
-  they can act on the message alone, without reading the workflow or guessing. A bare non-zero
-  exit or a raw tool dump is not enough.
-- In a custom `run:` check, emit a GitHub error annotation before `exit 1`: point it at the
-  offending file, give it a title that names the problem, and put the fix (the command to run
-  or the change to make) in the message. Print the details (diff, offending values) to the log
-  as well.
+- Every failure says what is wrong and how to fix it, so the developer can act on the message
+  alone. A bare non-zero exit or a raw tool dump is not enough.
+- In a custom `run:` check, emit an error annotation before `exit 1`: point it at the file, title
+  it with the problem, put the fix in the message. Print details (diff, values) to the log too.
 
   ```bash
   echo "::error file=go.mod,title=go.mod and go.sum are not tidy::Run 'go mod tidy' locally and commit the updated go.mod and go.sum."
   ```
-
-## Workflows and moon
-
-- `check.yml` (`Repository: check`, job `Check`) runs every lint, build and test task through
-  `moon ci`, which picks the projects affected since the base commit. `workflows-lint.yml`
-  runs only zizmor; actionlint is the `root:ci-actionlint` task.
-- moon prefixes task output in CI, so a workflow command (`::error ...`) printed by a task does
-  not become an annotation. A task never prints workflow commands. It writes them to
-  `.ci/annotations/<project>-<check>.txt`, its reports (SARIF, coverage, JUnit) to
-  `.ci/<project>/`, and on failure a marker to `.ci/failed/<project>-<check>`. Steps after
-  `moon ci` print the annotations, fail on the markers and read the reports.
-- A CI-only task is named `ci-<check>` and has `runInCI: 'only'`, `cache: false` and
-  `allowFailure: true`, so one failure does not cancel the other checks. Tasks that CI runs
-  without `allowFailure` (`hump:tidy`, `hump-tower:openapi`, the builds) fail `moon ci` directly.
-  `hump:ci-dep-age` is a CI-only task: it fails on a Go module published less than 7 days ago,
-  matching the Dependabot cooldown (details in the root `AGENTS.md`, "Dependencies").
-- Drift checks are workflow steps after `moon ci`: they diff what the tasks regenerated (tidy
-  `go.mod`/`go.sum`, the OpenAPI spec, the embedded UI build, `bun.lock`) and fail with an
-  `::error` annotation that names the command to run locally.
-- Dependabot directories: `gomod` in `/apps/hump` and `/apps/hump/tools/actionlint`, `bun` in
-  `/` (the root `bun.lock` covers every workspace), `docker-compose` in `/dev`,
-  `github-actions` in `/`. A new Go module under `packages/` needs its own `gomod` entry and
-  must be added to the dep-age check in `apps/hump/scripts/ci.sh`.

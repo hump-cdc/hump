@@ -17,15 +17,10 @@ import { Mark } from '@/shared/ui/mark'
 
 ## Props
 
-Renders a `<mark data-slot="mark">`; `HTMLAttributes<HTMLElement>` pass through, `className` is
-merged with `cn`. Own props:
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `ref` | `Ref<HTMLElement>` | — | |
+No props of its own: it renders a `<mark data-slot="mark">` and passes the `HTMLElement` attributes
+and `ref` through.
 
 ## Semantic styles
 
 No cva variants and no states. One fixed look: `bg-surface-3` fill, `border-hairline` border,
-`text-ink`, `font-mono`, `rounded-md`, `px-1 py-0.5`. Font size is inherited from the surrounding
-text.
+`text-ink`, `font-mono`. Font size is inherited from the surrounding text.

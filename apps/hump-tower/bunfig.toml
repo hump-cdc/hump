@@ -1,6 +1,6 @@
 [test]
 # Keep the coverage total about the code written here, locally and in CI
-# (.github/workflows/check.yml, moon task hump-tower:ci-test). Test files are skipped too
+# (.github/workflows/ci-check.yml, moon task hump-tower:ci-test). Test files are skipped too
 # (coverageSkipTestFiles).
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [

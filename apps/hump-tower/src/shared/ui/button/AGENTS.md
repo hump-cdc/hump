@@ -29,40 +29,19 @@ As a link (`pages/not-found`): the child becomes the rendered element and takes 
 
 ## Props
 
-Plus every `<button>` attribute (`ButtonHTMLAttributes<HTMLButtonElement>`), passed through.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `variant` | `'primary' \| 'secondary' \| 'outline' \| 'ghost' \| 'danger'` | `'primary'` | Visual weight, see below |
-| `nonInteractive` | `boolean` | `false` | `true` drops the press (scale) feedback |
-| `loading` | `boolean` | `false` | Shows a spinning `LoaderCircle` before the children, hides every other svg inside, and disables the button |
-| `disabled` | `boolean` | — | Effective value is `disabled \|\| loading` |
-| `asChild` | `boolean` | `false` | Renders the single child through Radix `Slot` instead of a `<button>` |
-| `className` | `string` | — | Merged through `cn` after the variant classes |
-| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the element |
+| Prop | Description |
+|---|---|
+| `nonInteractive` | `true` drops the press (scale) feedback |
+| `loading` | Shows a spinning `LoaderCircle` before the children, hides every other svg inside, and disables the button (`disabled \|\| loading`) |
 
 With `asChild` the children are rendered as they are: no spinner is injected, though `loading`
 still hides the child's svgs and passes `disabled` to the child.
 
 ## Semantic styles
 
-Base: `h-8.5`, `rounded-lg`, `px-3.5`, `gap-2`, `font-medium text-base`; any svg inside is forced to
-`size-4`.
-
-| `variant` | Meaning | Tokens |
-|---|---|---|
-| `primary` | the main action of a block | `bg-primary`, `text-on-primary`, hover `bg-primary-hover` |
-| `secondary` | a filled, lower-emphasis action | `bg-surface-3`, `text-ink-muted`, hover `bg-surface-2` |
-| `outline` | a bordered action on a plain background | `border-hairline-strong`, `text-ink-muted`, hover `bg-surface-1` |
-| `ghost` | the quietest action, no fill or border | `text-ink-subtle`, hover `bg-surface-1` + `text-ink-muted` |
-| `danger` | a destructive action | `bg-danger`, `text-white`, hover `opacity-90` |
-
-| `nonInteractive` | Classes |
-|---|---|
-| `false` | `active:scale-[0.96]`, cancelled under `motion-reduce` |
-| `true` | none |
-
-States:
-
-- focus-visible: `ring-2 ring-primary` with `ring-offset-2 ring-offset-canvas`.
-- disabled (or `loading`): `opacity-50`, `pointer-events-none`.
+- `primary` — the main action of a block; `secondary` — a filled, lower-emphasis action;
+  `outline` — a bordered action on a plain background; `ghost` — the quietest action, no fill or
+  border; `danger` — a destructive action.
+- `danger` uses `text-white` and hovers with `opacity-90` instead of a hover token.
+- The press scale (`active:scale-[0.96]`, unless `nonInteractive`) is cancelled under
+  `motion-reduce`. Disabled and `loading` look the same: `opacity-50`, `pointer-events-none`.

@@ -15,44 +15,26 @@ import { Code } from '@/shared/ui/code'
 <Code value={query} lang="sql" lineNumbers={false} />
 ```
 
-The folder exports `Code` only. `code.grammar.ts` (`detectGrammar`, `formatCode`, the
-`CodeGrammar` and `CodeSource` types) is internal and not re-exported from `index.ts`.
+The folder exports `Code` only; `code.grammar.ts` (`detectGrammar`, `formatCode`) is internal.
 
 ## Props
 
-No HTML attributes pass through; only the props below.
+No HTML attributes pass through.
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `value` | `string` | required | Source text |
-| `lang` | `'yaml' \| 'json' \| 'sql' \| 'plaintext'` | — | Grammar to use; skips detection **and** formatting |
-| `lineNumbers` | `boolean` | `true` | Line-number gutter |
-| `format` | `boolean` | `false` | Pretty-print JSON (2-space indent) and YAML (block style, 2-space indent, comments kept) before highlighting |
-| `className` | `string` | — | Wrapper class; sizing is the caller's job |
+| Prop | Description |
+|---|---|
+| `lang` | Grammar to use; skips detection **and** `format` |
+| `format` | Pretty-print JSON (2-space indent) and YAML (block style, 2-space indent, comments kept) before highlighting |
 
 Grammar detection, when `lang` is not set: JSON if the text parses as JSON, scalars such as `42`,
 `true` or `"x"` included (checked first, since JSON is also YAML); YAML if it parses without errors
-into a map or a list, so a bare YAML scalar (`hello`) is not YAML; otherwise plain text. SQL is never detected — pass `lang="sql"`. `format` is ignored when `lang`
-is set.
+into a map or a list, so a bare YAML scalar (`hello`) is not YAML; otherwise plain text. SQL is
+never detected — pass `lang="sql"`.
 
 ## Semantic styles
 
 No cva variants. The wrapper is `hump-code min-h-0 flex-1 overflow-auto`: it fills a flex parent
 and scrolls inside it, so give it a bounded box. The `.hump-code` rules in `app/styles.css` map
-TanStack Highlight's `th-*` token classes onto the `--syntax-*` tokens, which flip between light
-and dark:
-
-| Token | Paints |
-|---|---|
-| `--syntax-bg` | background (`--surface-1` by default) |
-| `--syntax-fg` | default text |
-| `--syntax-tag` | properties, functions |
-| `--syntax-string` | strings |
-| `--syntax-number` | numbers |
-| `--syntax-keyword` | keywords, literals |
-| `--syntax-comment` | comments (italic) |
-| `--syntax-punctuation` | operators |
-| `--hump-code-ln` | line numbers (`--ink-tertiary`) |
-
-Text is JetBrains Mono, 13px. To change the background from a call site, override the token:
-`className="[--syntax-bg:var(--canvas)]"`.
+TanStack Highlight's `th-*` classes onto the `--syntax-*` tokens, which flip between light and
+dark; `--syntax-bg` defaults to `--surface-1`. To change the background from a call site,
+override the token: `className="[--syntax-bg:var(--canvas)]"`.

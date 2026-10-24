@@ -5,14 +5,6 @@ client has been connected for `timeout`, so a resource nobody is watching costs 
 keeps `adapter/metrics_collector` and `adapter/operations_collector` idle until a dashboard opens,
 and both of their AGENTS.md files rely on the guarantees below.
 
-The directory is `idle_gate`, the package is `idlegate`.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `idle_gate.go` | the whole `Gate` |
-
 ## The contract callers build on
 
 - **Callbacks run under the gate's lock.** `onStart` and `onStop` are called with `g.mu` held, so
@@ -54,5 +46,3 @@ connected gate holds nothing. `TestGateHasNoBackgroundGoroutines` checks that wi
 
 `TestGateIgnoresStaleDeactivation` calls `deactivate` with an old generation directly, since the
 real race is not reproducible on demand.
-
-Helpers live below the last test function — see the `go` skill.

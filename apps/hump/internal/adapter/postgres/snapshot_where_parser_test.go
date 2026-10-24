@@ -164,3 +164,108 @@ func TestParseWhereRejectsInvalidExpressions(t *testing.T) {
 		})
 	}
 }
+
+func FuzzSnapshotWhereParser(f *testing.F) {
+	for _, where := range []string{
+		"",
+		" \t\r\n",
+		"id = 1",
+		`"User""Id" = 1 and t.id = "T"."Id"`,
+		"name = 'O''Brien' or a = 1.5e-2",
+		"a is not distinct from b and c is not null",
+		"a in (1, 2) and b not between 3 and 4 and c not ilike 'x%'",
+		"a + b * c - d / e % f = 0 and a || b = 'x'",
+		"a = - -1 and -a::int = 1",
+		"a::timestamp with time zone = b::time(3) without time zone and c::numeric(10, 2) = 1",
+		"CAST(a AS double precision) = 1 and extract(year from created_at) = 2024",
+		"ts > now() - interval '1 day' and d >= date '2024-01-01'",
+		"lower(name) = 'x' and coalesce(a, b, 0) = 1",
+		"a = 1; DROP TABLE users",
+		"a = 1 -- x",
+		"a = 1 /* x */",
+		"a = $$x$$",
+		"pg_sleep(10) is null",
+		"a in (select id from t)",
+		`"" = 1`,
+		"a = 'x",
+		strings.Repeat("(", 70) + "a" + strings.Repeat(")", 70),
+		strings.Repeat("not ", 70) + "a",
+		strings.Repeat("-", 70) + "1 = 1",
+	} {
+		f.Add(where)
+	}
+
+	f.Fuzz(func(t *testing.T, where string) {
+		got, err := newSnapshotWhereParser().Parse(where)
+
+		reused := newSnapshotWhereParser()
+		_, _ = reused.Parse("((a = 1 and")
+		again, againErr := reused.Parse(where)
+		if again != got || (againErr == nil) != (err == nil) {
+			t.Fatalf("Parse(%q) on a reused parser = %q, %v, want %q, %v", where, again, againErr, got, err)
+		}
+
+		if err != nil {
+			return
+		}
+
+		if got == "" {
+			if strings.Trim(where, " \t\r\n") != "" {
+				t.Fatalf("Parse(%q) = \"\", want a rendered filter for a non-blank input", where)
+			}
+
+			return
+		}
+
+		tokens, err := newSnapshotWhereLexer(got).lex()
+		if err != nil {
+			t.Fatalf("Parse(%q) = %q, which does not lex: %v", where, got, err)
+		}
+
+		depth := 0
+		for _, token := range tokens {
+			switch {
+			case token.kind != snapshotWhereTokenSymbol:
+			case token.text == "(":
+				depth++
+			case token.text == ")":
+				depth--
+				if depth < 0 {
+					t.Fatalf("Parse(%q) = %q, which closes a parenthesis it did not open", where, got)
+				}
+			}
+		}
+		if depth != 0 {
+			t.Fatalf("Parse(%q) = %q, which leaves %d parentheses open", where, got, depth)
+		}
+
+		if _, err := newSnapshotWhereParser().Parse(got); err != nil && !strings.Contains(err.Error(), "nested too deeply") {
+			t.Fatalf("Parse(%q) = %q, which does not parse again: %v", where, got, err)
+		}
+	})
+}
+
+func FuzzSnapshotWhereQuoting(f *testing.F) {
+	f.Add("id", "1")
+	f.Add("User\"Id", "O'Brien")
+	f.Add("select", "'; DROP TABLE users; --")
+	f.Add("a -- b", "/* x */")
+	f.Add("\x00\xff", "\n\t\r")
+
+	f.Fuzz(func(t *testing.T, name, value string) {
+		if name == "" {
+			t.Skip("the lexer rejects an empty quoted identifier by design")
+		}
+
+		where := quoteIdentifier(name) + " = " + quoteLiteral(value)
+
+		got, err := newSnapshotWhereParser().Parse(where)
+		if err != nil {
+			t.Fatalf("Parse(%q) error = %v, want a quoted comparison to be accepted", where, err)
+		}
+
+		if want := "(" + where + ")"; got != want {
+			t.Fatalf("Parse(%q) = %q, want %q", where, got, want)
+		}
+	})
+}

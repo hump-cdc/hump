@@ -2,8 +2,6 @@ package config
 
 import (
 	"hump/config/decoder"
-
-	"github.com/goccy/go-yaml"
 )
 
 // Parse parses raw YAML into a Configuration. The returned error, when
@@ -18,11 +16,7 @@ func Parse(source string) (Configuration, error) {
 	}
 
 	var cfg Configuration
-	if err := yaml.UnmarshalWithOptions(
-		[]byte(expaned), &cfg,
-		yaml.Strict(),
-		yaml.Validator(decoder.Validate),
-	); err != nil {
+	if err := decoder.Unmarshal([]byte(expaned), &cfg); err != nil {
 		return Configuration{}, err
 	}
 

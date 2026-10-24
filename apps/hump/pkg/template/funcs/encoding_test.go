@@ -25,3 +25,18 @@ func TestEncodingTemplates(t *testing.T) {
 		})
 	}
 }
+
+func FuzzEncodingRoundTrip(f *testing.F) {
+	f.Add("hello")
+	f.Add("")
+	f.Add("\x00\xff\xfe binary")
+	f.Add("Ünïcødé")
+
+	f.Fuzz(func(t *testing.T, value string) {
+		for _, src := range []string{`{{ .Value | b64enc | b64dec }}`, `{{ .Value | b32enc | b32dec }}`} {
+			if got := mustRender(t, src, V(value)); got != value {
+				t.Fatalf("%s = %q, want %q", src, got, value)
+			}
+		}
+	})
+}

@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml/ast"
@@ -67,10 +68,64 @@ func TestNodeLine(t *testing.T) {
 	}
 }
 
+func TestDecodeKeepsScalarTextOfStringFields(t *testing.T) {
+	tests := []struct {
+		src  string
+		want string
+	}{
+		{src: "name: 00000\n", want: "00000"},
+		{src: "name: 0x1F\n", want: "0x1F"},
+		{src: "name: 1.50\n", want: "1.50"},
+		{src: "name: .inf\n", want: ".inf"},
+		{src: "name: true\n", want: "true"},
+		{src: "name: !!str 007\n", want: "007"},
+		{src: "name: \"q\\tx\"\n", want: "q\tx"},
+		{src: "name: |-\n  a\n  b\n", want: "a\nb"},
+	}
+
+	for _, tt := range tests {
+		var out sample
+		if err := Decode(parseMapping(t, tt.src), &out); err != nil {
+			t.Fatalf("Decode(%q): %v", tt.src, err)
+		}
+		if out.Name != tt.want {
+			t.Errorf("Decode(%q) Name = %q, want %q", tt.src, out.Name, tt.want)
+		}
+	}
+}
+
+func TestDecodeReportsFirstUnknownFieldInDocumentOrder(t *testing.T) {
+	node := parseMapping(t, "name: hump\nzz: 1\nnested:\n  name: x\n  yy: 2\naa: 3\nmm: 4\n")
+
+	for range 50 {
+		var out nestedSample
+		err := Decode(node, &out)
+		if err == nil || !strings.Contains(err.Error(), `[2:1] unknown field "zz"`) {
+			t.Fatalf("Decode error = %v, want the first unknown field zz", err)
+		}
+	}
+}
+
+func TestUnmarshalReportsFirstUnknownFieldInDocumentOrder(t *testing.T) {
+	for range 50 {
+		var out nestedSample
+		err := Unmarshal([]byte("name: hump\nnested:\n  name: x\n  yy: 2\n  bb: 3\naa: 4\n"), &out)
+		if err == nil || !strings.Contains(err.Error(), `[4:3] unknown field "yy"`) {
+			t.Fatalf("Unmarshal error = %v, want the first unknown field yy", err)
+		}
+	}
+}
+
 // sample is a minimal decode target with one required field.
 type sample struct {
 	Name  string `yaml:"name"            validate:"required"`
 	Other string `yaml:"other,omitempty"`
+}
+
+// nestedSample is a decode target with a nested plain struct.
+type nestedSample struct {
+	Name   string `yaml:"name"`
+	Nested sample `yaml:"nested"`
 }
 
 // parseMapping parses src and returns its root mapping node.

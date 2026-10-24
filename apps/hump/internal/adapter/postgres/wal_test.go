@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net"
 	"slices"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"hump/config"
 	"hump/internal/domain"
 	"hump/internal/port/database"
+	"hump/pkg/template"
 )
 
 func TestNewWalOpensReplicationSession(t *testing.T) {
@@ -1376,6 +1378,10 @@ func TestDecodeText(t *testing.T) {
 		{name: "unknown type", data: "whatever", dataType: 999999, want: "whatever"},
 		{name: "uuid", data: "0f8fad5b-d9cb-469f-a165-70867728950e", dataType: pgtype.UUIDOID, want: "0f8fad5b-d9cb-469f-a165-70867728950e"},
 		{name: "undecodable", data: "seven", dataType: pgtype.Int4OID, wantErr: true},
+		{name: "timestamptz infinity", data: "infinity", dataType: pgtype.TimestamptzOID, want: infiniteTime(pgtype.Infinity)},
+		{name: "timestamp -infinity", data: "-infinity", dataType: pgtype.TimestampOID, want: infiniteTime(pgtype.NegativeInfinity)},
+		{name: "date infinity", data: "infinity", dataType: pgtype.DateOID, want: infiniteTime(pgtype.Infinity)},
+		{name: "float8 infinity stays a float", data: "Infinity", dataType: pgtype.Float8OID, want: math.Inf(1)},
 	}
 
 	for _, tt := range tests {
@@ -1395,6 +1401,55 @@ func TestDecodeText(t *testing.T) {
 
 			if got != tt.want {
 				t.Errorf("decodeText() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeTextInfinityRendersAsNull(t *testing.T) {
+	columns := []struct {
+		name string
+		data string
+		oid  uint32
+	}{
+		{"tstz", "infinity", pgtype.TimestamptzOID},
+		{"ts", "-infinity", pgtype.TimestampOID},
+		{"d", "infinity", pgtype.DateOID},
+	}
+
+	next := domain.DbRecord{}
+	for _, column := range columns {
+		val, err := decodeText(pgtype.NewMap(), column.oid, []byte(column.data))
+		if err != nil {
+			t.Fatalf("decodeText(%q) error = %v", column.data, err)
+		}
+		next[column.name] = val
+	}
+
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"field", "{{ .Next.tstz }} {{ .Next.ts }}", "infinity -infinity"},
+		{"json", "{{ .Next | json }}", `{"d":null,"ts":null,"tstz":null}`},
+		{"yaml", "{{ .Next | yaml false }}", "d: null\nts: null\ntstz: null"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := template.New(tt.source)
+			if err != nil {
+				t.Fatalf("template.New(%q) error = %v", tt.source, err)
+			}
+
+			got, err := tmpl.Render(map[string]any{"Next": next})
+			if err != nil {
+				t.Fatalf("Render() error = %v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("Render() = %q, want %q", got, tt.want)
 			}
 		})
 	}

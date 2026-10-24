@@ -16,8 +16,15 @@ import (
 //     list survives the merge below;
 //   - dropping the top-level `sinks` section from the output.
 func expand(raw string) (string, error) {
-	var root any
-	if err := yaml.UnmarshalWithOptions([]byte(raw), &root, yaml.UseOrderedMap()); err != nil {
+	// goccy's own decode is what reports syntax errors and duplicate keys; the
+	// tree is built from the AST so that scalars keep their source text.
+	var check any
+	if err := yaml.UnmarshalWithOptions([]byte(raw), &check, yaml.UseOrderedMap()); err != nil {
+		return "", err
+	}
+
+	root, err := sourceValue(raw)
+	if err != nil {
 		return "", err
 	}
 
@@ -78,7 +85,7 @@ func collectSinkPresets(root yaml.MapSlice) map[string]yaml.MapSlice {
 			continue
 		}
 
-		name, _ := nameAny.(string)
+		name := scalarString(nameAny)
 		out[name] = mapDelete(sm, "name")
 	}
 
@@ -146,7 +153,7 @@ func resolveSinkPresets(tables []yaml.MapSlice, presets map[string]yaml.MapSlice
 				continue
 			}
 
-			presetName, _ := presetRaw.(string)
+			presetName := scalarString(presetRaw)
 			base, exists := presets[presetName]
 			if !exists {
 				return fmt.Errorf("unknown sink preset: %q", presetName)
@@ -203,8 +210,8 @@ func mergeTablesByKey(tables []yaml.MapSlice) []yaml.MapSlice {
 	for _, t := range tables {
 		schemaRaw, _ := mapGet(t, "schema")
 		tableRaw, _ := mapGet(t, "table")
-		schema, _ := schemaRaw.(string)
-		table, _ := tableRaw.(string)
+		schema := scalarString(schemaRaw)
+		table := scalarString(tableRaw)
 		k := key{schema, table}
 
 		if i, found := idx[k]; found {
@@ -267,9 +274,10 @@ func mergeTableEntries(a, b yaml.MapSlice) (yaml.MapSlice, error) {
 }
 
 // canonicalYAML marshals v to a YAML string; equal values yield equal output,
-// so it also serves as a deep-equality key.
+// so it also serves as a deep-equality key. A string goccy would not read back
+// as itself is written double-quoted.
 func canonicalYAML(v any) (string, error) {
-	buf, err := yaml.Marshal(v)
+	buf, err := yaml.Marshal(quoteFragileStrings(v))
 	if err != nil {
 		return "", err
 	}

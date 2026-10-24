@@ -4,6 +4,7 @@ import (
 	"math"
 	"strconv"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestConvertTemplates(t *testing.T) {
@@ -34,6 +35,10 @@ func TestConvertTemplates(t *testing.T) {
 		{"json pretty", `{{ json true .Value }}`, map[string]any{"a": 1}, "{\n  \"a\": 1\n}"},
 		{"json default pipe", `{{ .Value | json }}`, map[string]any{"a": 1}, `{"a":1}`},
 		{"json pretty pipe", `{{ .Value | json true }}`, map[string]any{"a": 1}, "{\n  \"a\": 1\n}"},
+		{"json NaN", `{{ .Value | json }}`, math.NaN(), "null"},
+		{"json nested non-finite", `{{ .Value | json }}`, map[string]any{"f": math.Inf(1), "f4": float32(math.Inf(-1)), "l": []any{1.5, math.NaN()}, "p": new(math.NaN())}, `{"f":null,"f4":null,"l":[1.5,null],"p":null}`},
+		{"json pretty non-finite", `{{ .Value | json true }}`, map[string]any{"f": math.NaN()}, "{\n  \"f\": null\n}"},
+		{"json bytes beside NaN", `{{ .Value | json }}`, map[string]any{"b": []byte("hi"), "f": math.NaN()}, `{"b":"aGk=","f":null}`},
 		{"fromjson get", `{{ index (fromjson .Value) "a" }}`, `{"a":1}`, "1"},
 		{"fromjsonarray", `{{ index (fromjsonarray .Value) 1 }}`, `[1,"x",true]`, "x"},
 	}
@@ -50,6 +55,12 @@ func TestConvertTemplates(t *testing.T) {
 func TestConvertTemplate_Errors(t *testing.T) {
 	if _, err := render(t, `{{ json false .Value }}`, V(make(chan int))); err == nil {
 		t.Fatalf("expected json marshal error")
+	}
+	if _, err := render(t, `{{ json .Value }}`, V(map[string]any{"c": make(chan int), "f": math.NaN()})); err == nil {
+		t.Fatalf("expected json marshal error for a channel beside NaN")
+	}
+	if _, err := render(t, `{{ $d := dict "f" .Value }}{{ $_ := set $d "me" $d }}{{ $d | json }}`, V(math.NaN())); err == nil {
+		t.Fatalf("expected json marshal error for a cycle beside NaN")
 	}
 	if _, err := render(t, `{{ fromjson .Value }}`, V("{bad}")); err == nil {
 		t.Fatalf("expected fromjson error")
@@ -154,4 +165,22 @@ func TestJSONArgErrors(t *testing.T) {
 	if _, err := render(t, `{{ json }}`, nil); err == nil {
 		t.Fatalf("expected error for zero arguments")
 	}
+}
+
+func FuzzJSONRoundTrip(f *testing.F) {
+	f.Add("hello")
+	f.Add("")
+	f.Add(`"quoted" \ back\slash`)
+	f.Add("<script>&\u2028\u2029</script>")
+	f.Add("\x00\x1f control")
+
+	f.Fuzz(func(t *testing.T, value string) {
+		if !utf8.ValidString(value) {
+			t.Skip("encoding/json replaces invalid UTF-8, so only valid strings round-trip")
+		}
+
+		if got := mustRender(t, `{{ .Value | json | fromjson }}`, V(value)); got != value {
+			t.Fatalf("fromjson(json(%q)) = %q", value, got)
+		}
+	})
 }

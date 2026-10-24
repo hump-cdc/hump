@@ -20,7 +20,7 @@ x-pg-command: &pg-command
 services:
     # Postgres
     postgres-15:
-        image: timescale/timescaledb:latest-pg15
+        image: timescale/timescaledb:2.28.3-pg15@sha256:6343bdc87ca132c6b53acb26113a6bad1821d188fa39975a745f32ddd9757634
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -31,7 +31,7 @@ services:
         <<: *pg-command
 
     postgres-16:
-        image: timescale/timescaledb:latest-pg16
+        image: timescale/timescaledb:2.30.2-pg16@sha256:6f139d56042989bd35f50ba5986e492cd32e35cc6778c50be2659add298dc09f
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -42,7 +42,7 @@ services:
         <<: *pg-command
 
     postgres-17:
-        image: timescale/timescaledb:latest-pg17
+        image: timescale/timescaledb:2.30.2-pg17@sha256:b346edcdb51a1fd6020e3965e0bd1c9f3406fa6d5fbce1e28f4852587ef934e2
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -53,7 +53,7 @@ services:
         <<: *pg-command
 
     postgres-18:
-        image: timescale/timescaledb:latest-pg18
+        image: timescale/timescaledb:2.30.2-pg18@sha256:e72689191e1c977892c53d6f2c344dbc4a9657a867dc8cc1899229f9d3672b2e
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -65,7 +65,7 @@ services:
 
     # Kafka
     kafka:
-        image: apache/kafka:latest
+        image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
         restart: unless-stopped
         ports:
             - "9092:9092"
@@ -87,7 +87,7 @@ services:
             - kafka-data:/var/lib/kafka/data
 
     kafka-init:
-        image: apache/kafka:latest
+        image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
         depends_on:
             - kafka
         restart: "no"
@@ -107,7 +107,7 @@ services:
 
     # NATS
     nats:
-        image: nats:2.15.0
+        image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
         restart: unless-stopped
         ports:
             - "4222:4222"
@@ -118,7 +118,7 @@ services:
             - nats-data:/data
 
     nats2:
-        image: nats:2.15.0
+        image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
         restart: unless-stopped
         ports:
             - "4223:4222"
@@ -130,7 +130,7 @@ services:
 
     # RabbitMQ (classic AMQP + Streams)
     rabbitmq:
-        image: rabbitmq:4-management
+        image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
         restart: unless-stopped
         hostname: rabbitmq
         ports:
@@ -147,7 +147,7 @@ services:
 
     # Declares the classic-AMQP exchange and binds a catch-all demo queue
     rabbitmq-init:
-        image: rabbitmq:4-management
+        image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
         depends_on:
             - rabbitmq
         restart: "no"
@@ -167,7 +167,7 @@ services:
 
     # HTTP sink target: /submit1 → 200, /submit2 → 5/95 200/500 after 950ms, logs body, /submit3 → 500
     http-sink:
-        image: openresty/openresty:alpine
+        image: openresty/openresty:1.31.1.1-4-alpine@sha256:52ff9a6e337bd0138745c73cdfeb5aaa0e783e29eeec0695eec6971c1231f3bd
         restart: unless-stopped
         ports:
             - "5050:80"

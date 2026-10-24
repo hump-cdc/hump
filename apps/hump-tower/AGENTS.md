@@ -35,6 +35,7 @@ in the repo) wrap some of them.
 | `bun run knip` | knip (`knip.jsonc`): unused files, exports, types and dependencies; must exit 0 |
 | `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev`, `build` |
 | `bun run generate-routes` | `tsr generate` → `app/routeTree.gen.ts` |
+| `moon run hump-tower:audit` | `bun audit`: known vulnerabilities in every package of the root `bun.lock`, transitive ones included (GitHub's dependency graph, and so Dependabot alerts, sees only the direct npm dependencies); never cached. CI runs `ci-audit` (`scripts/ci.sh audit`), which skips the advisories in `AUDIT_IGNORES` there (fixes younger than 7 days, each with a revisit date) and also fails when a `bun.lock` package does not resolve from `https://registry.npmjs.org/` or a `.npmrc` / bunfig `registry` setting exists |
 | `moon run hump-tower:openapi` | Go `apps/hump/cmd/openapi` → `src/shared/api/openapi.json`; `hump-tower:dev`, `hump-tower:build` depend on it |
 
 There is no dev proxy: `API_URL` and `VERSION` are compile-time constants (`source.define`,
@@ -52,7 +53,7 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
 | `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`); the `src/widgets` stories glob is configured, but there are no widget stories yet |
 | `public/` | fonts, logos, favicon |
-| `scripts/` | `ci.sh`, run by the `ci-*` moon tasks |
+| `scripts/` | `ci.sh` (`knip`, `biome`, `typecheck`, `test`, `audit`), run by the `ci-*` moon tasks |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.
 
@@ -110,7 +111,8 @@ there is no preload, so the other tests run without a DOM (`src/shared/live/AGEN
 | Path | Produced by |
 |---|---|
 | `app/routeTree.gen.ts` | the TanStack Router plugin on `dev`/`build`, or `generate-routes` |
-| `src/shared/api/openapi.json` | `moon run hump-tower:openapi` |
+| `src/shared/api/openapi.json` | `moon run hump-tower:audit` | `bun audit`: known vulnerabilities in every package of the root `bun.lock`, transitive ones included (GitHub's dependency graph, and so Dependabot alerts, sees only the direct npm dependencies); never cached. CI runs `ci-audit` (`scripts/ci.sh audit`), which skips the advisories in `AUDIT_IGNORES` there (fixes younger than 7 days, each with a revisit date) and also fails when a `bun.lock` package does not resolve from `https://registry.npmjs.org/` or a `.npmrc` / bunfig `registry` setting exists |
+| `moon run hump-tower:openapi` |
 | `src/shared/api/generated/` | `bun run generate:openapi` |
 | `apps/hump/internal/controller/hump_tower/` | `bun run build` |
 

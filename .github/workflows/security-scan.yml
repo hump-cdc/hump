@@ -1,0 +1,193 @@
+name: "Repository: security scan"
+
+on:
+    push:
+        branches:
+            - main
+    schedule:
+        - cron: "0 6 * * 1"
+    workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
+defaults:
+    run:
+        shell: bash
+
+jobs:
+    # zizmor-action uploads with the fixed category 'zizmor', which does not depend on the workflow
+    # or job name. The code_scanning rule of the main ruleset matches the tool name 'zizmor'.
+    zizmor:
+        name: Security report
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning
+        steps:
+            # Audit mode only logs outbound connections; the policy switches to block once the
+            # endpoints this job needs are collected from the audit runs.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Scan workflows and upload findings to the Security tab
+              uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+              with:
+                  advanced-security: true
+                  version: "1.31.1"
+
+    # check.yml runs the same scan only when a PR or push touches apps/hump; this job also catches
+    # vulnerabilities published since the last change to the module.
+    govulncheck:
+        name: Go vulnerability report
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning
+        steps:
+            # Audit mode only logs outbound connections; the policy switches to block once the
+            # endpoints this job needs are collected from the audit runs.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # Same inputs as in check.yml: proto and moon at the pinned versions, Go from
+            # .moon/toolchains.yml through 'moon setup'.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # hump:ci-vulncheck writes .ci/hump/govulncheck.sarif with repository-relative paths
+            # (apps/hump/...), as code scanning expects, and, when govulncheck reports called
+            # vulnerabilities (exit 3) or fails, a fix hint in .ci/annotations and the marker
+            # .ci/failed/hump-vulncheck. The task allows failure, so 'moon run' exits 0 in both
+            # cases; the last step fails the job, after the report is uploaded. moon runs a
+            # runInCI: 'only' task only when CI=true; the runner sets it, this makes it explicit.
+            - name: Scan apps/hump for known Go vulnerabilities
+              env:
+                  CI: "true"
+              run: |
+                  set -euo pipefail
+                  if ! moon run hump:ci-vulncheck; then
+                      echo "::error title=Vulnerability scan did not run::moon could not run hump:ci-vulncheck; see this step's log. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+
+            # Runs also when the scan found vulnerabilities, so the Security tab shows them.
+            - name: Upload Go vulnerability findings to the Security tab
+              if: ${{ !cancelled() && hashFiles('.ci/hump/govulncheck.sarif') != '' }}
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: .ci/hump/govulncheck.sarif
+                  category: govulncheck
+
+            - name: Report the Go vulnerability scan findings as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
+              run: cat .ci/annotations/*.txt
+
+            # ci.sh builds govulncheck from the tool module apps/hump/tools/govulncheck; a failed
+            # build leaves a marker. A failed SARIF run stops ci.sh without a marker, so a missing
+            # or invalid report fails the job too.
+            - name: Check that the Go vulnerability scan passed
+              if: ${{ !cancelled() }}
+              env:
+                  SARIF_FILE: .ci/hump/govulncheck.sarif
+              run: |
+                  set -euo pipefail
+                  if [[ -f .ci/failed/hump-vulncheck ]]; then
+                      echo "::error file=apps/hump/go.mod,title=Go vulnerability scan failed::The annotation above names the fix; the findings are in the Security tab (category govulncheck). Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+                  if ! jq -e '.runs' "$SARIF_FILE" >/dev/null 2>&1; then
+                      echo "::error file=apps/hump/scripts/ci.sh,title=Vulnerability scan did not complete::hump:ci-vulncheck wrote no valid ${SARIF_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      exit 1
+                  fi
+
+    # bun audit checks every package of the root bun.lock, direct and transitive; Dependabot alerts
+    # see only the direct npm dependencies. bun audit has no SARIF output, so nothing goes to the
+    # Security tab: the findings are in the log and the annotations.
+    npm-audit:
+        name: npm vulnerability report
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        permissions:
+            contents: read # checkout
+        steps:
+            # Audit mode only logs outbound connections; the policy switches to block once the
+            # endpoints this job needs are collected from the audit runs.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            # Same inputs as in check.yml: proto and moon at the pinned versions, Bun from
+            # .moon/toolchains.yml through 'moon setup'.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # hump-tower:ci-audit runs bun audit and checks that every package in bun.lock comes
+            # from registry.npmjs.org. It writes .ci/hump-tower/audit.json and, on a finding or an
+            # error, a fix hint in .ci/annotations and the marker .ci/failed/hump-tower-audit. The
+            # task allows failure, so 'moon run' exits 0 in both cases; the last step fails the
+            # job. moon runs a runInCI: 'only' task only when CI=true; the runner sets it, this
+            # makes it explicit.
+            - name: Scan the npm dependencies in bun.lock for known vulnerabilities
+              env:
+                  CI: "true"
+              run: |
+                  set -euo pipefail
+                  if ! moon run hump-tower:ci-audit; then
+                      echo "::error title=npm vulnerability scan did not run::moon could not run hump-tower:ci-audit; see this step's log. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+                      exit 1
+                  fi
+
+            - name: Report the npm vulnerability scan findings as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
+              run: cat .ci/annotations/*.txt
+
+            # ci.sh writes audit.json before it checks anything, so a missing report means the
+            # task stopped before the scan ran and left no marker.
+            - name: Check that the npm vulnerability scan passed
+              if: ${{ !cancelled() }}
+              env:
+                  REPORT_FILE: .ci/hump-tower/audit.json
+              run: |
+                  set -euo pipefail
+                  if [[ -f .ci/failed/hump-tower-audit ]]; then
+                      echo "::error file=bun.lock,title=npm vulnerability scan failed::The annotation above names the fix; the findings are in the log of the scan step. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+                      exit 1
+                  fi
+                  if [[ ! -f "$REPORT_FILE" ]]; then
+                      echo "::error file=apps/hump-tower/scripts/ci.sh,title=npm vulnerability scan did not complete::hump-tower:ci-audit wrote no ${REPORT_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+                      exit 1
+                  fi

@@ -26,6 +26,13 @@ jobs:
         permissions:
             contents: read # checkout
         steps:
+            # Audit mode only logs outbound connections; the policy switches to block once the
+            # endpoints this job needs are collected from the audit runs.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
             # moon compares the checked-out commit with the base commit to find the affected
             # projects, so the history is fetched in full.
             - name: Check out repository
@@ -109,6 +116,11 @@ jobs:
                   if [[ -n "$(git status --porcelain -- apps/hump/tools/actionlint/go.mod apps/hump/tools/actionlint/go.sum)" ]]; then
                       git diff -- apps/hump/tools/actionlint/go.mod apps/hump/tools/actionlint/go.sum
                       echo "::error file=apps/hump/tools/actionlint/go.mod,title=apps/hump/tools/actionlint/go.mod and go.sum are not tidy::Run 'moon run hump:tidy' locally and commit the updated apps/hump/tools/actionlint/go.mod and go.sum."
+                      status=1
+                  fi
+                  if [[ -n "$(git status --porcelain -- apps/hump/tools/govulncheck/go.mod apps/hump/tools/govulncheck/go.sum)" ]]; then
+                      git diff -- apps/hump/tools/govulncheck/go.mod apps/hump/tools/govulncheck/go.sum
+                      echo "::error file=apps/hump/tools/govulncheck/go.mod,title=apps/hump/tools/govulncheck/go.mod and go.sum are not tidy::Run 'moon run hump:tidy' locally and commit the updated apps/hump/tools/govulncheck/go.mod and go.sum."
                       status=1
                   fi
                   exit "$status"

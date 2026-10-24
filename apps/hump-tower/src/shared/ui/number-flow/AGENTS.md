@@ -5,12 +5,8 @@ digits when it changes. Use it wherever a live metric is shown; for time elapsed
 date pick `@/shared/ui/elapsed-time`, which ticks by itself.
 Storybook: `Content/Number Flow`.
 
-Parts:
-
-| File | Exports | Public |
-|---|---|---|
-| `number-flow.tsx` | `NumberFlow` | yes, through `index.ts` |
-| `duration-flow.tsx` | `DurationFlow` | no — `index.ts` does not re-export it; reached as `<NumberFlow kind="duration">` |
+`index.ts` exports `NumberFlow` only. `duration-flow.tsx` (`DurationFlow`) is internal, reached as
+`<NumberFlow kind="duration">`.
 
 ## Usage
 
@@ -26,14 +22,8 @@ import { NumberFlow } from '@/shared/ui/number-flow'
 
 ## Props
 
-### NumberFlow
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `value` | `number \| undefined` | required | `undefined` renders a dash (`—`) of the same height, for every `kind` |
-| `kind` | `'integer' \| 'decimal' \| 'compact' \| 'percent' \| 'bytes' \| 'latency' \| 'duration'` | `'integer'` | How the value is read and formatted, see below |
-| `suffix` | `string` | — | Appended after the kind's own suffix |
-| `className` | `string` | — | |
+`value` is `number | undefined`: `undefined` renders a dash (`—`) of the same height, for every
+`kind`. `kind` defaults to `'integer'`; `suffix` is appended after the kind's own suffix.
 
 | `kind` | Input | Output |
 |---|---|---|
@@ -43,22 +33,11 @@ import { NumberFlow } from '@/shared/ui/number-flow'
 | `percent` | percent value, already 0–100 | no fraction digits + `%`; the value is not multiplied |
 | `bytes` | bytes | scaled by 1024 to `B`/`KB`/`MB`/`GB`/`TB`; 0 fraction digits for `B`, 2 otherwise |
 | `latency` | milliseconds | `ms` rounded below 1000, otherwise seconds with 2 fraction digits and `s` |
-| `duration` | seconds | delegated to `DurationFlow` |
+| `duration` | seconds | `Xh Ym Zs`, leading zero units dropped (`Ym Zs`, `Zs`); rounded, clamped at 0; the units animate as one `NumberFlowGroup` |
 
 The scalar kinds mirror the string formatters in `@/shared/utils` (`formatBytes`, `formatLatency`),
 so an animated value reads the same as a formatted one. `bytes` and `latency` scale through
 `scaleBytes` / `scaleLatency`, which return `{ value, suffix, fractionDigits }` instead of a string.
-
-### DurationFlow (internal)
-
-Renders `Xh Ym Zs`, dropping leading zero units (`Ym Zs`, `Zs`); the units animate as one
-`NumberFlowGroup`. Seconds are rounded and clamped at 0.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `seconds` | `number` | required | |
-| `suffix` | `string` | — | Appended after the trailing `s` |
-| `className` | `string` | — | |
 
 ## Semantic styles
 

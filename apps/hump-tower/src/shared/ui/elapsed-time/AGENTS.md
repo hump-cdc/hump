@@ -17,15 +17,10 @@ import { ElapsedTime } from '@/shared/ui/elapsed-time'
 
 ## Props
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `startedAt` | `Date` | required | Start of the interval |
-| `finishedAt` | `Date` | — | End of the interval; while `undefined` the component is running |
-| `className` | `string` | — | Passed to `NumberFlow` |
-
-While running it re-renders once a second from an internal timer, which is cleared when
-`finishedAt` arrives or on unmount. With `finishedAt` set the value is static. Output format is
-that of `NumberFlow`'s `duration` kind: `Xh Ym Zs`, leading zero units dropped.
+While `finishedAt` is `undefined` it re-renders once a second from an internal timer, which is
+cleared when `finishedAt` arrives or on unmount; with `finishedAt` set the value is static.
+`className` goes to `NumberFlow`. Output format is that of `NumberFlow`'s `duration` kind:
+`Xh Ym Zs`, leading zero units dropped.
 
 ## Semantic styles
 

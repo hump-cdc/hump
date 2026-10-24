@@ -26,27 +26,18 @@ import { WhereInput } from '@/shared/ui/where-input'
 
 ## Props
 
-Only the props below; nothing else is passed through.
+The props type in `where-input.tsx` is closed: nothing else is passed through. Not obvious from
+the types:
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `value` | `string` | required | The condition, without the `WHERE` keyword. Controlled only |
-| `onValueChange` | `(value: string) => void` | required | Called on every edit, on clear (`''`) and on restore (`suggestion`) |
-| `onBlur` | `() => void` | — | Called when the editor loses focus, e.g. to act on the finished condition |
-| `placeholder` | `string` | `'(no filter)'` | |
-| `suggestion` | `string` | — | Suggested condition offered for restore while the input is focused and empty |
-| `fields` | `WhereField[]` | `[]` | Columns offered by autocompletion |
-| `invalid` | `boolean` | — | Error styling; sets `aria-invalid` on the panel |
-| `disabled` | `boolean` | — | Disables the textarea and makes the editor read-only |
-| `className` | `string` | — | Merged into the outer wrapper (`relative h-9 w-full`), not the panel |
-| `ref` | `Ref<HTMLTextAreaElement>` | — | Receives the editor's `<textarea>` |
-
-`WhereField`:
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Column name; quoted on insert unless it is a plain lower-case, non-reserved identifier |
-| `type` | `string` (optional) | Column type as PostgreSQL formats it, shown next to the name |
+- `value` is the condition without the `WHERE` keyword, and the input is controlled only.
+- `onValueChange` fires on every edit, on clear (`''`) and on restore (with `suggestion`).
+- `suggestion` is offered for restore while the input is focused and empty.
+- `invalid` sets `aria-invalid` on the panel; `disabled` disables the textarea and makes the editor
+  read-only.
+- `className` goes to the outer wrapper (`relative h-9 w-full`), not the panel; `ref` receives the
+  editor's `<textarea>`.
+- `WhereField.name` is quoted on insert unless it is a plain lower-case, non-reserved identifier;
+  `type` is shown next to it as PostgreSQL formats it.
 
 ## Behaviour
 
@@ -62,7 +53,7 @@ Only the props below; nothing else is passed through.
   editor when the list is closed).
 - **Clear and restore.** Both buttons exist only while focused: `X` when there is a value, the
   restore arrow (tooltip shows `suggestion`) when the value is empty and `suggestion` is set.
-- **Clicks.** The panel swallows `click`, so an enclosing `<label>` (a selectable table row) is not
+- **Clicks.** The panel cancels `click`, so an enclosing `<label>` (a selectable table row) is not
   activated, and redirects `mousedown` on its chrome to the editor.
 - **Value sync.** The editor (`prism-react-editor`) owns its text after mount; a `value` changed
   from outside is written back into it.
@@ -78,15 +69,10 @@ No cva variants. Part of the styling lives outside Tailwind, in the `.hump-where
 `app/styles.css`; the heights in `where-input.consts.ts` (36px collapsed, 20px lines, 14px
 vertical padding, 2px border) must stay in sync with them.
 
-| Part | Tokens |
-|---|---|
-| panel | `border-hairline`, `bg-canvas`, `rounded-lg`; focused: `z-20`, from `lg` also `shadow-lg` |
-| `WHERE` prefix | `text-ink-subtle`; `text-danger` when `invalid` |
-| text / placeholder | `text-ink`, `font-mono` / `--ink-tertiary` |
-| caret / selection | `--ink` / `--primary` at 25% |
-| clear, restore buttons | `text-ink-subtle`; hover `text-ink-muted` (clear), `text-ink` (restore) |
-| suggestion popup | `border-hairline`, `bg-canvas`, `rounded-xl`, `shadow-lg`; active option `bg-surface-1` |
-| suggestion option | `text-ink`, `font-mono text-xs`; kind icon and type `text-ink-subtle`; matched characters `text-primary` |
+The panel has the same look and states as `TextInput`: `border-hairline`, `bg-canvas`; focus ring
+`ring-primary`; invalid `border-danger` (and the `WHERE` prefix turns `text-danger`); disabled
+`opacity-50`. Focused it also gets `z-20`, and from `lg` `shadow-lg`. The caret is `--ink`, the
+selection `--primary` at 25%.
 
 Syntax colours (`.hump-where .token.*`):
 
@@ -99,11 +85,6 @@ Syntax colours (`.hump-where .token.*`):
 | comment | `--syntax-comment`, italic |
 | function, cast, quoted identifier | `--syntax-tag` |
 
-Suggestion kind icons: `field` → `Columns3`, `function` → `SquareFunction`, `keyword` →
+In the suggestion popup the matched characters are `text-primary`, the active option
+`bg-surface-1`. Kind icons: `field` → `Columns3`, `function` → `SquareFunction`, `keyword` →
 `CaseSensitive`, `operator` → `Equal`.
-
-States of the panel, the same as `TextInput`:
-
-- focus-within: `ring-2 ring-primary` with `ring-offset-2 ring-offset-canvas`.
-- invalid: `border-danger`, focus ring `ring-danger`.
-- disabled: `opacity-50`, `pointer-events-none`.

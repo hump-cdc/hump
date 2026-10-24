@@ -11,9 +11,10 @@ Three string variables the linker fills in. `version.go` declares `Version`, `Co
 ## What to know
 
 - **The path in `-X` is the coupling.** Renaming a variable or moving the package does not break the
-  build — the linker ignores an `-X` that matches nothing — it just leaves every binary reporting
-  the defaults. Change `scripts/ldflags.sh` in the same edit, and the `-X` in the `openapi` task of
-  `apps/hump-tower/moon.yml`.
+  build (the linker ignores an `-X` that matches nothing); it just leaves every binary reporting
+  the defaults. Change every place that spells the path in the same edit: `scripts/ldflags.sh`,
+  `apps/hump/Dockerfile` (its own `-ldflags`, since the Docker context has no `.git` for
+  `ldflags.sh`) and the `openapi` task in `apps/hump-tower/moon.yml`.
 - A plain `go build` or `go test` gets the defaults: `Version` is `development`, `Commit` and `Date`
   are empty. Code that reads them must be fine with that; `log.Scope` omits `commit` when it is
   empty.

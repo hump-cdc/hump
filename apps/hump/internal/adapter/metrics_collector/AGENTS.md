@@ -13,20 +13,19 @@ goes out over `/metrics`.
 | `scrape.go` | gathered families → deltas plus the absolute readings (`latest`) |
 | `bucket.go` | `aggregate` / `bucket` / `series` / `histogram` — the windowed side |
 | `snapshot.go` | topology + readings + window → `port.Snapshot` |
-| `logger.go` | the package logger scope |
 
 ## Idle by default
 
-The collector does nothing until a client calls `Connect`, which the SSE handler at `/api/live`
-does per connection. The refcount, the idle timer and the generation guarding it live in
-`pkg/idle_gate`, shared with `operations_collector`; this package supplies the two callbacks.
+The collector does nothing until a client calls `Connect` (`stream_updates`, once per `/api/live`
+connection). The refcount, the idle timer and the generation guarding it live in
+`pkg/idle_gate` (see its `AGENTS.md`); this package supplies the two callbacks.
 `stop` **drops every aggregate**: `scraper`, `series` and `lastTick` all go back to zero. A `Dump`
 after that is not an error — `snapshot` reports the configured topology with zero counts, which
 is the same shape an active collector with no traffic returns. Do not remove that guard; the
 tests dump an idle collector on purpose.
 
-The gate runs `activate` and `stop` **under its own lock**, so they take `c.mu` themselves and
-must never call back into the gate. `activate` spawns the scrape loop while both locks are held;
+The gate runs `activate` and `stop` under its own lock, so they must never call back into the
+gate. `activate` spawns the scrape loop while both locks are held;
 the new goroutine's first `tick` locks `c.mu` to take `waiting`, so it blocks until `activate`
 returns, then gathers outside any lock.
 
@@ -120,13 +119,8 @@ and failure counts, retries left out. Two consequences:
 
 ## Tests
 
-`newTestMetrics` registers the five families on a fresh registry; `countingGatherer` wraps it
-and counts calls so a test can assert the loop is or is not running. `mustDump` returns points,
-`mustSnapshot` the whole snapshot, `waitFor` polls a condition for a second, `waitClosed` waits
-for a `Scrape` channel to close.
+`countingGatherer` counts registry reads so a test can assert the loop is or is not running.
 
 A latency test has to **observe once before the collector starts**: the first scrape is the
 baseline, so observations made before it are invisible. Prime the series, wait for the first
 point, then observe what the test measures.
-
-Helpers live below the last test function — see the `go` skill.

@@ -4,12 +4,12 @@ The snapshot runner behind `port/snapshot.Runner`, one per process. A run reads 
 from one exported database snapshot and hands every row to the processing pipeline as an
 `insert` (`prev` nil, timestamp = now, no headers) — the same `database.ProcessMessageHandler` WAL
 delivers through, so sinks, operation filters and the operations log see snapshot rows like any
-other change.
+other change. The statuses, errors and sink rows a run reports are in `port/snapshot/AGENTS.md`.
 
 ## The run
 
 1. `Start` validates **every** filter through `database.ValidateWhere` before touching state; one
-   bad filter fails the whole request with `ErrInvalidWhere` (422) and nothing starts.
+   bad filter fails the whole request and nothing starts.
 2. Estimate: `GetRowCount` per table; the exact count wins, the rough one otherwise, zero when
    neither arrives. `EstimatedRows` grows to `CompletedRows` if the read overtakes it.
 3. `database.StartSnapshot` pauses WAL delivery, locks the tables `ACCESS SHARE` and exports a
@@ -19,13 +19,8 @@ other change.
    them, because the processing use case's worker pool batch API is not safe for concurrent use.
 5. `FinishSnapshot` runs in a defer of the run goroutine, whatever ended the run, which resumes WAL.
 
-Only sinks whose configured operations include `insert` are listed and counted per table.
-
-## Statuses
-
-While processing a table goes `wait → processing → done`. A table that failed mid-run is `done`
-with `Error` set (the processing DTO has no error status); `finish` turns `done` without error into
-`success`, `done` with error into `error`, and anything unfinished into `error` `"stopped"`.
+`finish` turns the processing statuses into the final ones; a table it finds unfinished gets
+`error` `"stopped"`.
 
 ## Stop, restart, shutdown
 

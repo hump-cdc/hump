@@ -1,25 +1,10 @@
 # domain — how this package hangs together
 
-The vocabulary every other layer shares: what a change event is made of. Named types and
-constants only — no business logic, no I/O, no errors; the one set of methods is
-`UnavailableValue`'s marker and serializers (see below). `config`, `cmd/hump` and the ports,
-adapters and use cases that handle change data import it; it imports nothing back. The production files have
-no imports at all, and that is the invariant to keep: a type that needs a project or third-party
-import belongs in a port or an adapter. (`unavailable_test.go` imports `pkg/template` and
-`goccy/go-yaml`, which is fine — tests only.)
-
-## Layout
-
-| File | Role |
-|---|---|
-| `table.go` | `TableSchema`, `TableName`, `TableIdentifier` |
-| `db_name.go` | `DbName` |
-| `db_record.go` | `DbRecord` — one row, column name → value |
-| `unavailable.go` | `UnavailableValue` / `Unavailable` — a column the WAL did not carry |
-| `headers.go` | `Headers` — name/value metadata of an event |
-| `operation_type.go` | `OperationType`, its constants, `OperationTypes` |
-| `delivery_status.go` | `DeliveryStatus` and its constants |
-| `replica_identity.go` | `ReplicaIdentity` and its constants |
+The vocabulary every other layer shares: what a change event is made of. It declares no error
+values either, and the one set of methods is `UnavailableValue`'s marker and serializers (see below). The production files
+have no imports at all, and that is the invariant to keep: a type that needs a project or
+third-party import belongs in a port or an adapter. (`unavailable_test.go` imports `pkg/template`
+and `goccy/go-yaml`, which is fine — tests only.)
 
 One concept per file, named after it. `OperationType`, `DbName`, `TableSchema`, `TableName`,
 `Headers` and `DbRecord` are the field types of `port/sink.Context`, which is what a template

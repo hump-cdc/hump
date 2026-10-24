@@ -44,7 +44,9 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
   Run a CI-only task locally with `CI=true moon run <project>:<task>`.
 - Task names are kebab-case (`test-file-cover`) and every task has a `description`.
 - A task belongs to the project whose files it works on. Repo-wide tasks (workflow lint, the
-  dev environment, the aggregate `check`) go to the root `moon.yml`.
+  dev environment, the aggregate `check`) go to the root `moon.yml`. Exception:
+  `hump-tower:openapi` runs Go code from `apps/hump` but lives in `hump-tower`, because a
+  dependency back into `hump` would make a cycle (`apps/hump-tower/moon.yml`).
 - Developer tasks (`run`, `dev`, `lint-fix`, `test-cover` etc.) have `runInCI: false`; the
   ones that are not cached use `preset: 'utility'` or `'server'`.
 - `ci-*` tasks exist only for CI: `runInCI: 'only'`, `cache: false`, `allowFailure: true`.
@@ -72,36 +74,31 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
 
 ## Dependencies
 
-Do not add or upgrade a dependency to a version published less than 7 days ago. This matches
-the 7-day Dependabot cooldown in `.github/dependabot.yml`.
+Do not add or upgrade a dependency, npm, Go or toolchain, to a version published less than 7
+days ago. This matches the 7-day Dependabot cooldown in `.github/dependabot.yml`. Pin exact
+versions everywhere.
 
-- npm (bun): enforced by `install.minimumReleaseAge` in the root `bunfig.toml`. When resolving
-  (`bun add`, `bun update`), bun silently skips versions younger than 7 days and fails only when
-  no older version matches (e.g. an exact too-new version). Entries already in `bun.lock` are
-  not re-checked, so do not hand-edit `bun.lock`.
-  Pin every dependency in every workspace `package.json` (root, `apps/*`, `packages/*`) to an
-  exact version: no `^`, `~`, `*` or `latest`. `install.exact` in the root `bunfig.toml` makes
-  `bun add` / `bun update` save exact versions, but it does not check what you type into
-  `package.json` by hand, so write those exact too.
+- npm (bun): `install.minimumReleaseAge` in the root `bunfig.toml` enforces the age. `bun add` /
+  `bun update` silently skip younger versions and fail only when no older one matches (e.g. an
+  exact too-new version). Entries already in `bun.lock` are not re-checked, so do not hand-edit
+  `bun.lock`.
+  No `^`, `~`, `*` or `latest` in any workspace `package.json` (root, `apps/*`, `packages/*`).
+  `install.exact` makes `bun add` / `bun update` save exact versions; it does not check what you
+  type by hand.
   No dependency runs install scripts: `"trustedDependencies": []` in the root `package.json`
   replaces Bun's default allow list (it blocks e.g. esbuild's `postinstall`). To allow one, review
   its script and list that package there explicitly.
-- Go: enforced in CI by `hump:ci-dep-age`. It fails when any module in the full build list
-  (`go list -m all`, direct and transitive, with `GOWORK=off`) of `apps/hump/go.mod`,
-  `apps/hump/tools/actionlint/go.mod` or `apps/hump/tools/govulncheck/go.mod` was published
-  less than 7 days ago. The last one pins govulncheck (`golang.org/x/vuln`), which
-  `hump:ci-vulncheck` builds from it. Run it locally with `CI=true moon run hump:ci-dep-age`.
-  Pin concrete versions in every `go.mod` (`apps/hump`, `apps/hump/tools/actionlint`,
-  `apps/hump/tools/govulncheck`, future `packages/*`). Before `go get` of a version, check its publish time with
-  `go list -m -json <module>@<version>` (the `Time` field) and pick one at least 7 days old,
-  so CI does not fail after the fact.
+- Go: `hump:ci-dep-age` fails when any module in the full build list (`go list -m all` with
+  `GOWORK=off`, transitive included) of `apps/hump`, `apps/hump/tools/actionlint` or
+  `apps/hump/tools/govulncheck` is too young. The last one pins govulncheck (`golang.org/x/vuln`),
+  which `hump:ci-vulncheck` builds from it. Run it locally with `CI=true moon run hump:ci-dep-age`.
+  Before `go get` of a version, check its `Time` with `go list -m -json <module>@<version>`.
   A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, an
   `apps/*/scripts` (or `packages/*/scripts`) script or `.github`; CI fails on an unused one in
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.
-- Toolchain: moon in `.prototools`, proto, Go and Bun in `.moon/toolchains.yml`, all exact
-  versions. The same 7-day rule applies. Dependabot does not update these files.
-  The bun and Go image tags in `apps/hump/Dockerfile` must match `.moon/toolchains.yml`;
-  Dependabot bumps the Dockerfile's base images but not `toolchains.yml`, so change them together.
+- Toolchain: moon in `.prototools`; proto, Go and Bun in `.moon/toolchains.yml`. Dependabot does
+  not update these files. It does bump the base images in `apps/hump/Dockerfile`, whose bun and Go
+  tags must match `.moon/toolchains.yml`, so change them together.
   `.prototools` sets `auto-install`; proto applies it only after `proto trust .prototools`.
 
 ## Before finishing a task

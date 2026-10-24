@@ -18,26 +18,11 @@ its last width, leaving the grey track. The header keeps a fixed height, so noth
 
 ## Props
 
-Plus the `div` attributes (except `title`) and `ref`.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `title` | `ReactNode` | required | label above the bar |
-| `value` | `number` | — | share filled green, 0 to 100; the fill width is clamped to that range |
-| `showError` | `boolean` | `false` | paints the unfilled remainder red rather than leaving it grey |
+`value` is 0 to 100; the fill width is clamped to that range. `showError` paints the unfilled
+remainder red instead of leaving it grey. `title` replaces the native `div` attribute.
 
 ## Semantic styles
 
-No cva variants. The colour of the percentage follows `value`:
-
-| `value` | Token |
-|---|---|
-| below 50 | `text-danger` |
-| 50 to below 95 | `text-amber` |
-| 95 and above | `text-success` |
-
-- Track `bg-surface-3`; fill `bg-success`; remainder `bg-danger`, visible only with
-  `showError` and a value.
-- Title `text-ink-subtle`.
-- The fill width and both opacities transition over 500ms; the percentage is animated with
-  `NumberFlow` (`kind="percent"`).
+No cva variants. The percentage colour follows `value`: below 50 `text-danger`, 50 to below 95
+`text-amber`, 95 and above `text-success`. The remainder is `bg-danger` only with `showError`
+and a value; otherwise the `bg-surface-3` track shows through.

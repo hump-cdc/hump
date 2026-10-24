@@ -1,17 +1,8 @@
 # application/hump_tower/get_operations — how this package hangs together
 
-`POST /api/operations` (`operations.list`, registered in `internal/controller/hump_tower.go`). One
-page of the operations log: deliveries of one row to one sink, newest first, cut by a filter. The
-log itself — the ring, the filter, the paging — is `adapter/operations_collector`; this package
-turns a request into a `Query` and a `Page` into JSON.
-
-## Layout
-
-| File | Role |
-|---|---|
-| `usecase.go` | `Search(Filter)`: nil check, the inverted-window check, `Filter` → `operationscollector.Query` |
-| `controller.go` | the huma handler, the error-to-status mapping, record and attempt rendering |
-| `dto.go` | `OperationsRequest` / `OperationsResponse` — the wire contract |
+`POST /api/operations` (`operations.list`). One page of the operations log: deliveries of one row
+to one sink, newest first, cut by a filter. The log itself — the ring, the filter, the paging — is
+`adapter/operations_collector`; this package turns a request into a `Query` and a `Page` into JSON.
 
 ## The filter is not applied here, and must not be
 
@@ -33,8 +24,8 @@ What that implies for the request:
   of one node.
 - Items stay in the order the collector answered in. Nothing here re-sorts.
 
-`ErrInvertedWindow` (`to < from`) is the single validation this package adds; `minimum:"0"` on both
-fields is huma's.
+`ErrInvertedWindow` (`to < from`, 422) is the single validation this package adds; `minimum:"0"`
+on both fields is huma's.
 
 ## `convert` keeps an empty list nil
 
@@ -44,18 +35,12 @@ The values are cast, not validated: the `enum` tags on `operations` and `statuse
 stray value out. `statuses` lists only `success` and `failure` on purpose — `retry` is an attempt's
 status and never a record's.
 
-## Errors
+## Nil versus idle collector
 
-| Cause | Status |
-|---|---|
-| `ErrDisabled` (nil collector) | 503 |
-| `ErrInvertedWindow` | 422 |
-
-A served route never sees a nil collector: `cmd/hump/main.go` builds it whenever the web port is
-set. The nil path exists for `cmd/openapi`, which constructs the use case with nil purely to
-register the route, and for tests. An **idle** collector is a different thing — it answers an empty
-page. Only `/api/live` calls `Connect` (see `stream_updates`), so records accumulate while a
-client holds that stream open and until the collector's idle timeout after it leaves; a bare call
+A nil collector is `ErrDisabled` (503); `cmd/hump/main.go` builds one whenever the web port is
+set. An **idle** collector is a different thing — it answers
+an empty page. Only `/api/live` calls `Connect` (see `stream_updates`), so records accumulate while
+a client holds that stream open and until the collector's idle timeout after it leaves; a bare call
 to this route never turns the log on.
 
 ## Rendering
@@ -69,13 +54,6 @@ to this route never turns the log on.
 - `payload` is the body truncated to the collector's limit; `payloadSize` is the untruncated
   length.
 
-`dto.go` tags are emitted into `apps/hump-tower/src/shared/api/openapi.json` by
-`moon run hump-tower:openapi`.
-
 ## Tests
 
 `controller_test.go` covers the use case through the handler; there is no `usecase_test.go`.
-`call` builds the request from a flat `request` struct, `status` extracts huma's status from an
-error, `queriesEqual` compares two `Query` values field by field because their slices rule out
-`==`. `fakeCollector` keeps the query it was asked for and answers one fixed page. Helpers live
-below the last test function — see the `go` skill.

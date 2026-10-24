@@ -1,9 +1,8 @@
 # apps/hump-tower
 
-The hump web UI: a single-page app over the web UI API (`/api/...` on `WEB_PORT`). Five pages —
-Flows (`/`), Configuration, Operations, Snapshot, Statistics. `bun run build` writes into
-`apps/hump/internal/controller/hump_tower`, which is committed and embedded into the Go binary; how
-it is served is described in `apps/hump/internal/controller/AGENTS.md`.
+The hump web UI: a single-page app over the web UI API (`/api/...` on `WEB_PORT`). Five pages:
+Flows (`/`), Configuration, Operations, Snapshot, Statistics. How the Go binary serves the build
+(SPA fallback, `routes.json`, 404s) is in `apps/hump/pkg/middleware/AGENTS.md`.
 
 ## Stack
 
@@ -15,34 +14,28 @@ it is served is described in `apps/hump/internal/controller/AGENTS.md`.
   light/`.dark` tokens → `@theme` utilities). Radix UI, `@base-ui/react` (the combobox), `cva`,
   `lucide-react`, `@xyflow/react`.
 - `@hey-api/openapi-ts` generates the API client, zod 4 schemas and TanStack Query helpers.
-- Biome 2.5.15 (lint, format, import order). Storybook 10 (`storybook-react-rsbuild`).
+- Biome 2 (lint, format, import order). Storybook 10 (`storybook-react-rsbuild`).
 
 ## Commands
 
-Run in `apps/hump-tower`. The moon tasks in `moon.yml` (`moon run hump-tower:<task>`, from anywhere
-in the repo) wrap some of them.
+Scripts are in `package.json`; the moon tasks in `moon.yml` wrap some of them. The ones with a
+catch:
 
 | Command | Does |
 |---|---|
-| `bun run dev` | dev server on port 3000; `moon run hump-tower:dev` adds `API_URL=http://localhost:3200` |
-| `bun run build` | production build into `apps/hump/internal/controller/hump_tower`; `moon run hump-tower:build` |
-| `bun run preview` | `rsbuild preview`: serves the last production build locally |
-| `bun run analyze` | production build with Rsdoctor (`RSDOCTOR=true`): opens the bundle analysis page; its report goes to `apps/hump/internal/controller/hump_tower/.rsdoctor` (gitignored, not embedded) and the next `build` cleans it |
-| `bun run check` / `lint` / `format` | `biome check` / `biome lint` / `biome format` |
-| `bun test` | every `*.test.ts(x)`, colocated with the code under test, written on `bun:test` |
-| `bun run storybook` | Storybook on port 6006; `moon run hump-tower:storybook` |
-| `bun run build-storybook` | `storybook build` → static Storybook in `storybook-static/` (gitignored) |
-| `bun run knip` | knip (`knip.jsonc`): unused files, exports, types and dependencies; must exit 0 |
-| `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev`, `build` |
-| `bun run generate-routes` | `tsr generate` → `app/routeTree.gen.ts` |
-| `moon run hump-tower:audit` | `bun audit`: known vulnerabilities in every package of the root `bun.lock`, transitive ones included (GitHub's dependency graph, and so Dependabot alerts, sees only the direct npm dependencies); never cached. CI runs `ci-audit` (`scripts/ci.sh audit`), which skips the advisories in `AUDIT_IGNORES` there (fixes younger than 7 days, each with a revisit date) and also fails when a `bun.lock` package does not resolve from `https://registry.npmjs.org/` or a `.npmrc` / bunfig `registry` setting exists |
-| `moon run hump-tower:openapi` | Go `apps/hump/cmd/openapi` → `src/shared/api/openapi.json`; `hump-tower:dev`, `hump-tower:build` depend on it |
+| `moon run hump-tower:dev` | `bun run dev` (port 3000) with `API_URL=http://localhost:3200`, i.e. against `moon run hump:run` |
+| `moon run hump-tower:build` | production build into `apps/hump/internal/controller/hump_tower` |
+| `bun run analyze` | build with Rsdoctor; its report goes to `apps/hump/internal/controller/hump_tower/.rsdoctor` (gitignored, not embedded), and the next `build` cleans it |
+| `bun run generate:openapi` | `openapi.json` → `src/shared/api/generated`; runs before `dev` and `build` |
+| `moon run hump-tower:openapi` | Go `apps/hump/cmd/openapi` → `src/shared/api/openapi.json`; `dev` and `build` depend on it |
+| `moon run hump-tower:typecheck` | `tsc --noEmit`; there is no type-check script in `package.json` |
+| `moon run hump-tower:audit` | `bun audit` over the root `bun.lock`, transitive packages included (Dependabot alerts see only direct ones). CI's `ci-audit` skips `AUDIT_IGNORES` in `scripts/ci.sh` and also checks that every package comes from `registry.npmjs.org` |
+
+`bun test` runs every `*.test.ts(x)`, colocated with the code under test and written on `bun:test`.
 
 There is no dev proxy: `API_URL` and `VERSION` are compile-time constants (`source.define`,
 declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
-(`src/shared/api/client.ts`). There is no type-check script in `package.json` (`tsconfig.json` has
-`noEmit`); the moon task `hump-tower:typecheck` runs `tsc --noEmit`. `moon run root:check` runs the
-`check`, `test`, `typecheck` and `knip` tasks here, alongside actionlint and the Go lint and tests.
+(`src/shared/api/client.ts`).
 
 ## Directory layout
 
@@ -51,9 +44,9 @@ declared in `src/env.d.ts`). An empty `API_URL` means the page's own origin
 | `app/` | the entry: `main.tsx`, `router.tsx`, `routes/` (route files), `styles.css` |
 | `src/app` | the FSD app layer: `Providers` (query client, live updates, theme, tooltips, config, `<Toaster />`) |
 | `src/{pages,widgets,features,entities,shared}` | the other FSD layers, see below |
-| `.storybook/` | Storybook config; picks up `src/shared/ui` (stories, `.mdx`); the `src/widgets` stories glob is configured, but there are no widget stories yet |
+| `.storybook/` | Storybook config; stories come from `src/shared/ui` and `src/widgets` |
 | `public/` | fonts, logos, favicon |
-| `scripts/` | `ci.sh` (`knip`, `biome`, `typecheck`, `test`, `audit`), run by the `ci-*` moon tasks |
+| `scripts/ci.sh` | the bodies of the `ci-*` moon tasks |
 
 `@/*` resolves to `src/*` (`tsconfig.json`). `app/` is reached by relative paths only.
 
@@ -70,26 +63,22 @@ Feature-Sliced Design. Imports point downwards only.
 | `src/entities` | domain slices, mostly grouped: `entities/<group>/<slice>` | `shared` |
 | `src/shared` | API client, live stream, state keys, theme, UI kit, utils | `shared` only |
 
-Principles — each one is a `noRestrictedImports` override in `biome.json`, per layer:
+Principles. Each one is a `noRestrictedImports` override in `biome.json`, per layer:
 
 - **Downward only.** A layer never imports a layer above it.
 - **No sideways imports.** A slice does not import another slice of its layer, not even one of
   its own group. The exception is `@x`: the exporting slice adds `@x/<consumer>.ts` listing what
   that consumer may take, e.g. `@/entities/metrics/@x/flows` or
-  `@/entities/config/state/@x/operations`. Only `entities` uses it today.
+  `@/entities/config/state/@x/operations`.
 - **Public API.** A slice is imported through its `index.ts` (`@/pages/flows`,
   `@/entities/statistics/delivered`, `@/shared/state`), never a file inside it. `shared/ui` has no
   barrel of its own: one import per component folder (`@/shared/ui/button`,
   `@/shared/ui/charts/bar-chart`).
 - **Relative imports stay inside the slice**: `../../../` is rejected.
 
-`bun run lint` passes on the current tree, so none of these is violated anywhere.
-
-A slice is `index.ts` plus `model/` (hooks, stores, pure logic, tests) and `ui/` (components).
-`widgets/sidebar` keeps its files flat. Every page except `pages/operations` has no `model/`,
-and neither do `entities/config/source-viewer` and `entities/flows/toolbar`. `entities/metrics`
-is not grouped, has no `ui/` and no `index.ts`: only entities consume it, so its public API is
-its `@x` files.
+A slice is `index.ts` plus `model/` (hooks, stores, pure logic, tests) and `ui/` (components);
+either folder is left out when empty; `widgets/sidebar` keeps its files flat. `entities/metrics` is not grouped and has no `index.ts`:
+only entities consume it, so its public API is its `@x` files.
 
 Tests that render (`*.test.tsx`) register happy-dom per file and use `@testing-library/react`;
 there is no preload, so the other tests run without a DOM (`src/shared/live/AGENTS.md`, "Tests").
@@ -99,20 +88,17 @@ there is no preload, so the other tests run without a DOM (`src/shared/live/AGEN
 - **Requests.** Slices call the generated SDK classes from `@/shared/api` (`Metrics.get`,
   `Operations.list`, ...) inside `useQuery`/`useMutation`, with keys from `keys` in
   `@/shared/state`. `useConfig` is the exception: it spreads the generated `getApiConfigOptions()`.
-- **Live updates.** `shared/live` holds one SSE connection to `/api/live` (`liveStream`), which
-  reconnects with backoff. `LiveUpdates`, mounted in `Providers`, invalidates the metrics queries
-  on every batch, and metrics plus operations after a reconnect (`shared/state/invalidate.ts`).
-  Slices subscribe themselves with `useLiveOperations`, `useLiveStatus`, `useLiveSnapshot`.
+- **Live updates.** One SSE connection to `/api/live`; `LiveUpdates` in `Providers` turns its
+  events into query invalidations. Details in `src/shared/live/AGENTS.md`.
 - **Client state** lives in zustand stores inside the owning slice's `model/`.
 - **Metrics** arrive already aggregated from `POST /api/metrics`; the UI parses no Prometheus text.
 
-## Generated — never edit by hand
+## Generated, never edit by hand
 
 | Path | Produced by |
 |---|---|
-| `app/routeTree.gen.ts` | the TanStack Router plugin on `dev`/`build`, or `generate-routes` |
-| `src/shared/api/openapi.json` | `moon run hump-tower:audit` | `bun audit`: known vulnerabilities in every package of the root `bun.lock`, transitive ones included (GitHub's dependency graph, and so Dependabot alerts, sees only the direct npm dependencies); never cached. CI runs `ci-audit` (`scripts/ci.sh audit`), which skips the advisories in `AUDIT_IGNORES` there (fixes younger than 7 days, each with a revisit date) and also fails when a `bun.lock` package does not resolve from `https://registry.npmjs.org/` or a `.npmrc` / bunfig `registry` setting exists |
-| `moon run hump-tower:openapi` |
+| `app/routeTree.gen.ts` | the TanStack Router plugin on `dev`/`build`, or `bun run generate-routes` |
+| `src/shared/api/openapi.json` | `moon run hump-tower:openapi` |
 | `src/shared/api/generated/` | `bun run generate:openapi` |
 | `apps/hump/internal/controller/hump_tower/` | `bun run build` |
 
@@ -143,10 +129,3 @@ All four are committed. Biome skips the first three, and `app/styles.css`.
 3. A `<NavItem to label icon />` in `src/widgets/sidebar/app-sidebar-menu.tsx`.
 4. `moon run hump-tower:build`: the build writes `routes.json` from the route tree, and the Go
    server answers paths missing from it with status 404.
-
-## Module guides
-
-Each module carries its own `AGENTS.md` with the details: `src/app`,
-`src/entities/{config,flows,metrics,operations,statistics}`, `src/features/snapshot`,
-`src/pages/{configuration,flows,not-found,operations,snapshot,statistics}`,
-`src/shared/{api,live,state,theme,ui,utils}`, `src/widgets/sidebar`.

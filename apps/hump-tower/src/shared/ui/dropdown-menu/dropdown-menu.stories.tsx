@@ -123,5 +123,5 @@ const meta: Meta<StoryArgs> = {
 export default meta
 
 export const Default: StoryObj<StoryArgs> = {
-    name: 'DropdownMenu',
+    name: 'Dropdown Menu',
 }

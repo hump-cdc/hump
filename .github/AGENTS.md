@@ -35,14 +35,14 @@ Don't break these:
   (actionlint v1.7.12 lacks `$/...`). They set their own `permissions: {}`, `defaults` and job
   `timeout-minutes`, and no `concurrency` (the caller's group applies).
 - Fork and Dependabot PRs get a read-only token, so the Trivy SARIF upload is skipped there.
-  Trivy exceptions go to `.trivyignore` with a reason and a review date.
+  Trivy exceptions go to `.trivyignore` in the repo root (Trivy picks it up on its own; create it
+  when needed), each with a reason and a review date.
 - Dependabot doesn't bump these inputs; raise them by hand to releases at least 7 days old:
   zizmor `version` (only versions the pinned `zizmorcore/zizmor-action` supports),
   `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`.
-- Tasks never print `::error`; they write to `.ci/`, and steps after `moon ci` read it. Drift
-  checks are such steps: they diff regenerated files and fail with an `::error` naming the local
-  command to run. Tasks CI runs without `allowFailure` (`hump:tidy`, `hump-tower:openapi`, the
-  builds) fail `moon ci` directly.
+- Drift checks are steps after `moon ci`: they diff regenerated files and fail with an `::error`
+  naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
+  `hump-tower:openapi`, the builds) fail `moon ci` directly.
 - The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
   `workflows-lint.yml` (PRs) and `security-scan.yml` (`main`) both upload zizmor SARIF with
   category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
@@ -56,10 +56,9 @@ Don't break these:
   Never use a tag or branch as the ref:
   `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`.
 - Resolve the SHA with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`. For an annotated tag
-  (`"type": "tag"`), dereference it with `gh api repos/<owner>/<repo>/git/tags/<sha>`. Update the
-  comment with the SHA. Dependabot bumps both together; don't bypass it with a mutable ref.
-- actionlint is a Go tool in its own module, `apps/hump/tools/actionlint/go.mod`, kept out of
-  `go.work` because its dependencies conflict with golangci-lint's. Run `moon run root:actionlint`.
+  (`"type": "tag"`), dereference it with `gh api repos/<owner>/<repo>/git/tags/<sha>`. Change the
+  tag comment together with the SHA. Dependabot bumps both; don't bypass it with a mutable ref.
+- Lint workflows locally with `moon run root:actionlint`.
 
 ## Runner hardening
 

@@ -7,15 +7,8 @@ Storybook: `Layout/Tabs`.
 
 ## Parts
 
-| Part | Renders | Role |
-|---|---|---|
-| `Tabs` | Tabs `Root` | state holder: `value` / `onValueChange` / `defaultValue` |
-| `TabsList` | Tabs `List` | the row of triggers; owns the variant and the indicator |
-| `TabsTrigger` | Tabs `Trigger` | one tab (`value`, `disabled`) |
-| `TabsContent` | Tabs `Content` | the panel for one `value`; optional |
-
-Every part forwards the props of its Radix primitive and sets `data-slot`. The indicator
-(`tabs-list-indicator.tsx`) is internal and not exported.
+One part per Radix primitive: `Tabs` (`Root`), `TabsList`, `TabsTrigger`, `TabsContent` (optional).
+`TabsList` owns the variant and the indicator; the indicator (`tabs-list-indicator.tsx`) is internal.
 
 ## Usage
 
@@ -52,13 +45,8 @@ Segmented control without panels, controlled (`entities/config/state/ui/live-con
 
 ## Props
 
-`TabsList` — Tabs `List` props plus:
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `variant` | `'pill' \| 'underline'` | `'pill'` | shape of the list and of the active indicator |
-
-`Tabs`, `TabsTrigger` and `TabsContent` have no props of their own.
+Only `TabsList` adds a prop: `variant` (`'pill'` default, or `'underline'`). The other parts take
+their Radix props.
 
 ## Semantic styles
 
@@ -67,28 +55,17 @@ itself through `group-data-[variant=underline]/tabs-list:`.
 
 | | `pill` | `underline` |
 |---|---|---|
-| list | `inline-flex w-fit`, `rounded-lg`, `border-hairline`, `bg-surface-1`, `p-0.5` | `flex w-full`, `border-hairline border-b` |
-| trigger | `rounded-md px-3 py-1.5 text-sm`, width by content | `flex-1` (equal widths), `rounded-none`, `text-base` |
-| active trigger | `text-ink` | `text-ink`, `font-semibold` |
-| indicator | covers the trigger: `rounded-md`, `border-hairline-strong`, `bg-canvas` (`dark:bg-surface-3`), `shadow-sm` | 2px bar on the trigger's bottom edge, `bg-primary` |
+| list | `w-fit`, bordered `bg-surface-1` box | `w-full`, `border-b` |
+| trigger | width by content | equal widths (`flex-1`), active one `font-semibold` |
+| indicator | covers the trigger: `bg-canvas` (`dark:bg-surface-3`), `border-hairline-strong` | 2px `bg-primary` bar on the trigger's bottom edge |
 
-Trigger states, both variants:
-
-| State | Classes |
-|---|---|
-| inactive | `text-ink-subtle`, `font-medium` |
-| hover | `text-ink-muted` |
-| active (`data-state=active`) | `text-ink` |
-| disabled | `opacity-50`, `pointer-events-none` |
-| focus-visible | `ring-2 ring-primary`, `ring-offset-2 ring-offset-canvas` |
-
-Icons inside a trigger default to `size-4` unless they carry their own `size-*` class.
+Triggers in both variants: inactive `text-ink-subtle`, hover `text-ink-muted`, active `text-ink`,
+disabled `opacity-50`. Icons inside a trigger default to `size-4` unless they carry their own
+`size-*` class.
 
 The indicator is an absolutely positioned `div` inside the list (the list is `relative`). It
-finds `[data-slot="tabs-trigger"][data-state="active"]`, copies that trigger's
-`offsetLeft` / `offsetTop` / `offsetWidth` / `offsetHeight`, and re-measures on `data-state`
-changes, on added or removed triggers (`MutationObserver`) and on list resize (`ResizeObserver`).
-With no active trigger it is hidden (`opacity: 0`). The slide transition (300ms) switches on
-only after the first measurement, so the indicator does not animate in on mount.
-
-`Tabs` itself is `flex flex-col gap-2`; `TabsContent` is `flex-1 outline-none`.
+finds `[data-slot="tabs-trigger"][data-state="active"]`, copies that trigger's offset box, and
+re-measures on `data-state` changes, on added or removed triggers (`MutationObserver`) and on list
+resize (`ResizeObserver`). With no active trigger it is hidden (`opacity: 0`). The slide transition
+(300ms) switches on only after the first measurement, so the indicator does not animate in on
+mount.

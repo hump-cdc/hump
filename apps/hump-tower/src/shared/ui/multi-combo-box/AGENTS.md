@@ -6,7 +6,7 @@ options, "Select all" and a counter. Use it for a filter over a known list
 `@/shared/ui/combobox` only for a combobox this one does not cover.
 Storybook: `Inputs/Multi Combo Box`.
 
-Exports: `MultiComboBox` and the type `MultiComboBoxItem`.
+Exports: `MultiComboBox` and the type `MultiComboBoxItem` (`{ value, label, aside? }`).
 
 ## Usage
 
@@ -34,30 +34,18 @@ const tables: MultiComboBoxItem[] = [
 
 ## Props
 
-Only the props below; nothing else is passed through to the combobox.
+The props type in `multi-combo-box.tsx` is closed: nothing else is passed through to the combobox.
+Not obvious from the types:
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `items` | `MultiComboBoxItem[]` | required | The options |
-| `value` | `string[]` | — | Selected `value`s. Passing it makes the component controlled; without it the selection is internal and starts empty |
-| `onValueChange` | `(value: string[]) => void` | — | Called with the new selected `value`s |
-| `placeholder` | `string` | — | Shown in the input only while nothing is selected |
-| `emptyText` | `string` | `'No items found.'` | Popup text when the search matches nothing |
-| `icon` | `ReactNode` | — | Leading icon; its svg is forced to `size-4` |
-| `hint` | `ReactNode` | — | Tooltip on hovering the icon; ignored without `icon` |
-| `invalid` | `boolean` | — | Error styling; sets `aria-invalid` on the field box |
-| `disabled` | `boolean` | — | |
-| `clearToAll` | `boolean` | — | The clear button selects every item instead of none, for a filter where "All" is the reset state |
-| `className` | `string` | — | Passed to the field box (`ComboboxChips`); the place to set the width |
-| `ref` | `Ref<HTMLDivElement>` | — | Forwarded to the field box, which is also the popup anchor |
-
-`MultiComboBoxItem`:
-
-| Field | Type | Description |
-|---|---|---|
-| `value` | `string` | Identity of the option; what `value` / `onValueChange` carry |
-| `label` | `string` | Text of the option and its chip; what the search matches |
-| `aside` | `string` (optional) | Secondary text on the right of the option, e.g. a count |
+- `value` makes it controlled; without it the selection is internal and starts empty.
+- `label` is what the option, its chip and the search show; `aside` is secondary text on the
+  option's right (e.g. a count).
+- `placeholder` shows only while nothing is selected.
+- `hint` is a tooltip on the icon and is ignored without `icon`.
+- `clearToAll` makes the clear button select every item instead of none, for a filter where "All"
+  is the reset state.
+- `className` and `ref` go to the field box (`ComboboxChips`), which is also the popup anchor:
+  set the width there.
 
 Behaviour a caller should know:
 
@@ -73,14 +61,7 @@ Behaviour a caller should know:
 ## Semantic styles
 
 No cva variants. The field box, chips, popup and option rows take their styles from
-`@/shared/ui/combobox` (including focus, `aria-invalid` and disabled states). Own pieces:
-
-| Part | Tokens |
-|---|---|
-| leading icon | `text-ink-subtle` |
-| `All` badge | `bg-surface-3`, `text-ink-muted` — neutral: nothing is filtered out |
-| `+N` badge | `bg-primary-soft`, `text-primary` — same colours as a chip |
-| chevron (`ChevronsUpDown`) | `text-ink-subtle` |
-| option checkbox | `border-hairline-strong`; selected `bg-primary` with the `Check` in `text-on-primary` |
-| option label / `aside` | `text-ink` / `text-ink-tertiary`; `aside` also `font-mono`, `tabular-nums` |
-| footer | `border-hairline` top border; "Select all" `text-primary`, hover `text-primary-hover`, disabled `opacity-50` once everything is selected; counter `text-ink-tertiary` |
+`@/shared/ui/combobox` (including focus, `aria-invalid` and disabled states). Own pieces: the `All`
+badge is neutral (`bg-surface-3 text-ink-muted`: nothing is filtered out), the `+N` badge uses the
+chip colours (`bg-primary-soft text-primary`), a selected option's checkbox is `bg-primary`, and
+"Select all" is `text-primary`, dimmed once everything is selected.

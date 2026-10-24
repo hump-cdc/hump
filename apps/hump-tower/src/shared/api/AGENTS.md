@@ -1,23 +1,8 @@
 # shared/api — how this module hangs together
 
 The typed HTTP client of the web UI. Almost all of it is generated from the OpenAPI spec the Go
-side emits; the hand-written part is three small files (`client.ts`, `error-message.ts`,
-`index.ts`). FSD layer: `shared`. It imports nothing from the upper layers and nothing from
-another `shared/*` segment.
-
-Consumers (through `@/shared/api` only — biome forbids reaching into the folder):
-`entities/config`, `entities/flows`, `entities/metrics`, `entities/operations`,
-`features/snapshot`, `shared/live`, and `shared/state` (types only).
-
-## Layout
-
-| File | Role |
-|---|---|
-| `openapi.json` | the spec, written by `apps/hump/cmd/openapi` — generated, committed |
-| `generated/` | output of `@hey-api/openapi-ts` — generated, committed |
-| `client.ts` | `createClientConfig`: the runtime config of the generated client (base URL) |
-| `error-message.ts` | `ApiError`, `errorMessage`, and the react-query `defaultError` registration |
-| `index.ts` | the public contract |
+side emits; the hand-written part is `client.ts` (base URL), `error-message.ts` (`ApiError`,
+`errorMessage`) and `index.ts`. It imports nothing from another `shared/*` segment.
 
 `index.ts` re-exports `error-message`, `generated/index.ts` (the SDK classes, `Options`, every
 `*Model` type), `generated/@tanstack/react-query.gen` and `generated/zod.gen`. `client.ts` and
@@ -34,15 +19,12 @@ apps/hump/internal/application/hump_tower/*/dto.go + controller.go   (huma opera
 
 - `apps/hump/cmd/openapi/main.go` builds the same `controller.NewHumpTowerController` the server
   uses, with empty dependencies (handlers are registered, never called), and marshals
-  `api.OpenAPI()`. It fails without `OPENAPI_OUT`; the `openapi` task in `apps/hump-tower/moon.yml`
-  is what sets it.
-- `hump-tower:dev` and `hump-tower:build` depend on `hump-tower:openapi`. On the bun side `predev`
-  and `prebuild` run `generate:openapi`. So `bun run dev` on its own regenerates the client from
-  whatever `openapi.json` is on disk — it does **not** refresh the spec. After changing a Go DTO or
-  route, run `moon run hump-tower:openapi` (or `hump-tower:dev` / `hump-tower:build`).
-- **Never hand-edit `openapi.json` or `generated/`** — the next run overwrites both. Biome skips
-  them (`biome.json`, `files.includes`). A change to the API shape is made in Go; a change to
-  the generated code's form is made in `openapi-ts.config.ts`.
+  `api.OpenAPI()`. It fails without `OPENAPI_OUT`, which only the `openapi` task sets.
+- `predev` / `prebuild` regenerate the client from whatever `openapi.json` is on disk; they do
+  **not** refresh the spec. After changing a Go DTO or route, run `moon run hump-tower:openapi`
+  (or `hump-tower:dev` / `hump-tower:build`, which depend on it).
+- A change to the API shape is made in Go; a change to the generated code's form is made in
+  `openapi-ts.config.ts`.
 
 What `openapi-ts.config.ts` decides, and where it shows:
 
@@ -53,26 +35,20 @@ What `openapi-ts.config.ts` decides, and where it shows:
 | `sdk` `byTags` + `nesting` | a static class per tag, method = operationId minus its first segment: `snapshot.stream` → `Snapshot.stream` |
 | `sdk` `transformer: true` | every response with a body goes through its zod schema (`responseTransformer`) |
 | `@tanstack/react-query` | `getApiConfigOptions`/`getApiConfigQueryKey` for the one plain GET; `post*Mutation` for POSTs, except the SSE `POST /api/snapshot/estimate` |
-| `zod` | `<Name>Schema` + inferred type `<Name>`, per-operation `z<Method>Api…Response`: `zGetApi…` for the three GETs (Config, Live, Snapshot), `zPostApi…` for the five POSTs (Metrics, Operations, SnapshotEstimate, SnapshotStop, SnapshotTables) |
+| `zod` | `<Name>Schema` + inferred type `<Name>`, plus per-operation `zGetApi…` / `zPostApi…` request and response schemas |
 
 Two things follow. Responses are **parsed at runtime** (`parseAsync`), not only typed. And the
-reads that are POSTs (`/api/metrics`, `/api/operations`,
-`/api/snapshot/tables`) get mutation options from the generator, not query options — their
-consumers write `useQuery` by hand around the SDK call, with keys from `shared/state`. Only
-`entities/config` uses a generated options helper.
+reads that are POSTs (`/api/metrics`, `/api/operations`, `/api/snapshot/tables`) get mutation
+options from the generator, not query options — their consumers write `useQuery` by hand around
+the SDK call, with keys from `shared/state`. Only `entities/config` uses a generated options
+helper.
 
 ## Base URL
 
 `client.ts` resolves it once, at module load: `API_URL` if non-empty, else `location.origin`,
-else `''`. `API_URL` is a compile-time constant from `rsbuild.config.ts` (`source.define`, fed by
-the `API_URL` env variable, declared in `src/env.d.ts`); the `typeof` guard covers runs where
-nothing defines it, such as `bun test`.
-
-- Production: `API_URL` is empty, the UI is embedded in the binary, so the origin is the API.
-- Dev: there is **no dev-server proxy**. `moon run hump-tower:dev` sets
-  `API_URL=http://localhost:3200` and the rsbuild server runs on port 3000, so requests are
-  cross-origin; `moon run hump:run` sets `CORS=http://localhost:3000` for `pkg/middleware.Cors` to
-  allow them.
+else `''`. The `typeof API_URL` guard covers runs where nothing defines the constant, such as
+`bun test`. In dev the UI (port 3000) calls the API on port 3200 cross-origin;
+`moon run hump:run` sets `CORS=http://localhost:3000` for `pkg/middleware.Cors` to allow it.
 
 ## Errors
 
@@ -85,8 +61,7 @@ hence `ApiError = Error | ErrorModelModel`.
 so `error` from `useQuery`/`useMutation` is typed app-wide. `errorMessage(error)` picks, in order:
 `Error.message`; for a problem body `detail`, then `title`, then `status`, then
 `'Unknown error'`; anything else `String(error)`. `isErrorModel` checks the shape at runtime
-because the client throws the body untyped. Use `errorMessage` for anything shown to the user
-(`features/snapshot` passes it to toasts and error states).
+because the client throws the body untyped. Use `errorMessage` for anything shown to the user.
 
 ## SSE responses are unions without event names
 

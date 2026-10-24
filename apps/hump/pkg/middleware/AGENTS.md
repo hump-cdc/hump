@@ -5,13 +5,6 @@ variable, and the handler that serves the embedded single-page application. Its 
 `internal/controller/hump_tower.go`, which installs `Cors()` with `router.Use` and `Static` as the
 router's `NotFound` handler — so `Static` sees every request the API routes did not claim.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `cors.go` | `Cors` — go-chi/cors configured from the `CORS` environment variable |
-| `static.go` | `Static` — assets, the SPA shell fallback, the route manifest |
-
 ## CORS
 
 `Cors` reads `CORS` **when it is called**, once, as a comma-separated list of origins; blanks are

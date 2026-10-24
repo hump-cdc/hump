@@ -9,13 +9,6 @@ Nothing in `process_operation` knows this package exists. That is the point of t
 holds the `OperationLog` interface it always held, and `cmd/hump/main.go` hands it the wrapper
 instead of the collector.
 
-## Layout
-
-| File | Role |
-|---|---|
-| `live_streamer.go` | the `Streamer`: options, the six delegating methods, the window, the fan-out |
-| `logger.go` | the package logger scope |
-
 ## The window
 
 `Record` appends to `pending` and arms a `time.AfterFunc` **only when the window was empty**, so a
@@ -26,14 +19,14 @@ interval — against ten-ish growth reallocations a virgin `append` chain would 
 
 **There is no permanent goroutine.** No ticker, no `run` loop, nothing alive between windows. That
 is deliberate and `TestStreamerHasNoBackgroundGoroutines` pins it with goleak, the same way
-`operations_collector` does. The dead `FanOutStreamer` that used to live in `internal/port/live_stream`
-had an unbuffered `in` channel plus a permanent `run` goroutine, which is exactly what this replaces.
+`operations_collector` does.
 
 **Do not double-buffer `pending`.** A second buffer is only sound when the consumer is done with
 buffer N before the producer swaps back to it, and here the consumer is `subscriberBuffer` slots
 deep across every subscriber, with `json.Encoder` on the far end of a handler that huma gives five
 seconds to write. Handing the slice over and allocating a fresh one costs two allocations a second
-and cannot corrupt a window mid-encode.
+and cannot corrupt a window mid-encode. `TestStreamerOpensANewWindowAfterAFlush` fails if anyone
+reintroduces the double buffer.
 
 ## `generation`, and the race it exists for
 
@@ -54,6 +47,8 @@ a non-empty `pending` with no timer armed.
 for the scrape off the lock (see "The scrape belongs to `flush`"). The last subscriber leaving or
 `close` during that wait bumps the generation, and the batch `flush` already took is dropped with
 the window — `TestStreamerDropsAWindowWhoseSubscribersLeftDuringAScrape` pins it.
+`TestStreamerIgnoresAStaleTimer` drives `flush(generation-1)` directly, since the real race is not
+reproducible on demand.
 
 ## Fanning out under the lock is load-bearing
 
@@ -129,16 +124,6 @@ the log does not.
 
 ## Tests
 
-Helpers live below the last test function — see the `go` skill. `newTestStreamer` uses a
-millisecond window and `t.Cleanup(s.close)` to bypass the global shutdown hook, like
-`newTestCollector` next door. `fakeCollector` counts what was delegated to it; its `records` counter
-is atomic only because `TestStreamerSurvivesConcurrentRecordsAndSubscribers` writes it from four
-goroutines.
-
-`fakeScraper` counts `Scrape` calls and answers its `scraped` channel, or a closed one when that is
-nil; a test holds a window back by leaving `scraped` open and uses `waitForScrapes` to know `flush`
-has reached the wait.
-
-`TestStreamerIgnoresAStaleTimer` drives `flush(generation-1)` directly, since the real race is not
-reproducible on demand. `TestStreamerOpensANewWindowAfterAFlush` is what fails if anyone
-reintroduces the double buffer.
+`newTestStreamer` uses a millisecond window and `t.Cleanup(s.close)` to bypass the global shutdown
+hook. A test holds a window back by leaving `fakeScraper.scraped` open and uses `waitForScrapes` to
+know `flush` has reached the wait.

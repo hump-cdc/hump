@@ -26,40 +26,22 @@ import { AreaChart } from '@/shared/ui/charts/area-chart'
 />
 ```
 
-- `data` is wide: one row per x position, one column per series `dataKey`. Rows are plotted
-  by index; `xAxisKey` names the column shown as the tooltip heading. When its values are
-  unique, they also key the marks, so a mark follows its label across updates; otherwise marks
-  are keyed by index.
+- The shape of `data` and `series` follows `charts/chart` ("Data").
 - The size is `h-40 w-full` unless `className` overrides it.
 - Memoize `data` and `series`: the chart definition is rebuilt when either changes identity.
 
 ## Props
 
-Plus the `div` attributes and `ref`, passed to the container.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `data` | `ChartDataRow[]` (`Record<string, number \| string>[]`) | — | the rows; a missing or non-numeric series value counts as `0` |
-| `series` | `ChartSeries[]` (`{ dataKey: string; label?: string; variant }`) | — | the plotted columns, in stacking order; `label` falls back to `dataKey` |
-| `xAxisKey` | `string` | — | column with the x label, shown in the tooltip |
-| `stacked` | `boolean` | `true` | stacks the series; `false` starts every series at zero, so the areas overlap |
-| `tooltip` | `boolean` | `false` | shows the tooltip for the focused x position |
-| `tooltipValue` | `ChartTooltipValue` (`{ kind?; suffix? }` of `NumberFlow`) | — | how tooltip values are rendered; `kind` falls back to `integer` or `decimal` by value |
-| `legend` | `boolean` | `false` | shows the legend under the plot |
+| Prop | Description |
+|---|---|
+| `stacked` | Default `true`; `false` starts every series at zero, so the areas overlap |
+| `tooltip`, `legend` | Both off by default; `AreaChartCard` turns the tooltip on and draws its own legend in the header |
 
 ## Semantic styles
 
-No cva variants. The colour of a series is its `variant`:
+No cva variants; series colours, tooltip and legend come from `charts/chart`.
 
-| `variant` | Token |
-|---|---|
-| `success` | `--success` |
-| `primary` | `--primary` |
-| `danger` | `--danger` |
-| `amber` | `--amber` |
-
-- Each series: a 2px stroke in its colour over a vertical gradient of the same colour, from
-  35% opacity down to transparent.
-- Hover and keyboard focus select a whole x position: a vertical rule in `--hairline` follows
-  it, and a dot in the series colour appears on every series.
-- Tooltip and legend styling comes from `charts/chart`.
+- Each series is a 2px stroke over a vertical gradient of its colour, 35% opacity down to
+  transparent.
+- Hover and keyboard focus select a whole x position: a vertical `--hairline` rule and a dot on
+  every series.

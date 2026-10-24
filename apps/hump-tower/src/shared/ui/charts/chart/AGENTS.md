@@ -2,26 +2,25 @@
 
 Internal building block of the charts, on top of `@tanstack/charts`: the sized frame, the
 per-series colour variables, the legend, the tooltip card, the motion presets and the data
-helpers. It has no story and no component of its own to render. Consumed only by
-`charts/area-chart` and `charts/bar-chart`; application code imports those (or the `card/*`
-wrappers), not this folder.
+helpers. Consumed only by `charts/area-chart` and `charts/bar-chart`; application code imports
+those (or the `card/*` wrappers), not this folder.
 
 Exports (`index.ts`):
 
-| Export | Kind | What it is |
-|---|---|---|
-| `ChartContainer` | component | frame: provides the config context, injects `ChartStyle`, renders the plot and the optional legend |
-| `ChartStyle` | component | `<style>` that sets `--color-<key>` per series, scoped to `[data-chart=<id>]` |
-| `ChartLegend` | component | row of swatches and labels read from the config |
-| `ChartTooltipContent` | component | tooltip card: the x label, then one row per series |
-| `chartTooltipOptions` | const | tooltip behaviour passed to `defineChart` |
-| `useChartRenderer` | hook | motion renderer: marks grow in on mount, spring between data updates, respect reduced motion |
-| `chartSpring`, `chartCursorSpring` | const | spring of the marks; snappier spring of the hover cursor |
-| `createChartConfig` | function | `ChartSeries[]` → `ChartConfig` (label, colour) |
-| `toChartRows` | function | wide `ChartDataRow[]` → long `ChartRow[]`, with `start`/`end` stacked extents |
-| `getChartMaximum` | function | top of the y domain, rounded up to a nice tick; `1` for an all-zero chart |
-| `getSeriesColor` | function | `dataKey` → `var(--color-<dataKey>)` |
-| `ChartConfig`, `ChartSeries`, `ChartDataRow`, `ChartRow`, `ChartVariant`, `ChartTooltipValue` | types | see Props |
+| Export | What it is |
+|---|---|
+| `ChartContainer` | frame: provides the config context, injects `ChartStyle`, renders the plot and the optional legend |
+| `ChartStyle` | `<style>` that sets `--color-<key>` per series, scoped to `[data-chart=<id>]` |
+| `ChartLegend` | row of swatches and labels read from the config |
+| `ChartTooltipContent` | tooltip card: the x label, then one row per series |
+| `chartTooltipOptions` | tooltip behaviour passed to `defineChart` |
+| `useChartRenderer` | motion renderer: marks grow in on mount, spring between data updates, respect reduced motion |
+| `chartSpring`, `chartCursorSpring` | spring of the marks; snappier spring of the hover cursor |
+| `createChartConfig` | `ChartSeries[]` → `ChartConfig` (label, colour) |
+| `toChartRows` | wide `ChartDataRow[]` → long `ChartRow[]`, with `start`/`end` stacked extents |
+| `getChartMaximum` | top of the y domain, rounded up to a nice tick; `1` for an all-zero chart |
+| `getSeriesColor` | `dataKey` → `var(--color-<dataKey>)` |
+| `ChartConfig`, `ChartSeries`, `ChartDataRow`, `ChartRow`, `ChartVariant`, `ChartTooltipValue` | types |
 
 ## Usage
 
@@ -66,72 +65,40 @@ const definition = defineChart({
 ```
 
 - `ChartContainer` takes a render function, not JSX: it hands over the `chartId` the chart
-  must pass as `idPrefix` so gradient ids stay unique per chart.
+  must pass as `idPrefix` so gradient ids stay unique per chart. An `id` prop replaces the
+  generated id in `chart-<id>`.
 - `ChartLegend` and `ChartTooltipContent` read the config from context and throw outside a
   `ChartContainer`. The context hook itself (`useChart`) is not exported.
 - The container is `aspect-video` by default; the height comes from the consumer's `className`.
 
+### Data (`toChartRows`)
+
+These rules hold for every chart built on it:
+
+- `data` is wide: one row per x position, one column per series `dataKey`. Rows are plotted by
+  index; `xAxisKey` names the column shown as the tooltip heading. When its values are unique,
+  they also key the marks, so a mark follows its label across updates; otherwise marks are
+  keyed by index.
+- A missing or non-numeric series value counts as `0`.
+- `series` order is the stacking order; `label` falls back to `dataKey`.
+
 ## Props
 
-`ChartContainer` — plus the `div` attributes, except `children`. `id`, when set, replaces the
-generated id in `chart-<id>`.
+- `ChartTooltipContent`: `seriesOrder` fixes the row order regardless of stacking; `valueProps`
+  (`kind`, `suffix` of `NumberFlow`) applies to every value, and `kind` falls back to `integer`
+  or `decimal` by value. Renders nothing without points.
+- `ChartLegend`: `hideIcon` shows the colour swatch even when the config entry has an `icon`.
+  Renders nothing for an empty config.
+- `ChartStyle`: config entries without `color` or `theme` are skipped.
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `config` | `ChartConfig` | — | series labels and colours, keyed by `dataKey` |
-| `legend` | `boolean` | `false` | appends `ChartLegend` under the plot |
-| `children` | `(chartId: string) => ReactNode` | — | renders the plot |
-
-`ChartLegend` — plus the `div` attributes. Renders nothing for an empty config.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `hideIcon` | `boolean` | `false` | shows the colour swatch even when the config entry has an `icon` |
-
-`ChartTooltipContent` — renders nothing without points.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `points` | `readonly ChartPoint<ChartRow, number, number>[]` | — | the focused points, from `renderTooltipBody` |
-| `seriesOrder` | `string[]` | — | series keys; rows follow this order regardless of stacking |
-| `valueProps` | `ChartTooltipValue` | — | `kind` and `suffix` for every value; `kind` falls back to `integer` or `decimal` by value |
-
-`ChartStyle`
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `id` | `string` | — | the chart id the rule is scoped to |
-| `config` | `ChartConfig` | — | entries without `color` or `theme` are skipped |
-
-Types:
-
-| Type | Shape |
-|---|---|
-| `ChartVariant` | `'success' \| 'primary' \| 'danger' \| 'amber'` |
-| `ChartSeries` | `{ dataKey: string; label?: string; variant: ChartVariant }` |
-| `ChartDataRow` | `Record<string, number \| string>` — one row per x position, one column per series |
-| `ChartRow` | `{ key; index; label; series; value; start; end }` — one row per x position and series |
-| `ChartConfig` | `Record<string, { label?: ReactNode; icon?: ComponentType } & ({ color?: string } \| { theme: { light: string; dark: string } })>` |
-| `ChartTooltipValue` | `Pick<NumberFlow props, 'kind' \| 'suffix'>` |
-
-`createChartConfig` sets only `label` (falling back to `dataKey`) and `color`; nothing in the
-tree sets `icon` or `theme`.
+`createChartConfig` sets only `label` and `color`; nothing in the tree sets `icon` or `theme` of
+a `ChartConfig` entry.
 
 ## Semantic styles
 
-No cva variants. A series colour is its `ChartVariant`, mapped by `createChartConfig` and
-exposed per chart as `--color-<dataKey>`:
+No cva variants. A series `variant` (`success`, `primary`, `danger`, `amber`) maps to the
+token of the same name; `createChartConfig` resolves it and `ChartStyle` exposes it per chart as
+`--color-<dataKey>`, which marks, legend and tooltip read.
 
-| `variant` | Token |
-|---|---|
-| `success` | `--success` |
-| `primary` | `--primary` |
-| `danger` | `--danger` |
-| `amber` | `--amber` |
-
-- Container: `text-xs`; the library tooltip chrome is stripped through `--ts-chart-tooltip-*`
-  (transparent background, no border, shadow or padding; text `--ink`), so the card below is
-  the only visible surface.
-- Tooltip card: `bg-surface-1`, `border-hairline`, `text-ink`, `shadow-xl`; series label
-  `text-ink-subtle`; value `font-mono text-ink`, animated with `NumberFlow`.
-- Legend: swatch `var(--color-<key>)`; a config `icon`, when present, is `text-ink-subtle`.
+- The container strips the library tooltip chrome through `--ts-chart-tooltip-*` (transparent,
+  no border, shadow or padding), so `ChartTooltipContent` is the only visible surface.

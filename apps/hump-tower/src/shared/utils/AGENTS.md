@@ -1,13 +1,9 @@
 # shared/utils — how this module hangs together
 
 Small helpers with no knowledge of the domain: formatters, a few hooks, `cn`, `debounce`, `sleep`.
-FSD layer: `shared`. Nothing here imports from the app at all — not even another `shared/*`
-segment; dependencies are `react`, `@tanstack/react-router` (one hook), `clsx`, `tailwind-merge`.
-
-Imported, always through `@/shared/utils`, by `shared/ui` (mostly `cn`), `shared/live` (`sleep`),
-`entities/{config,flows,operations,statistics}`, `features/snapshot`, `pages/{flows,operations}`
-and `widgets/sidebar`. `index.ts` is `export *` of every file, so anything a file exports is
-public.
+Nothing here imports from the app — not even another `shared/*` segment; dependencies are
+`react`, `@tanstack/react-router` (one hook), `clsx`, `tailwind-merge`. `index.ts` is `export *`
+of every file, so anything a file exports is public.
 
 ## File naming
 
@@ -17,8 +13,6 @@ public.
   `useSwitchViewValue` and `SwitchViewValueContext`, which go with `useSwitchAnimation`.
 - A bare name (`cn.ts`, `debounce.ts`, `sleep.ts`) — everything else. `debounce.ts` holds both
   the plain function and its hook, `useDebounce`.
-- Tests sit next to the file as `<name>.test.ts` on `bun:test`. Every `format.*`
-  file, `debounce` and `sleep` have one; the hooks and `cn` have none.
 
 ## Formatters
 
@@ -57,26 +51,25 @@ are grouped with a space, not a comma: `formatNumber*` and `formatNumberCompact`
 |---|---|
 | `cn(...inputs)` | `clsx` then `tailwind-merge`; the merge is extended to know `shadow-glow` (the custom `--shadow-glow` in `app/styles.css`) as a shadow class |
 | `debounce(fn, ms, { maxWait })` | trailing edge only, called with the last arguments; with `maxWait`, runs at least that often counted from the first call of a burst; `.cancel()` drops the pending call |
-| `useDebounce(fn, ms, options)` | a `debounce` with a stable identity that always calls the latest `fn` and cancels on unmount; `ms` and `options` are read on the first render only |
+| `useDebounce(fn, ms, options)` | a `debounce` with a stable identity that always calls the latest `fn` and cancels on unmount; `ms` and `options` are read on the first render only, so changing them later has no effect |
 | `sleep(ms, signal?)` | resolves after `ms`, as soon as `signal` aborts, or at once when it is already aborted — it **never rejects**, so the caller checks `signal.aborted` itself |
-| `useClipboard(resetDelay = 1500)` | `copy(text)` writes to the clipboard; `copied` is true for `resetDelay` ms after a success; a failed write is swallowed |
+| `useClipboard(resetDelay = 1500)` | `copied` is true for `resetDelay` ms after a successful `copy(text)`; a failed write is swallowed |
 | `useElementSize()` | `[callbackRef, { width, height }]` from `offsetWidth`/`offsetHeight`, kept current by a `ResizeObserver`; zero while no element is attached |
-| `useIsMobile(breakpoint = MOBILE_BREAKPOINT)` | true below 1024 px (`max-width: breakpoint - 1`), tracked through `matchMedia` |
-| `useStaticData()` | the `staticData` of the deepest matched route that has a `title`, or `{}` |
-| `useSwitchAnimation(value)` | `{ current, leaving, views, onLeaveEnd }`: keeps the previous value mounted next to the new one for a cross-fade |
-| `useSwitchViewValue<T>()` | the value of the enclosing `SwitchViewValueContext`; `T` is asserted, not checked |
+| `useIsMobile(breakpoint = 1024)` | true below the breakpoint (`max-width: breakpoint - 1`), tracked through `matchMedia` |
 
 Things that are easy to get wrong:
 
 - **`use-static-data.tsx` is also a type declaration.** It augments TanStack Router's
   `StaticDataRouteOption` with `title` and `headerAside`; that is what makes `staticData` typed in
-  the route files under `app/routes`. A new static field for routes is added there. Because the
-  lookup keys on `title`, a route that sets `headerAside` without `title` contributes nothing.
-- **`useSwitchAnimation` does not time anything.** `leaving` stays set — and the old view stays
-  mounted — until the consumer calls `onLeaveEnd` (from its animation-end handler). A change
-  mid-animation replaces the leaving value. The consumer provides `SwitchViewValueContext` per
-  view, so a leaving view can keep rendering the last value it had (`features/snapshot`).
-- `useDebounce` creates its timer once; changing `ms` between renders has no effect.
+  the route files under `app/routes`. A new static field for routes is added there.
+  `useStaticData()` returns the `staticData` of the deepest matched route that has a `title`, so a
+  route that sets `headerAside` without `title` contributes nothing.
+- **`useSwitchAnimation` does not time anything.** It returns `{ current, leaving, views,
+  onLeaveEnd }` for a cross-fade; `leaving` stays set — and the old view stays mounted — until the
+  consumer calls `onLeaveEnd` (from its animation-end handler). A change mid-animation replaces
+  the leaving value. The consumer provides `SwitchViewValueContext` per view, so a leaving view
+  can keep rendering the last value it had (`features/snapshot`); `useSwitchViewValue<T>()` reads
+  it, with `T` asserted, not checked.
 
 ## What belongs here
 

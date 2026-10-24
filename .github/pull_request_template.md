@@ -20,6 +20,10 @@ Related issues: <!-- Closes #123 -->
 
 <!-- Trade-offs, open questions, follow-ups. Describe any effect on delivery semantics: at-least-once, WAL confirmation, ordering. -->
 
+## Related issues
+
+<!-- Links to issues that the PR related to or/and closes. -->
+
 ## Testing
 
 <!-- How you tested it: commands, configuration, PostgreSQL and sink versions. -->

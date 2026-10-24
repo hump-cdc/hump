@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { resolveColumnWidths } from './data-table.sizing'
+import { isResizableColumn, resolveColumnWidths } from './data-table.sizing'
 import type { DataTableColumn } from './data-table.types'
 
 type Row = { id: string }
@@ -42,5 +42,16 @@ describe('resolveColumnWidths', () => {
         expect(resolveColumnWidths(columns, {}, 800)).toEqual([200, 600])
         expect(resolveColumnWidths(columns, {}, 200)).toEqual([100, 300])
         expect(resolveColumnWidths(columns, { col_0: 150 }, 800)).toEqual([150, 650])
+    })
+})
+
+describe('isResizableColumn', () => {
+    test('allows dragging a fixed column unless it opts out', () => {
+        expect(isResizableColumn<Row>({ width: 100 })).toBe(true)
+        expect(isResizableColumn<Row>({ width: 100, resizable: false })).toBe(false)
+    })
+
+    test('never drags a flex column', () => {
+        expect(isResizableColumn<Row>({ flex: 1 })).toBe(false)
     })
 })

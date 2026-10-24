@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 
 import { useFlowInspectorStore } from './store'
+import './types'
 
 const SINK = { type: 'kafka', host: 'localhost:9092' }
 

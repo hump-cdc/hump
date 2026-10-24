@@ -1,0 +1,27 @@
+name: "Docker: scan"
+
+# Builds and scans the release image on every PR and push to main, as release-docker-publish.yml
+# does for a release. No paths filter: the job is a required check, and a required check that
+# doesn't run blocks the PR.
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions: {}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    # Required check 'Docker image / Build and scan' (caller job / called job) in the main ruleset;
+    # rename only together with it.
+    image:
+        name: Docker image
+        # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
+        uses: ./.github/workflows/call-docker-scan.yml # zizmor: ignore[self-repository]
+        permissions:
+            contents: read # checkout
+            security-events: write # upload SARIF to code scanning (read-only on fork and Dependabot PRs)

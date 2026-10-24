@@ -9,7 +9,7 @@
 # In GitHub Actions a failure also writes a fix hint to .ci/annotations/root-actionlint.txt and
 # the marker .ci/failed/root-actionlint: moon prefixes task output, so workflow commands printed
 # here would not become annotations, and ci-actionlint is allowed to fail so that the other
-# checks keep running. .github/workflows/check.yml reads both after 'moon ci'.
+# checks keep running. .github/workflows/ci-check.yml reads both after 'moon ci'.
 
 set -euo pipefail
 

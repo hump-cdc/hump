@@ -7,5 +7,5 @@ go = "1.26.10"
 [settings]
 # Install a missing pinned version on first run instead of failing.
 auto-install = true
-# No usage reports to launch.moonrepo.app: CI blocks that endpoint (harden-runner in check.yml).
+# No usage reports to launch.moonrepo.app: CI blocks that endpoint (harden-runner in ci-check.yml).
 telemetry = false

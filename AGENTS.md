@@ -57,7 +57,7 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
   - `.ci/annotations/<project>-<check>.txt` — annotations and fix hints;
   - `.ci/failed/<project>-<check>` — failure markers.
 
-  `.github/workflows/check.yml` reads them after `moon ci`, and `.github/workflows/security-scan.yml`
+  `.github/workflows/ci-check.yml` reads them after `moon ci`, and `.github/workflows/main-security-scan.yml`
   after its weekly `hump:ci-vulncheck` run. Details in `.github/AGENTS.md`.
 
 ### Adding a package
@@ -70,7 +70,7 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
    (`hump:ci-dep-age`) in `apps/hump/scripts/ci.sh`. A Go tool module kept outside `go.work`
    (like `apps/hump/tools/actionlint` and `apps/hump/tools/govulncheck`) gets the same
    Dependabot entry and dep-age check, plus a `GOWORK=off go -C <dir> mod tidy` in the
-   `hump:tidy` task and its `go.mod` / `go.sum` in the tidy diff of `.github/workflows/check.yml`.
+   `hump:tidy` task and its `go.mod` / `go.sum` in the tidy diff of `.github/workflows/ci-check.yml`.
 
 ## Dependencies
 

@@ -19,8 +19,8 @@ defaults:
         shell: bash
 
 jobs:
-    # zizmor-action uploads with the fixed category 'zizmor', which does not depend on the workflow
-    # or job name. The code_scanning rule of the main ruleset matches the tool name 'zizmor'.
+    # The main ruleset's code_scanning rule matches tool 'zizmor'; the action's fixed category
+    # doesn't depend on workflow or job names.
     zizmor:
         name: Security report
         runs-on: ubuntu-24.04
@@ -29,8 +29,8 @@ jobs:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
             - name: Audit outbound network traffic of the runner
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
@@ -41,16 +41,15 @@ jobs:
               with:
                   persist-credentials: false
 
-            # No 'version' input: the default 'latest' is the zizmor version that the pinned action
-            # locks with hashes in its own tree (support/locks), so Dependabot bumps zizmor together
-            # with the action SHA.
+            # No 'version' input: the default 'latest' is the zizmor version the pinned action
+            # locks, so it follows the action SHA.
             - name: Scan workflows and upload findings to the Security tab
               uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
               with:
                   advanced-security: true
 
-    # check.yml runs the same scan only when a PR or push touches apps/hump; this job also catches
-    # vulnerabilities published since the last change to the module.
+    # ci-check.yml scans only when apps/hump changes; this job also catches newly published
+    # vulnerabilities.
     govulncheck:
         name: Go vulnerability report
         runs-on: ubuntu-24.04
@@ -59,8 +58,8 @@ jobs:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
             - name: Audit outbound network traffic of the runner
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
@@ -71,8 +70,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            # Same inputs as in check.yml: proto and moon at the pinned versions, Go from
-            # .moon/toolchains.yml through 'moon setup'.
+            # Same inputs as in ci-check.yml; Go comes from .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
@@ -80,12 +78,9 @@ jobs:
                   auto-setup: true
                   cache: false
 
-            # hump:ci-vulncheck writes .ci/hump/govulncheck.sarif with repository-relative paths
-            # (apps/hump/...), as code scanning expects, and, when govulncheck reports called
-            # vulnerabilities (exit 3) or fails, a fix hint in .ci/annotations and the marker
-            # .ci/failed/hump-vulncheck. The task allows failure, so 'moon run' exits 0 in both
-            # cases; the last step fails the job, after the report is uploaded. moon runs a
-            # runInCI: 'only' task only when CI=true; the runner sets it, this makes it explicit.
+            # hump:ci-vulncheck writes the SARIF and, on findings or errors, a fix hint and a
+            # .ci/failed marker; it allows failure, so the last step fails the job after the upload.
+            # CI=true makes the runInCI: 'only' task run.
             - name: Scan apps/hump for known Go vulnerabilities
               env:
                   CI: "true"
@@ -108,8 +103,7 @@ jobs:
               if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
               run: cat .ci/annotations/*.txt
 
-            # ci.sh builds govulncheck from the tool module apps/hump/tools/govulncheck; a failed
-            # build leaves a marker. A failed SARIF run stops ci.sh without a marker, so a missing
+            # A failed govulncheck build leaves a marker; a failed SARIF run doesn't, so a missing
             # or invalid report fails the job too.
             - name: Check that the Go vulnerability scan passed
               if: ${{ !cancelled() }}
@@ -126,9 +120,8 @@ jobs:
                       exit 1
                   fi
 
-    # bun audit checks every package of the root bun.lock, direct and transitive; Dependabot alerts
-    # see only the direct npm dependencies. bun audit has no SARIF output, so nothing goes to the
-    # Security tab: the findings are in the log and the annotations.
+    # bun audit covers direct and transitive packages of bun.lock (Dependabot alerts only direct
+    # ones). No SARIF, so the findings are in the log and annotations.
     npm-audit:
         name: npm vulnerability report
         runs-on: ubuntu-24.04
@@ -136,8 +129,8 @@ jobs:
         permissions:
             contents: read # checkout
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
             - name: Audit outbound network traffic of the runner
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
@@ -148,8 +141,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            # Same inputs as in check.yml: proto and moon at the pinned versions, Bun from
-            # .moon/toolchains.yml through 'moon setup'.
+            # Same inputs as in ci-check.yml; Bun comes from .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
@@ -157,12 +149,9 @@ jobs:
                   auto-setup: true
                   cache: false
 
-            # hump-tower:ci-audit runs bun audit and checks that every package in bun.lock comes
-            # from registry.npmjs.org. It writes .ci/hump-tower/audit.json and, on a finding or an
-            # error, a fix hint in .ci/annotations and the marker .ci/failed/hump-tower-audit. The
-            # task allows failure, so 'moon run' exits 0 in both cases; the last step fails the
-            # job. moon runs a runInCI: 'only' task only when CI=true; the runner sets it, this
-            # makes it explicit.
+            # hump-tower:ci-audit runs bun audit and checks that every package comes from
+            # registry.npmjs.org; it allows failure, so the last step fails the job. CI=true makes
+            # the runInCI: 'only' task run.
             - name: Scan the npm dependencies in bun.lock for known vulnerabilities
               env:
                   CI: "true"
@@ -177,8 +166,8 @@ jobs:
               if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
               run: cat .ci/annotations/*.txt
 
-            # ci.sh writes audit.json before it checks anything, so a missing report means the
-            # task stopped before the scan ran and left no marker.
+            # ci.sh writes audit.json first, so a missing one means the task stopped before the
+            # scan.
             - name: Check that the npm vulnerability scan passed
               if: ${{ !cancelled() }}
               env:
@@ -194,12 +183,11 @@ jobs:
                       exit 1
                   fi
 
-    # Rescans the image of the latest GitHub release from Docker Hub on every run (the weekly
-    # schedule included), so vulnerabilities published after the release show up; publish.yml
-    # scans it once, right after the push. With no stable release yet, the job ends with a notice.
+    # Rescans the latest release image on every run so newly published vulnerabilities show up;
+    # without a stable release the job ends with a notice.
     published-image:
         name: Published image
-        uses: ./.github/workflows/scan-published-image.yml # zizmor: ignore[self-repository]
+        uses: ./.github/workflows/call-docker-scan-published.yml # zizmor: ignore[self-repository]
         permissions:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning

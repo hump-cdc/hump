@@ -8,26 +8,26 @@ in the root `AGENTS.md`.
 
 | File | Name | Purpose |
 |---|---|---|
-| `check.yml` | `Repository: check` | Every lint, build and test task through `moon ci` |
-| `workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
-| `security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
-| `scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
-| `scan-image.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
-| `docker-scan.yml` | `Docker: scan` | Calls `scan-image.yml` on every PR and push to `main` |
-| `publish.yml` | `Docker: publish` | On a `v*` release: calls `scan-image.yml`, `publish-image.yml`, then `scan-published-image.yml` on the pushed digest |
-| `publish-image.yml` | `Docker: publish image` | Reusable: pushes, signs and attests `docker.io/humpcdc/hump` |
-| `scan-published-image.yml` | `Docker: scan published image` | Reusable: scans the pushed image by digest (or the latest release image) with Trivy |
+| `ci-check.yml` | `Repository: check` | Every lint, build and test task through `moon ci` |
+| `pr-workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
+| `main-security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
+| `main-scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
+| `call-docker-scan.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
+| `ci-docker-scan.yml` | `Docker: scan` | Calls `call-docker-scan.yml` on every PR and push to `main` |
+| `release-docker-publish.yml` | `Docker: publish` | On a `v*` release: calls `call-docker-scan.yml`, `call-docker-publish.yml`, then `call-docker-scan-published.yml` on the pushed digest |
+| `call-docker-publish.yml` | `Docker: publish image` | Reusable: pushes, signs and attests `docker.io/humpcdc/hump` |
+| `call-docker-scan-published.yml` | `Docker: scan published image` | Reusable: scans the pushed image by digest (or the latest release image) with Trivy |
 
 Don't break these:
 
-- `scorecard.yml` follows the Scorecard [restrictions](https://github.com/ossf/scorecard-action#workflow-restrictions),
+- `main-scorecard.yml` follows the Scorecard [restrictions](https://github.com/ossf/scorecard-action#workflow-restrictions),
   or the API rejects its results: no top-level `env`/`defaults`, no workflow-level write
   permissions, `id-token: write` only in the Scorecard job. That job has no `env`, `defaults`,
   `container` or `services`, runs on an Ubuntu hosted runner and uses only `actions/checkout`,
   `actions/upload-artifact`, `github/codeql-action/upload-sarif`, `ossf/scorecard-action` and
   `step-security/harden-runner`. No `run:` steps.
-- The path of `publish-image.yml` is the Sigstore signer identity (SLSA Build L3),
-  `hump-cdc/hump/.github/workflows/publish-image.yml@refs/tags/v*`. Rename or move it only
+- The path of `call-docker-publish.yml` is the Sigstore signer identity (SLSA Build L3),
+  `hump-cdc/hump/.github/workflows/call-docker-publish.yml@refs/tags/v*`. Rename or move it only
   together with the verification docs.
 - Caller permissions cap the called workflow, so the `Publish` job grants `contents: read`,
   `id-token: write` and `attestations: write`. Secrets are scoped to environment `production`;
@@ -46,9 +46,9 @@ Don't break these:
   naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
   `hump-tower:openapi`, the builds) fail `moon ci` directly.
 - The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
-  `workflows-lint.yml` (PRs) and `security-scan.yml` (`main`) both upload zizmor SARIF with
+  `pr-workflows-lint.yml` (PRs) and `main-security-scan.yml` (`main`) both upload zizmor SARIF with
   category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
-  or high alerts. A fork PR can't upload, so there `workflows-lint.yml` runs zizmor without SARIF
+  or high alerts. A fork PR can't upload, so there `pr-workflows-lint.yml` runs zizmor without SARIF
   and fails on findings; its required `Security` check blocks the merge.
 - A new `gomod` entry in `dependabot.yml` copies the cooldown and group of the existing ones.
 

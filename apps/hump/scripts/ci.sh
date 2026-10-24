@@ -5,8 +5,8 @@
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump. A failure appends a fix
 # hint as a workflow command to .ci/annotations/hump-<check>.txt (moon prefixes task output, so
 # workflow commands printed here would not become annotations) and creates the marker
-# .ci/failed/hump-<check>. .github/workflows/check.yml prints those files, fails on the markers and
-# reads the reports after 'moon ci'; .github/workflows/security-scan.yml does the same for vulncheck.
+# .ci/failed/hump-<check>. .github/workflows/ci-check.yml prints those files, fails on the markers and
+# reads the reports after 'moon ci'; .github/workflows/main-security-scan.yml does the same for vulncheck.
 
 set -euo pipefail
 

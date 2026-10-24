@@ -1,5 +1,5 @@
 # https://docs.codecov.com/docs/codecov-yaml
-# Coverage is uploaded by .github/workflows/check.yml (flags 'go' and 'hump-tower').
+# Coverage is uploaded by .github/workflows/ci-check.yml (flags 'go' and 'hump-tower').
 coverage:
     precision: 1
     round: down
@@ -117,7 +117,7 @@ fixes:
 
 # Keep in sync with the profile filter in apps/hump/scripts/ci.sh and the
 # coveragePathIgnorePatterns in apps/hump-tower/bunfig.toml (and with the 'excluded' inputs of the
-# coverage summary steps in .github/workflows/check.yml).
+# coverage summary steps in .github/workflows/ci-check.yml).
 ignore:
     # Writes the OpenAPI spec at build time; not part of the shipped binary.
     - "apps/hump/cmd/openapi"

@@ -1,10 +1,8 @@
 name: "Docker: build and scan"
 
-# Reusable: builds the image for linux/amd64 and linux/arm64 without pushing it and scans each
-# platform with Trivy. Called by docker-scan.yml (every PR and push to main) and by publish.yml
-# (before a release is pushed), so a PR and a release are scanned the same way.
-# The job has no environment and no secrets, so a compromised scanner action cannot reach the
-# release credentials. The base images are pulled anonymously.
+# Reusable: builds both platforms without pushing and scans them with Trivy, for PRs
+# (ci-docker-scan.yml) and releases (release-docker-publish.yml). No environment and no secrets, so
+# a compromised scanner can't reach release credentials.
 on:
     workflow_call:
 
@@ -15,12 +13,10 @@ defaults:
         shell: bash
 
 # No cache anywhere (no cache-from/cache-to, no trivy cache): the image is built only from the
-# checked-out commit, so nothing written by another workflow run can end up in it.
+# checked-out commit.
 jobs:
-    # One job for both platforms, so the caller has a single check to require and to wait for.
-    # Each platform is exported to a docker-archive tarball and Trivy reads the tarball: the
-    # Docker daemon is not involved, so the arm64 image needs neither QEMU nor the containerd
-    # image store on the amd64 runner.
+    # One job for both platforms gives the caller a single check. Trivy reads docker-archive
+    # tarballs, so arm64 needs neither QEMU nor the Docker daemon.
     build-and-scan:
         name: Build and scan
         runs-on: ubuntu-24.04
@@ -29,8 +25,8 @@ jobs:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
             - name: Audit outbound network traffic of the runner
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
@@ -41,9 +37,8 @@ jobs:
               with:
                   persist-credentials: false
 
-            # Same values as in publish-image.yml, so for a release the scanned binary matches the
-            # published one. A PR or a push to main has no version tag and builds 0.0.0 (the
-            # Dockerfile default). The Docker build has no .git, so ldflags.sh cannot read the
+            # Same values as call-docker-publish.yml, so a release scans the published binary;
+            # non-tag builds use 0.0.0. The Docker build has no .git, so ldflags.sh can't read the
             # commit there.
             - name: Compute the version, commit and build date of the image
               id: version
@@ -68,8 +63,7 @@ jobs:
               with:
                   cache-binary: false
 
-            # The UI stage and the Go module download run on the build platform, so the arm64
-            # build below reuses them from this builder's state of the same run.
+            # The arm64 build reuses the build-platform stages from this builder.
             - name: Build the linux/amd64 image into a tarball
               uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
               with:
@@ -98,14 +92,9 @@ jobs:
                       COMMIT=${{ steps.version.outputs.commit }}
                       DATE=${{ steps.version.outputs.date }}
 
-            # trivy-action was compromised in March 2026 (CVE-2026-33634): every tag but one was
-            # rewritten. v0.36.0 was released after the incident; its signed tag points to a commit
-            # on master. Exit code 0 lets the upload run; the last step fails the job.
-            # limit-severities-for-sarif: without it the action drops the severity filter for SARIF
-            # and the report holds every severity. scanners: vuln, because secret findings have a
-            # different fix. Trivy reads .trivyignore from the repository root on its own when
-            # the file exists. cache: false also turns off the action's actions/cache of the DB.
-            # The second scan reuses the setup and the DB that the first one downloaded.
+            # v0.36.0 was released after the March 2026 compromise (CVE-2026-33634); its signed tag
+            # points to master. exit-code 0 lets the upload run, limit-severities-for-sarif keeps
+            # the severity filter in SARIF, cache: false disables the DB cache.
             - name: Scan the linux/amd64 image for fixable CRITICAL and HIGH vulnerabilities
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
@@ -136,12 +125,9 @@ jobs:
                   output: trivy-linux-arm64.sarif
                   exit-code: "0"
 
-            # Runs also when the scan found vulnerabilities, so the Security tab shows them. One
-            # category per platform: a second upload under the same category would replace the
-            # first. A PR from a fork or from Dependabot gets a read-only GITHUB_TOKEN whatever the
-            # job requests, so the upload is skipped there; the check step below still fails on
-            # findings and prints them to the log. github.actor (not the PR author) is what
-            # GitHub uses to give a Dependabot run the read-only token.
+            # Runs on findings too, one category per platform so uploads don't replace each other.
+            # Fork and Dependabot PRs (by github.actor) get a read-only token, so the upload is
+            # skipped and the check step reports findings.
             - name: Upload linux/amd64 image vulnerability findings to the Security tab
               if: ${{ !cancelled() && hashFiles('trivy-linux-amd64.sarif') != '' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
               uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2

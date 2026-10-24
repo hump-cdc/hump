@@ -5,7 +5,7 @@
 # Reports (SARIF, coverage, JUnit) go to $MOON_WORKSPACE_ROOT/.ci/hump-tower. Annotations go to
 # .ci/annotations/hump-tower-<check>.txt: moon prefixes task output, so workflow commands printed
 # here would not become annotations. A failure also creates the marker
-# .ci/failed/hump-tower-<check>. .github/workflows/check.yml prints those files, fails on the
+# .ci/failed/hump-tower-<check>. .github/workflows/ci-check.yml prints those files, fails on the
 # markers and reads the reports after 'moon ci'.
 
 set -euo pipefail

@@ -1,13 +1,10 @@
 name: "Repository: OpenSSF Scorecard"
 
-# publish_results: true sends the results to the Scorecard API (the README badge). The API
-# rejects results from a workflow that breaks its rules
-# (https://github.com/ossf/scorecard-action#workflow-restrictions): no top-level env or defaults,
-# no workflow-level write permissions, id-token: write only in the Scorecard job, and that job has
-# no env, defaults, container or services, runs on an Ubuntu hosted runner and uses only
-# actions/checkout, actions/upload-artifact, github/codeql-action/upload-sarif,
-# ossf/scorecard-action and step-security/harden-runner. Keep this workflow to that list.
-# Scorecard supports push and schedule on the default branch; workflow_dispatch is experimental.
+# The Scorecard API rejects results that break
+# https://github.com/ossf/scorecard-action#workflow-restrictions: no top-level env/defaults or write
+# permissions; id-token only in the job, which has no env/defaults/container/services, no run steps
+# and uses only checkout, upload-artifact, upload-sarif, scorecard-action and harden-runner.
+# workflow_dispatch is experimental.
 on:
     push:
         branches:
@@ -27,15 +24,14 @@ jobs:
         name: Scorecard report
         runs-on: ubuntu-24.04
         timeout-minutes: 15
-        # The repository is public, so the extra reads that private repositories need (issues,
-        # pull-requests, checks, actions) are not granted.
+        # Public repository: the extra reads that private repositories need are not granted.
         permissions:
             contents: read # checkout and the Scorecard checks
             security-events: write # upload SARIF to code scanning
             id-token: write # OIDC token that signs the results published to the Scorecard API
         steps:
-            # Audit mode only logs outbound connections; the policy switches to block once the
-            # endpoints this job needs are collected from the audit runs.
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
             - name: Audit outbound network traffic of the runner
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
@@ -53,8 +49,7 @@ jobs:
                   results_format: sarif
                   publish_results: true
 
-            # Anyone can download the artifact for 5 days to debug a run; the Security tab is
-            # visible only to people with write access.
+            # Downloadable by anyone for 5 days; the Security tab needs write access.
             - name: Upload the Scorecard SARIF report as a workflow artifact
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:

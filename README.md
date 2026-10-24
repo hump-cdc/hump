@@ -79,13 +79,13 @@ docker buildx imagetools inspect docker.io/humpcdc/hump:<version>
 
 ### Verifying the image
 
-Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/publish-image.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week.
+Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/call-docker-publish.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week.
 
 Check the signature:
 
 ```sh
 cosign verify docker.io/humpcdc/hump@sha256:<digest> \
-  --certificate-identity-regexp '^https://github\.com/hump-cdc/hump/\.github/workflows/publish-image\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/hump-cdc/hump/\.github/workflows/call-docker-publish\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -94,7 +94,7 @@ Check the build provenance. `--signer-workflow` accepts only attestations signed
 ```sh
 gh attestation verify oci://docker.io/humpcdc/hump@sha256:<digest> \
   --repo hump-cdc/hump \
-  --signer-workflow hump-cdc/hump/.github/workflows/publish-image.yml \
+  --signer-workflow hump-cdc/hump/.github/workflows/call-docker-publish.yml \
   --deny-self-hosted-runners
 ```
 

@@ -324,11 +324,11 @@ func TestParse_UnknownPresetSurfaces(t *testing.T) {
 }
 
 func TestParse_NoTablesFailsValidation(t *testing.T) {
-	src := `tables: []
-`
-	_, err := Parse(src)
-	if err == nil {
-		t.Fatalf("expected validation error for empty tables")
+	for _, src := range []string{"tables: []\n", "", "# c\n", "---\n"} {
+		_, err := Parse(src)
+		if err == nil || !strings.Contains(err.Error(), "'Configuration.Tables'") || !strings.Contains(err.Error(), "'min' tag") {
+			t.Fatalf("Parse(%q) error = %v, want the min validation of Configuration.Tables", src, err)
+		}
 	}
 }
 
@@ -1110,10 +1110,9 @@ func FuzzParse(f *testing.F) {
 			t.Fatalf("Parse(%q) dumps as %q, then %q, %v, want it deterministic", src, dump, againDump, err)
 		}
 
-		// A document without a mapping parses to no tables at all, which the
-		// dump then spells out as an empty list that validation rejects.
+		// Validation rejects a configuration without tables, so none gets here.
 		if len(cfg.Tables) == 0 {
-			return
+			t.Fatalf("Parse(%q) = no tables, want a validation error", src)
 		}
 
 		for _, table := range cfg.Tables {

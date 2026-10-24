@@ -83,7 +83,9 @@ func NewUseCase(cfg Configuration, dbName string, sinksPort sink.Sink, metricsFa
 		}
 	}
 
-	// Setup the worker pool with the number of workers equal to the maximum number of sinks
+	// Setup the worker pool with the number of workers equal to the maximum number of sinks,
+	// at least one: the pool rejects zero, which no tables or a table without sinks would give
+	workerCount = max(workerCount, 1)
 	wp := workerpool.New[*sink.Context](
 		workerpool.WithWorkers(workerCount),
 		workerpool.WithQueueSize(workerCount),

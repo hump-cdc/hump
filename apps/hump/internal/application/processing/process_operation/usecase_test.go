@@ -122,6 +122,25 @@ func TestUseCaseShutdownHookClosesPool(t *testing.T) {
 	}
 }
 
+func TestNewUseCaseWithoutSinks(t *testing.T) {
+	for name, tbls := range map[string][]config.Table{
+		"no tables":      nil,
+		"table no sinks": {{Schema: "public", Name: "users"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sinks := &recordingSinks{}
+			uc := newTestUseCase(t, sinks, tbls...)
+
+			if err := process(context.Background(), uc, "users"); err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			if got := sinks.delivered(); len(got) != 0 {
+				t.Fatalf("delivered to %v, want none", got)
+			}
+		})
+	}
+}
+
 // tables is a [Configuration] over a fixed list of tables.
 type tables []config.Table
 

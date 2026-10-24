@@ -10,6 +10,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/hump-cdc/hump)](https://github.com/hump-cdc/hump/releases)
 ![PostgreSQL 15+](https://img.shields.io/badge/PostgreSQL-15%2B-336791)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/hump-cdc/hump/badge)](https://scorecard.dev/viewer/?uri=github.com/hump-cdc/hump)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15877/badge)](https://www.bestpractices.dev/projects/15877)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](#verifying-the-image)
 
 [Website](https://hump.dev) · [Documentation](https://hump.dev/docs/getting-started)

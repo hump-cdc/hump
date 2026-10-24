@@ -30,12 +30,25 @@ jobs:
             security-events: write # upload SARIF to code scanning
             id-token: write # OIDC token that signs the results published to the Scorecard API
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      codeload.github.com:443
+                      www.bestpractices.dev:443
+                      oss-fuzz-build-logs.storage.googleapis.com:443
+                      api.osv.dev:443
+                      api.deps.dev:443
+                      api.scorecard.dev:443
+                      fulcio.sigstore.dev:443
+                      rekor.sigstore.dev:443
+                      tuf-repo-cdn.sigstore.dev:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

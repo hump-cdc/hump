@@ -53,7 +53,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@happy-dom/global-registrator": "20.14.6",
+    "@happy-dom/global-registrator": "21.0.4",
     "@hey-api/openapi-ts": "0.99.0",
     "@rsbuild/core": "2.2.12",
     "@rsbuild/plugin-react": "2.1.1",

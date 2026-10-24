@@ -29,12 +29,18 @@ jobs:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      pypi.org:443
+                      files.pythonhosted.org:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,13 +63,30 @@ jobs:
         permissions:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
+        # harden-runner blocks proto's connectivity probes (google.com, clients3.google.com,
+        # detectportal.firefox.com); "0" skips them so proto still installs the tools. Don't allow
+        # those hosts.
+        env:
+            PROTO_OFFLINE: "0"
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      ghcr.io:443
+                      pkg-containers.githubusercontent.com:443
+                      raw.githubusercontent.com:443
+                      release-assets.githubusercontent.com:443
+                      dl.google.com:443
+                      proxy.golang.org:443
+                      storage.googleapis.com:443
+                      vuln.go.dev:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,13 +151,28 @@ jobs:
         timeout-minutes: 15
         permissions:
             contents: read # checkout
+        # harden-runner blocks proto's connectivity probes (google.com, clients3.google.com,
+        # detectportal.firefox.com); "0" skips them so proto still installs the tools. Don't allow
+        # those hosts.
+        env:
+            PROTO_OFFLINE: "0"
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      ghcr.io:443
+                      pkg-containers.githubusercontent.com:443
+                      raw.githubusercontent.com:443
+                      release-assets.githubusercontent.com:443
+                      dl.google.com:443
+                      registry.npmjs.org:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

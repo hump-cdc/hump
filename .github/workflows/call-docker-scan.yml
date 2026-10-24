@@ -25,12 +25,25 @@ jobs:
             contents: read # checkout
             security-events: write # upload SARIF to code scanning
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      auth.docker.io:443
+                      registry-1.docker.io:443
+                      production.cloudfront.docker.com:443
+                      mirror.gcr.io:443
+                      get.trivy.dev:443
+                      proxy.golang.org:443
+                      registry.npmjs.org:443
+                      release-assets.githubusercontent.com:443
+                      storage.googleapis.com:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,7 +107,9 @@ jobs:
 
             # v0.36.0 was released after the March 2026 compromise (CVE-2026-33634); its signed tag
             # points to master. exit-code 0 lets the upload run, limit-severities-for-sarif keeps
-            # the severity filter in SARIF, cache: false disables the DB cache.
+            # the severity filter in SARIF, cache: false disables the DB cache. Trivy skips
+            # check.trivy.dev only with both its version check and telemetry disabled; the action
+            # has no input for them, so they are set as env.
             - name: Scan the linux/amd64 image for fixable CRITICAL and HIGH vulnerabilities
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
@@ -109,6 +124,9 @@ jobs:
                   format: sarif
                   output: trivy-linux-amd64.sarif
                   exit-code: "0"
+              env:
+                  TRIVY_SKIP_VERSION_CHECK: "true"
+                  TRIVY_DISABLE_TELEMETRY: "true"
 
             - name: Scan the linux/arm64 image for fixable CRITICAL and HIGH vulnerabilities
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -124,6 +142,9 @@ jobs:
                   format: sarif
                   output: trivy-linux-arm64.sarif
                   exit-code: "0"
+              env:
+                  TRIVY_SKIP_VERSION_CHECK: "true"
+                  TRIVY_DISABLE_TELEMETRY: "true"
 
             # Runs on findings too, one category per platform so uploads don't replace each other.
             # Fork and Dependabot PRs (by github.actor) get a read-only token, so the upload is

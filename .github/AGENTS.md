@@ -93,6 +93,18 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   Ubuntu hosted runner and uses only `actions/checkout`, `actions/upload-artifact`,
   `github/codeql-action/upload-sarif`, `ossf/scorecard-action` and
   `step-security/harden-runner`. Don't add `run:` steps or other actions to it.
+- `publish.yml` (`Docker: publish`) runs only on a published release with a `v*` tag. Job `Scan`
+  builds the linux/amd64 image locally (no environment, no secrets), scans it with Trivy, uploads
+  SARIF under category `trivy` and fails on fixable CRITICAL/HIGH findings; exceptions go to
+  `.trivyignore` with a reason and a review date. Job `Publish` runs in environment `production`
+  (secret `DOCKERHUB_TOKEN`, variable `DOCKERHUB_USERNAME`) and pushes `docker.io/humpcdc/hump`
+  for linux/amd64 and linux/arm64 with an SBOM and `mode=max` provenance, then adds a keyless
+  cosign signature and GitHub build provenance and SBOM attestations (`actions/attest`). No
+  moon, no repository scripts and no cache in this workflow. Dependabot does not bump the
+  `version` input of `aquasecurity/trivy-action` or the `cosign-release` input of
+  `sigstore/cosign-installer`; raise them by hand to releases at least 7 days old.
+- The bun and Go versions in the `FROM` lines of `apps/hump/Dockerfile` must match
+  `.moon/toolchains.yml`. Dependabot updates only the Dockerfile, so align them by hand.
 - moon prefixes task output in CI, so a workflow command (`::error ...`) printed by a task does
   not become an annotation. A task never prints workflow commands. It writes them to
   `.ci/annotations/<project>-<check>.txt`, its reports (SARIF, coverage, JUnit) to
@@ -108,12 +120,13 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   `::error` annotation that names the command to run locally.
 - Dependabot directories: `gomod` in `/apps/hump`, `/apps/hump/tools/actionlint` and
   `/apps/hump/tools/govulncheck`, `bun` in `/` (the root `bun.lock` covers every workspace),
-  `docker-compose` in `/dev`, `github-actions` in `/`. A new Go module under `packages/` or
+  `docker-compose` in `/dev`, `docker` in `/apps/hump` (the `FROM` digests of the Dockerfile),
+  `github-actions` in `/`. A new Go module under `packages/` or
   `apps/hump/tools/` needs its own `gomod` entry and must be added to the dep-age check in
   `apps/hump/scripts/ci.sh`.
 - Dependabot cooldown: `default-days: 7` everywhere; `gomod` and `bun` also wait 30 days for a
-  new major version (`semver-major-days: 30`). `github-actions` and `docker-compose` don't
-  support the SemVer cooldown options, so they keep 7 days for every update.
+  new major version (`semver-major-days: 30`). `github-actions`, `docker-compose` and `docker`
+  don't support the SemVer cooldown options, so they keep 7 days for every update.
 - Dependabot groups: `gomod` and `bun` entries group minor and patch updates into one PR per
   directory (`minor-patch`); each major update gets its own PR. `github-actions` groups every
   action update into one PR. A new `gomod` entry copies the cooldown and the group.

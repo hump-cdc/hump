@@ -56,6 +56,16 @@ updates:
       cooldown:
           default-days: 7
 
+    # Updates the digests (and tags) of the three FROM lines in apps/hump/Dockerfile: bun, golang
+    # and chainguard/static. The bun and Go tags must match .moon/toolchains.yml, which Dependabot
+    # does not update, so align them by hand. semver-major-days is not supported for docker.
+    - package-ecosystem: "docker"
+      directory: "/apps/hump"
+      schedule:
+          interval: "weekly"
+      cooldown:
+          default-days: 7
+
     # semver-major-days is not supported for GitHub Actions, so every action update waits 7 days
     # and all of them come in one PR.
     - package-ecosystem: "github-actions"

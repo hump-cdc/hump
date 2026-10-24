@@ -21,7 +21,7 @@ Project rules: `apps/hump/AGENTS.md` (Go app), `apps/hump-tower/AGENTS.md` (web 
 
 | Path | Contents |
 |---|---|
-| `apps/hump` | Go module `hump`: `cmd/`, `internal/`, `pkg/`, `config/`, `scripts/`, `tools/actionlint` and `tools/govulncheck` (separate Go tool modules, outside `go.work`) |
+| `apps/hump` | Go module `hump`: `cmd/`, `internal/`, `pkg/`, `config/`, `scripts/`, `tools/actionlint` and `tools/govulncheck` (separate Go tool modules, outside `go.work`), `Dockerfile` (image `humpcdc/hump`, build context: repo root) |
 | `apps/hump-tower` | Web UI, package `hump-tower` |
 | `packages/` | Shared packages; empty for now |
 | `dev/` | Local dev environment: `docker-compose.yml`, `hump.yaml` |
@@ -30,6 +30,7 @@ Project rules: `apps/hump/AGENTS.md` (Go app), `apps/hump-tower/AGENTS.md` (web 
 | `moon.yml` | The `root` project: repo-wide tasks |
 | `go.work` | Go workspace: `use ./apps/hump` |
 | `package.json`, `bunfig.toml`, `bun.lock` | Bun workspace over `apps/*` and `packages/*`; one lockfile for all |
+| `.dockerignore` | Build context filter for `apps/hump/Dockerfile` |
 | `.github/` | Workflows, Dependabot, composite actions |
 
 ## moon
@@ -96,6 +97,8 @@ the 7-day Dependabot cooldown in `.github/dependabot.yml`.
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.
 - Toolchain: moon in `.prototools`, proto, Go and Bun in `.moon/toolchains.yml`, all exact
   versions. The same 7-day rule applies. Dependabot does not update these files.
+  The bun and Go image tags in `apps/hump/Dockerfile` must match `.moon/toolchains.yml`;
+  Dependabot bumps the Dockerfile's base images but not `toolchains.yml`, so change them together.
   `.prototools` sets `auto-install`; proto applies it only after `proto trust .prototools`.
 
 ## Before finishing a task

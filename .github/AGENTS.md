@@ -43,8 +43,11 @@ Don't break these:
   checks are such steps: they diff regenerated files and fail with an `::error` naming the local
   command to run. Tasks CI runs without `allowFailure` (`hump:tidy`, `hump-tower:openapi`, the
   builds) fail `moon ci` directly.
-- The `main` ruleset's code scanning rule matches tool `zizmor`, so the zizmor SARIF upload in
-  `security-scan.yml` keeps category `zizmor`.
+- The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
+  `workflows-lint.yml` (PRs) and `security-scan.yml` (`main`) both upload zizmor SARIF with
+  category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
+  or high alerts. A fork PR can't upload, so there `workflows-lint.yml` runs zizmor without SARIF
+  and fails on findings.
 - A new `gomod` entry in `dependabot.yml` copies the cooldown and group of the existing ones.
 
 ## Pinning actions

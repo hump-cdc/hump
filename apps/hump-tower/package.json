@@ -31,7 +31,7 @@
     "@radix-ui/react-tooltip": "1.3.0",
     "@tanstack/charts": "1.1.0",
     "@tanstack/highlight": "1.1.0",
-    "@tanstack/react-query": "5.104.2",
+    "@tanstack/react-query": "5.104.4",
     "@tanstack/react-router": "1.170.42",
     "@tanstack/react-table": "9.2.8",
     "@tanstack/react-virtual": "3.14.15",

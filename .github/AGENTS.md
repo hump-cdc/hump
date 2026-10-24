@@ -47,9 +47,12 @@ Don't break these:
   `hump-tower:openapi`, the builds) fail `moon ci` directly.
 - The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
   `pr-workflows-lint.yml` (PRs) and `main-security-scan.yml` (`main`) both upload zizmor SARIF with
-  category `zizmor`. In SARIF mode zizmor exits 0 on findings; the ruleset blocks on error-level
-  or high alerts. A fork PR can't upload, so there `pr-workflows-lint.yml` runs zizmor without SARIF
-  and fails on findings; its required `Security` check blocks the merge.
+  category `zizmor`. `pr-workflows-lint.yml` checks out the PR head SHA, so the upload goes to the
+  head commit and `refs/pull/N/head`: GitHub regenerates the test merge commit with a new SHA, and
+  results on the old merge SHA leave the rule waiting. In SARIF mode zizmor exits 0 on findings;
+  the ruleset blocks on error-level or high alerts. A fork PR can't upload, so there
+  `pr-workflows-lint.yml` runs zizmor without SARIF and fails on findings; its required `Security`
+  check blocks the merge.
 - A new `gomod` entry in `dependabot.yml` copies the cooldown and group of the existing ones.
 
 ## Pinning actions
@@ -72,7 +75,9 @@ Don't break these:
   `grep -n egress-policy .github/workflows/*.yml`.
 - List only what the audit runs show. The agent allows GitHub Actions and StepSecurity endpoints
   itself. Telemetry is disabled, not allowed: `telemetry` in `.prototools` and
-  `.moon/workspace.yml`, `disable_telem: true` on every `codecov/codecov-action` step.
+  `.moon/workspace.yml`, `disable_telem: true` on every `codecov/codecov-action` step,
+  `TRIVY_SKIP_VERSION_CHECK` and `TRIVY_DISABLE_TELEMETRY` on every `aquasecurity/trivy-action`
+  step.
 - A job running proto or moon under `block` sets job-level `env: PROTO_OFFLINE: "0"`, or proto's
   dropped connectivity probes break tool installs. Don't allow the probe hosts (`google.com`,
   `clients3.google.com`, `detectportal.firefox.com`).

@@ -41,12 +41,15 @@ Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`.
   `scan-image.yml` and `publish-image.yml` (`docker-scan.yml` and `publish.yml` only call them
   and have no steps of their own).
 - The agent allows GitHub's Actions service endpoints (`*.actions.githubusercontent.com`,
-  `codeload.github.com`, the results storage, the cache host) and the StepSecurity API on its
-  own; don't list them. List only what the audit runs show. Telemetry is turned off rather than
-  allowed: `telemetry` in `.prototools` and `.moon/workspace.yml`, `disable_telem: true` on
-  every `codecov/codecov-action` step. When a step fails on a blocked
-  connection, open the insights link that the harden-runner step prints in the log and add the
-  endpoint to that job's list.
+  `codeload.github.com`, the results storage, the cache host) and the StepSecurity API on its own;
+  don't list them. List only what the audit runs show. Telemetry is turned off rather than
+  allowed: `telemetry` in `.prototools` and `.moon/workspace.yml`, `disable_telem: true` on every
+  `codecov/codecov-action` step. A job that runs proto or moon under `block` also sets job-level
+  `env: PROTO_OFFLINE: "0"`: otherwise proto's connectivity probes (google.com,
+  clients3.google.com, detectportal.firefox.com) are dropped, it assumes it is offline and the
+  tool installs fail. Don't allow those hosts. When a step fails on a blocked connection, open the
+  insights link that the harden-runner step prints in the log and add the endpoint to that job's
+  list.
 
 ## Naming
 

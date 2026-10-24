@@ -25,6 +25,12 @@ jobs:
         timeout-minutes: 40
         permissions:
             contents: read # checkout
+        # proto (and moon through proto_core) probes google.com, clients3.google.com and
+        # detectportal.firefox.com to detect that it is offline. harden-runner's block policy drops
+        # those probes, so proto would assume it is offline and fail to install moon, Go and Bun.
+        # "0" skips the probe; the hosts stay blocked because they are only connectivity checks.
+        env:
+            PROTO_OFFLINE: "0"
         steps:
             # Block mode: only the endpoints below are reachable. They were collected from the
             # audit runs of this job (StepSecurity insights). The agent also allows GitHub's

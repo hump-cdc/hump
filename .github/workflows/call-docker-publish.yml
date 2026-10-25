@@ -2,7 +2,8 @@ name: "Docker: publish image"
 
 # Reusable, called by release-docker-publish.yml for v* tags. Its path is the Sigstore signer
 # identity (hump-cdc/hump/.github/workflows/call-docker-publish.yml@refs/tags/v*, SLSA Build L3);
-# DOCKERHUB_TOKEN comes from the production environment, not the caller.
+# DOCKERHUB_TOKEN is a production environment secret, visible here only because the caller passes
+# secrets: inherit (otherwise the secrets context is empty).
 on:
     workflow_call:
         outputs:

@@ -35,12 +35,30 @@ jobs:
         env:
             IMAGE: docker.io/humpcdc/hump
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      auth.docker.io:443
+                      registry-1.docker.io:443
+                      index.docker.io:443
+                      production.cloudfront.docker.com:443
+                      proxy.golang.org:443
+                      storage.googleapis.com:443
+                      registry.npmjs.org:443
+                      release-assets.githubusercontent.com:443
+                      raw.githubusercontent.com:443
+                      fulcio.sigstore.dev:443
+                      rekor.sigstore.dev:443
+                      timestamp.sigstore.dev:443
+                      tuf-repo-cdn.sigstore.dev:443
+                      token.actions.githubusercontent.com:443
 
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

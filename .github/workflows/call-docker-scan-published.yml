@@ -31,12 +31,23 @@ jobs:
         env:
             IMAGE: docker.io/humpcdc/hump
         steps:
-            # Audit mode logs outbound connections; switch to block once the audit runs show this
-            # job's endpoints.
-            - name: Audit outbound network traffic of the runner
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
               uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
               with:
-                  egress-policy: audit
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      auth.docker.io:443
+                      registry-1.docker.io:443
+                      index.docker.io:443
+                      production.cloudfront.docker.com:443
+                      mirror.gcr.io:443
+                      get.trivy.dev:443
+                      release-assets.githubusercontent.com:443
 
             # Only for .trivyignore, which Trivy reads from the repository root.
             - name: Check out repository
@@ -88,12 +99,16 @@ jobs:
                   } >> "$GITHUB_OUTPUT"
 
             # Same inputs as in call-docker-scan.yml, but by digest; Trivy reads TRIVY_PLATFORM from
-            # the step env (the action has no platform input).
+            # the step env (the action has no platform input). Trivy skips check.trivy.dev only
+            # with both its version check and telemetry disabled; the action has no input for
+            # them, so they are set as env too (both scan steps).
             - name: Scan the published linux/amd64 image for fixable CRITICAL and HIGH vulnerabilities
               if: ${{ steps.resolve.outputs.skip == 'false' }}
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               env:
                   TRIVY_PLATFORM: linux/amd64
+                  TRIVY_SKIP_VERSION_CHECK: "true"
+                  TRIVY_DISABLE_TELEMETRY: "true"
               with:
                   version: "v0.76.0"
                   cache: false
@@ -112,6 +127,8 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               env:
                   TRIVY_PLATFORM: linux/arm64
+                  TRIVY_SKIP_VERSION_CHECK: "true"
+                  TRIVY_DISABLE_TELEMETRY: "true"
               with:
                   version: "v0.76.0"
                   cache: false

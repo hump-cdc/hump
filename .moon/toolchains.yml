@@ -21,4 +21,4 @@ javascript:
   dedupeOnLockfileChange: false
 
 bun:
-  version: '1.3.11'
+  version: '1.4.3'

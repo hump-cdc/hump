@@ -8,7 +8,7 @@ in the root `AGENTS.md`.
 
 | File | Name | Purpose |
 |---|---|---|
-| `ci-check.yml` | `Repository: check` | Every lint, build and test task through `moon ci` |
+| `ci-check.yml` | `Repository: check` | One job per moon project (`hump`, `hump-tower`, `root`); each runs the affected lint, build and test tasks of its project through the `.github/actions/moon-ci` action |
 | `pr-workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
 | `main-security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
 | `main-scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
@@ -42,7 +42,8 @@ Don't break these:
   `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`,
   `codecov/codecov-action` `version`. zizmor-action has no `version` input set: its default
   `latest` is the zizmor version the action locks with hashes, so it follows the action SHA.
-- Drift checks are steps after `moon ci`: they diff regenerated files and fail with an `::error`
+- Drift checks are steps after `moon ci` in the job of the project they check; the embedded-build
+  check runs in both the Go app and web UI jobs. They diff regenerated files and fail with an `::error`
   naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
   `hump-tower:openapi`, the builds) fail `moon ci` directly.
 - The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
@@ -72,7 +73,8 @@ Don't break these:
 - A new job starts with `egress-policy: audit`. Once audit runs show its endpoints, switch to
   `egress-policy: block` with `allowed-endpoints` (`host:443`) and rename the step to `Restrict
   outbound network traffic of the runner to the allowed endpoints`. Current state:
-  `grep -n egress-policy .github/workflows/*.yml`.
+  `grep -n egress-policy .github/workflows/*.yml`. A job split off a blocked job may start with
+  `block` and the parent's `allowed-endpoints`.
 - List only what the audit runs show. The agent allows GitHub Actions and StepSecurity endpoints
   itself. Telemetry is disabled, not allowed: `telemetry` in `.prototools` and
   `.moon/workspace.yml`, `disable_telem: true` on every `codecov/codecov-action` step,
@@ -88,11 +90,12 @@ Don't break these:
 
 - Every workflow, job and step has an explicit `name:`, never a bare tool name or generic verb.
 - Workflow: `Area: action` (`Repository: check`, `Workflows: lint`). Job: a short action without
-  the area, since GitHub shows `Workflow / Job` (`Check`, `Security report`; not `zizmor`). Step:
+  the area, since GitHub shows `Workflow / Job` (`Check Go app`, `Security report`; not `zizmor`). Step:
   the full action and subject (`Lint workflow syntax, expressions and shell scripts`, not `Run
   actionlint`).
 - Job names are the required checks of the `main` ruleset; renaming a job means updating it. A
-  reusable call shows as `caller job / called job`. Required: `Check`, `Docker image / Build and
+  reusable call shows as `caller job / called job`. Required: `Check Go app`, `Check web UI`,
+  `Check repository` (each passes when its project is unaffected), `Docker image / Build and
   scan` and `Security`; the ruleset has no bypass actors.
 - The ruleset matches checks by job name alone, so two jobs share a name only if they should
   count as one check.

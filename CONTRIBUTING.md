@@ -258,7 +258,7 @@ Some generated files are committed. CI fails when the OpenAPI spec or the embedd
 
 `moon run root:check` has to pass. It runs actionlint, `hump:lint`, `hump:test` and, for the web UI, `hump-tower:check` (Biome), `hump-tower:test`, `hump-tower:typecheck` and `hump-tower:knip`.
 
-CI ([.github/workflows/ci-check.yml](.github/workflows/ci-check.yml)) runs `moon ci` on every pull request: the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the OpenAPI spec or the embedded UI bundle is stale, or when `bun.lock` is out of sync with the `package.json` files.
+CI ([.github/workflows/ci-check.yml](.github/workflows/ci-check.yml)) runs `moon ci` on every pull request in three parallel jobs, one per moon project (Go app, web UI, repository-wide): the same checks plus a vulnerability scan, for the projects your change affects. It also fails when `go.mod`/`go.sum` are not tidy, when the OpenAPI spec or the embedded UI bundle is stale, or when `bun.lock` is out of sync with the `package.json` files.
 
 [.github/workflows/main-security-scan.yml](.github/workflows/main-security-scan.yml) runs on every push to `main`, every Monday and on manual dispatch. It scans the workflows with zizmor and the Go module `apps/hump` with govulncheck, and uploads both reports to the repository's **Security** tab. It also runs `bun audit` on every npm package in the root `bun.lock`, direct and transitive, and checks that each one comes from registry.npmjs.org; those findings appear in the job log and annotations, not in the Security tab. The weekly runs also catch vulnerabilities published after the last change to `apps/hump` or `bun.lock`.
 

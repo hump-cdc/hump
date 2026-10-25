@@ -106,6 +106,8 @@ To check the SBOM attestation, run the same command with `--predicate-type https
 
 The full documentation is at [hump.dev/docs](https://hump.dev/docs/getting-started). It covers configuration, sinks, templating, delivery guarantees, snapshots and observability.
 
+Versioning, compatibility and deprecation rules are in [VERSIONING.md](VERSIONING.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, set up the dev environment and open a pull request.

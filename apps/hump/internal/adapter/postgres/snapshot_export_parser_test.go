@@ -1,8 +1,10 @@
 package postgres
 
 import (
+	"bytes"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -130,6 +132,70 @@ func TestUnescapeCopyText(t *testing.T) {
 	}
 }
 
+func FuzzSnapshotExportParserChunking(f *testing.F) {
+	f.Add([]byte("1\talice\n2\t\\N\n"), uint8(1))
+	f.Add([]byte("1\ta\\tb\\nc\\\\d\n"), uint8(3))
+	f.Add([]byte("1\n1\ta\tb\n"), uint8(2))
+	f.Add([]byte("1\talice"), uint8(4))
+	f.Add([]byte("\\101\t\\x4\n\n\t\n"), uint8(0))
+
+	typeMap := pgtype.NewMap()
+
+	f.Fuzz(func(t *testing.T, data []byte, chunk uint8) {
+		whole := collectSnapshotExport(t, typeMap, [][]byte{data})
+		chunked := collectSnapshotExport(t, typeMap, chunkBytes(data, int(chunk)%16+1))
+
+		if !reflect.DeepEqual(whole, chunked) {
+			t.Fatalf("chunked parse = %#v, want it to match the whole parse %#v", chunked, whole)
+		}
+	})
+}
+
+func FuzzSnapshotExportParserRoundTrip(f *testing.F) {
+	f.Add("1", "alice")
+	f.Add("", `\N`)
+	f.Add("a\tb", "c\nd\re\\f")
+	f.Add("\b\f\v", "\x00\xff")
+
+	typeMap := pgtype.NewMap()
+
+	f.Fuzz(func(t *testing.T, id, name string) {
+		line := escapeCopyText(id) + "\t" + escapeCopyText(name) + "\n"
+
+		got := collectSnapshotExport(t, typeMap, [][]byte{[]byte(line)})
+
+		want := snapshotExportResult{rows: []domain.DbRecord{{"id": id, "name": name}}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("parse of %q = %#v, want %#v", line, got, want)
+		}
+	})
+}
+
+func FuzzUnescapeCopyText(f *testing.F) {
+	f.Add([]byte(`plain`))
+	f.Add([]byte(`\b\f\n\r\t\v`))
+	f.Add([]byte(`\101\0\777`))
+	f.Add([]byte(`\x41\x4\xZZ`))
+	f.Add([]byte(`end\`))
+
+	f.Fuzz(func(t *testing.T, field []byte) {
+		in := bytes.Clone(field)
+		got := (&snapshotExportParser{}).unescapeCopyText(field)
+
+		if !bytes.Equal(field, in) {
+			t.Fatalf("unescapeCopyText modified its input: %q, was %q", field, in)
+		}
+
+		if len(got) > len(field) {
+			t.Fatalf("unescapeCopyText(%q) = %q, longer than its input", field, got)
+		}
+
+		if bytes.IndexByte(field, '\\') < 0 && !bytes.Equal(got, field) {
+			t.Fatalf("unescapeCopyText(%q) = %q, want a field without escapes unchanged", field, got)
+		}
+	})
+}
+
 // newTestSnapshotExportParser returns a parser over an int4 id and a text name that
 // collects every row, answering each with err.
 func newTestSnapshotExportParser(err error) (*snapshotExportParser, *[]domain.DbRecord) {
@@ -140,4 +206,70 @@ func newTestSnapshotExportParser(err error) (*snapshotExportParser, *[]domain.Db
 		*rows = append(*rows, record)
 		return err
 	}), rows
+}
+
+// snapshotExportResult is what a snapshot export parse produced: the rows
+// handed to onRow and the error that ended it, as text.
+type snapshotExportResult struct {
+	rows []domain.DbRecord
+	err  string
+}
+
+// snapshotExportTextColumns are two text columns, whose codec accepts any
+// field, so a parse can fail only on the shape of a row.
+var snapshotExportTextColumns = []snapshotColumn{{name: "id", oid: pgtype.TextOID}, {name: "name", oid: pgtype.TextOID}}
+
+// collectSnapshotExport writes chunks to a parser over snapshotExportTextColumns
+// the way pgconn does, scribbling over each chunk once Write returns since
+// pgconn reuses its read buffer, and then finishes the stream.
+func collectSnapshotExport(t *testing.T, m *pgtype.Map, chunks [][]byte) snapshotExportResult {
+	t.Helper()
+
+	var result snapshotExportResult
+	parser := newSnapshotExportParser(snapshotExportTextColumns, m, func(record domain.DbRecord) error {
+		result.rows = append(result.rows, record)
+		return nil
+	})
+
+	for _, chunk := range chunks {
+		buffer := bytes.Clone(chunk)
+
+		n, err := parser.Write(buffer)
+		if err != nil {
+			result.err = err.Error()
+			return result
+		}
+		if n != len(buffer) {
+			t.Fatalf("Write() = %d, want %d", n, len(buffer))
+		}
+
+		for i := range buffer {
+			buffer[i] = 0xff
+		}
+	}
+
+	if err := parser.finish(); err != nil {
+		result.err = err.Error()
+	}
+
+	return result
+}
+
+// chunkBytes splits data into consecutive chunks of size bytes, the last one
+// possibly shorter.
+func chunkBytes(data []byte, size int) [][]byte {
+	var chunks [][]byte
+	for len(data) > size {
+		chunks = append(chunks, data[:size])
+		data = data[size:]
+	}
+
+	return append(chunks, data)
+}
+
+// escapeCopyText escapes s the way COPY ... TO STDOUT writes a text field.
+func escapeCopyText(s string) string {
+	return strings.NewReplacer(
+		"\\", "\\\\", "\b", `\b`, "\f", `\f`, "\n", `\n`, "\r", `\r`, "\t", `\t`, "\v", `\v`,
+	).Replace(s)
 }

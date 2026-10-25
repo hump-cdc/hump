@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"strings"
 	"testing"
 
 	"hump/internal/port/database"
@@ -99,6 +100,42 @@ func TestSnapshotWhereSuggesterSuggest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzSnapshotWhereSuggester(f *testing.F) {
+	f.Add("updated_at", "timestamp with time zone", false, false, false)
+	f.Add("ts_bucket", "timestamptz", true, true, false)
+	f.Add("created", "date", false, false, true)
+	f.Add("User\"Id", "timestamp(3) without time zone", true, false, false)
+	f.Add("a -- b", "timestamp", true, false, false)
+	f.Add("x'; DROP TABLE t; --", "timestamp", false, false, true)
+
+	f.Fuzz(func(t *testing.T, name, typ string, isTimeKey, isIndexed, isNowDefault bool) {
+		if name == "" || strings.ContainsRune(name, 0) {
+			t.Skip("PostgreSQL identifiers are never empty and never hold NUL")
+		}
+
+		candidate := tablesColumn{
+			TableColumn: database.TableColumn{Name: name, Type: typ},
+			TimeKey:     isTimeKey,
+			Indexed:     isIndexed,
+			NowDefault:  isNowDefault,
+		}
+
+		got := newSnapshotWhereSuggester([]tablesColumn{column("id", "bigint"), candidate}).Suggest()
+		if got == "" {
+			return
+		}
+
+		rendered, err := newSnapshotWhereParser().Parse(got)
+		if err != nil {
+			t.Fatalf("Suggest() = %q, which the filter parser rejects: %v", got, err)
+		}
+
+		if !strings.Contains(rendered, quoteIdentifier(name)) {
+			t.Fatalf("Parse(%q) = %q, want it to filter on %s", got, rendered, quoteIdentifier(name))
+		}
+	})
 }
 
 // column is a plain column of the given name and type.

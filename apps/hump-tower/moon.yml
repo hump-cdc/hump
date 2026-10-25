@@ -63,6 +63,21 @@ tasks:
   test:
     description: 'Unit tests (bun test)'
     command: 'bun test'
+  test-file:
+    description: 'Run one test file, passed as an arg: moon run hump-tower:test-file -- <path>'
+    # command, not script: moon appends the passthrough args only to a command. A path that
+    # starts with / or ./ runs that file; a bare name would be a substring filter.
+    command: 'bun test'
+    preset: 'utility'
+  test-cover:
+    description: 'Run all tests with a coverage table in the terminal'
+    command: 'bun test --coverage --coverage-reporter=text'
+    preset: 'utility'
+  test-file-cover:
+    description: 'Run one test file with a coverage table: moon run hump-tower:test-file-cover -- <path>'
+    # Covers whatever the test imports, not only the file under test.
+    command: 'bun test --coverage --coverage-reporter=text'
+    preset: 'utility'
   check:
     description: 'Biome: lint, format, import order'
     command: 'bun run check'
@@ -76,11 +91,13 @@ tasks:
     description: 'Known vulnerabilities in the npm packages of the root bun.lock (bun audit)'
     command: 'bun audit'
     # The advisories change without any change here, so the result is never cached. Unlike
-    # ci-audit, it also lists the advisories in AUDIT_IGNORES (scripts/ci.sh).
+    # ci-audit, it also lists the advisories in AUDIT_IGNORES (scripts/hump-tower-ci.sh).
     preset: 'utility'
   ci-knip:
     description: 'CI: knip with GitHub annotations in .ci/annotations'
-    script: 'bash ./scripts/ci.sh knip'
+    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh knip'
+    # The default inputs (the whole project) plus the script outside it; the same in the ci-* below.
+    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
     # knip sees the freshly generated API client.
     deps: ['build']
     options:
@@ -91,7 +108,8 @@ tasks:
       allowFailure: true
   ci-biome:
     description: 'CI: biome with a SARIF report in .ci/hump-tower'
-    script: 'bash ./scripts/ci.sh biome'
+    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh biome'
+    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
     # biome sees the freshly generated API client.
     deps: ['build']
     options:
@@ -102,7 +120,8 @@ tasks:
       allowFailure: true
   ci-test:
     description: 'CI: tests with lcov coverage and JUnit in .ci/hump-tower'
-    script: 'bash ./scripts/ci.sh test'
+    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh test'
+    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
     # The tests see the freshly generated API client.
     deps: ['build']
     options:
@@ -113,7 +132,8 @@ tasks:
       allowFailure: true
   ci-typecheck:
     description: 'CI: TypeScript type check with a fix hint in .ci/annotations'
-    script: 'bash ./scripts/ci.sh typecheck'
+    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh typecheck'
+    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
     # tsc sees the freshly generated API client.
     deps: ['build']
     options:
@@ -124,13 +144,13 @@ tasks:
       allowFailure: true
   ci-audit:
     description: 'CI: bun audit of the root bun.lock and a check that every package comes from registry.npmjs.org, with a fix hint in .ci/annotations'
-    script: 'bash ./scripts/ci.sh audit'
+    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh audit'
     # The root bun.lock covers every workspace; GitHub's dependency graph sees only the direct npm
     # dependencies, so Dependabot alerts miss the transitive ones.
     inputs:
       - 'package.json'
       - 'bunfig.toml'
-      - 'scripts/ci.sh'
+      - '/scripts/hump-tower-ci.sh'
       - '/package.json'
       - '/bun.lock'
       - '/bunfig.toml'

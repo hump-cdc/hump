@@ -51,8 +51,8 @@ jobs:
                   persist-credentials: false
 
             # Same values as call-docker-publish.yml, so a release scans the published binary;
-            # non-tag builds use 0.0.0. The Docker build has no .git, so ldflags.sh can't read the
-            # commit there.
+            # non-tag builds use 0.0.0. The Docker build has no .git, so the ldflags of the
+            # hump:build task can't read the commit there.
             - name: Compute the version, commit and build date of the image
               id: version
               env:

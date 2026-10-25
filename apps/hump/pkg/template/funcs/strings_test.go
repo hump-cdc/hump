@@ -132,3 +132,14 @@ func TestShuffleTemplate(t *testing.T) {
 		t.Fatalf("rune set differs: %q vs %q", got, in)
 	}
 }
+
+func TestRandStringPanicsOnRandError(t *testing.T) {
+	withFailingRand(t)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("randString: expected a panic")
+		}
+	}()
+	randString(4, "ab")
+}

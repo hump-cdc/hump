@@ -18,10 +18,10 @@ defaults:
         shell: bash
 
 jobs:
-    check:
-        name: Check
+    go:
+        name: Check Go app
         runs-on: ubuntu-24.04
-        timeout-minutes: 40
+        timeout-minutes: 30
         permissions:
             contents: read # checkout
         # harden-runner blocks proto's connectivity probes (google.com, clients3.google.com,
@@ -69,43 +69,34 @@ jobs:
                   auto-setup: true
                   cache: false
 
-            # Runs the runInCI tasks of the affected projects; reports and annotations go to .ci/
-            # for the steps below, since moon prefixes task output. ci-* tasks may fail and are
-            # checked later; a push with an unknown 'before' commit compares against HEAD^.
-            - name: Run lint, build and test tasks of the affected projects
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  BASE_REF: ${{ github.base_ref }}
-                  BEFORE_SHA: ${{ github.event.before }}
+            # Runs the runInCI tasks of hump affected since the base commit (and the tasks they
+            # depend on); the base-commit logic lives in the composite action. The self-repository
+            # form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Run the affected lint, build and test tasks of the Go app
+              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
+              with:
+                  project: hump
+
+            # Fix hints of the failed hump tasks and their per-finding annotations; only this
+            # project's files (defensive: hump-tower ci-* tasks never run in this job).
+            - name: Report the findings of the Go app moon tasks as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/hump-*.txt', '!.ci/annotations/hump-tower-*.txt') != '' }}
               run: |
                   set -euo pipefail
-                  if [[ "$EVENT_NAME" == "pull_request" ]]; then
-                      base="origin/${BASE_REF}"
-                  elif [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
-                      base="$BEFORE_SHA"
-                  else
-                      base="HEAD^"
-                  fi
-                  echo "Comparing against ${base}"
-                  if ! moon ci --base "$base" --summary minimal; then
-                      echo "::error title=Repository checks failed::One or more moon tasks failed; see the annotations and the task output in this step's log. Reproduce locally with: moon run root:check (a CI-only task with: CI=true moon run <project>:<task>)"
-                      exit 1
-                  fi
-
-            # Fix hints of failed tasks and the per-finding annotations of biome and knip.
-            - name: Report the findings of the moon tasks as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
-              run: cat .ci/annotations/*.txt
+                  shopt -s nullglob
+                  for file in .ci/annotations/hump-*.txt; do
+                      [[ "$file" == .ci/annotations/hump-tower-*.txt ]] || cat "$file"
+                  done
 
             # ci-* tasks allow failure so the others keep running; each failed one leaves
             # .ci/failed/<project>-<check>.
-            - name: Check that every lint, test and scan task passed
-              if: ${{ !cancelled() && hashFiles('.ci/failed/*') != '' }}
+            - name: Check that every lint, test and scan task of the Go app passed
+              if: ${{ !cancelled() && hashFiles('.ci/failed/hump-*', '!.ci/failed/hump-tower-*') != '' }}
               run: |
                   set -euo pipefail
-                  failed="$(find .ci/failed -type f -exec basename {} \; | sort | tr '\n' ' ')"
+                  failed="$(find .ci/failed -type f -name 'hump-*' ! -name 'hump-tower-*' -exec basename {} \; | sort | tr '\n' ' ')"
                   echo "Failed checks: ${failed}"
-                  echo "::error title=Repository checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
+                  echo "::error title=Go app checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
                   exit 1
 
             # Diffs the result of hump:tidy from 'moon ci'; git status also catches a newly created
@@ -141,7 +132,7 @@ jobs:
               run: |
                   set -euo pipefail
                   shopt -s nullglob
-                  sources=(moon.yml apps/*/moon.yml apps/*/scripts packages/*/moon.yml packages/*/scripts .github)
+                  sources=(moon.yml apps/*/moon.yml packages/*/moon.yml scripts .github)
                   unused=0
                   while IFS= read -r path; do
                       base="$path"
@@ -163,20 +154,10 @@ jobs:
                   ' apps/hump/go.mod)
                   exit "$unused"
 
-            # Diffs the result of hump-tower:openapi from 'moon ci'.
-            - name: Check that the hump-tower OpenAPI spec is up to date
-              if: ${{ !cancelled() }}
-              env:
-                  OPENAPI_SPEC: apps/hump-tower/src/shared/api/openapi.json
-              run: |
-                  set -euo pipefail
-                  if ! git diff --exit-code -- "$OPENAPI_SPEC"; then
-                      echo "::error file=${OPENAPI_SPEC},title=hump-tower OpenAPI spec is out of date::Run 'moon run hump-tower:openapi' locally and commit the updated ${OPENAPI_SPEC}."
-                      exit 1
-                  fi
-
-            # rsbuild cleans its output, so a stale build shows as deleted and untracked files: git
-            # status catches both, git diff wouldn't.
+            # hump:build rebuilds the UI through its hump-tower:build dependency, also when only the
+            # embedded files changed, which the web UI job doesn't count as affected. rsbuild cleans
+            # its output, so a stale build shows as deleted and untracked files: git status catches
+            # both, git diff wouldn't.
             - name: Check that the embedded hump-tower build in apps/hump/internal/controller/hump_tower is up to date
               if: ${{ !cancelled() }}
               env:
@@ -187,17 +168,6 @@ jobs:
                       git status -- "$BUILD_DIR"
                       git diff --stat -- "$BUILD_DIR"
                       echo "::error file=${BUILD_DIR}/index.html,title=Embedded hump-tower build is out of date::Run 'moon run hump-tower:build' locally and commit the updated ${BUILD_DIR}."
-                      exit 1
-                  fi
-
-            # Diffs what moon's Bun install changed in the manifests and the lockfile.
-            - name: Check that package.json files and bun.lock are in sync
-              if: ${{ !cancelled() }}
-              run: |
-                  set -euo pipefail
-                  if [[ -n "$(git status --porcelain -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json')" ]]; then
-                      git diff -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json'
-                      echo "::error file=bun.lock,title=bun.lock is out of date::Run 'bun install' in the repository root locally and commit the updated package.json files and bun.lock."
                       exit 1
                   fi
 
@@ -215,14 +185,6 @@ jobs:
               with:
                   sarif-file: .ci/hump/govulncheck.sarif
                   title: Go vulnerability scan
-
-            # biome writes absolute paths; sarif-summary makes them repository-relative.
-            - name: Summarize hump-tower lint findings in the job summary
-              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/biome.sarif') != '' }}
-              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
-              with:
-                  sarif-file: .ci/hump-tower/biome.sarif
-                  title: hump-tower code lint
 
             # coverage.out exists only when the Go tests pass. Each profile block counts once, so
             # the total is covered / total statements and may differ by 0.1 from 'go tool cover
@@ -267,6 +229,128 @@ jobs:
                   fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
                   disable_telem: true
 
+    web-ui:
+        name: Check web UI
+        runs-on: ubuntu-24.04
+        timeout-minutes: 25
+        permissions:
+            contents: read # checkout
+        # harden-runner blocks proto's connectivity probes (google.com, clients3.google.com,
+        # detectportal.firefox.com); "0" skips them so proto still installs the tools. Don't allow
+        # those hosts.
+        env:
+            PROTO_OFFLINE: "0"
+        steps:
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      ghcr.io:443
+                      pkg-containers.githubusercontent.com:443
+                      raw.githubusercontent.com:443
+                      release-assets.githubusercontent.com:443
+                      dl.google.com:443
+                      proxy.golang.org:443
+                      storage.googleapis.com:443
+                      vuln.go.dev:443
+                      registry.npmjs.org:443
+                      cli.codecov.io:443
+                      ingest.codecov.io:443
+                      keybase.io:443
+
+            # Full history: moon diffs against the base commit to find the affected projects.
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+
+            # auto-install installs moon from .prototools (otherwise the latest release); auto-setup
+            # installs Go and Bun from .moon/toolchains.yml, which 'moon ci' doesn't do itself.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # Runs the runInCI tasks of hump-tower affected since the base commit (and the tasks they
+            # depend on); the base-commit logic lives in the composite action. The self-repository
+            # form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Run the affected lint, build and test tasks of the web UI
+              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
+              with:
+                  project: hump-tower
+
+            # Fix hints of the failed hump-tower tasks and their per-finding annotations; only this
+            # project's files.
+            - name: Report the findings of the web UI moon tasks as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/hump-tower-*.txt') != '' }}
+              run: cat .ci/annotations/hump-tower-*.txt
+
+            # ci-* tasks allow failure so the others keep running; each failed one leaves
+            # .ci/failed/<project>-<check>.
+            - name: Check that every lint, test and scan task of the web UI passed
+              if: ${{ !cancelled() && hashFiles('.ci/failed/hump-tower-*') != '' }}
+              run: |
+                  set -euo pipefail
+                  failed="$(find .ci/failed -type f -name 'hump-tower-*' -exec basename {} \; | sort | tr '\n' ' ')"
+                  echo "Failed checks: ${failed}"
+                  echo "::error title=Web UI checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
+                  exit 1
+
+            # Diffs the result of hump-tower:openapi from 'moon ci'.
+            - name: Check that the hump-tower OpenAPI spec is up to date
+              if: ${{ !cancelled() }}
+              env:
+                  OPENAPI_SPEC: apps/hump-tower/src/shared/api/openapi.json
+              run: |
+                  set -euo pipefail
+                  if ! git diff --exit-code -- "$OPENAPI_SPEC"; then
+                      echo "::error file=${OPENAPI_SPEC},title=hump-tower OpenAPI spec is out of date::Run 'moon run hump-tower:openapi' locally and commit the updated ${OPENAPI_SPEC}."
+                      exit 1
+                  fi
+
+            # rsbuild cleans its output, so a stale build shows as deleted and untracked files: git
+            # status catches both, git diff wouldn't.
+            - name: Check that the embedded hump-tower build in apps/hump/internal/controller/hump_tower is up to date
+              if: ${{ !cancelled() }}
+              env:
+                  BUILD_DIR: apps/hump/internal/controller/hump_tower
+              run: |
+                  set -euo pipefail
+                  if [[ -n "$(git status --porcelain -- "$BUILD_DIR")" ]]; then
+                      git status -- "$BUILD_DIR"
+                      git diff --stat -- "$BUILD_DIR"
+                      echo "::error file=${BUILD_DIR}/index.html,title=Embedded hump-tower build is out of date::Run 'moon run hump-tower:build' locally and commit the updated ${BUILD_DIR}."
+                      exit 1
+                  fi
+
+            # Diffs what moon's Bun install changed in the manifests and the lockfile.
+            - name: Check that package.json files and bun.lock are in sync
+              if: ${{ !cancelled() }}
+              run: |
+                  set -euo pipefail
+                  if [[ -n "$(git status --porcelain -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json')" ]]; then
+                      git diff -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json'
+                      echo "::error file=bun.lock,title=bun.lock is out of date::Run 'bun install' in the repository root locally and commit the updated package.json files and bun.lock."
+                      exit 1
+                  fi
+
+            # biome writes absolute paths; sarif-summary makes them repository-relative.
+            - name: Summarize hump-tower lint findings in the job summary
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/biome.sarif') != '' }}
+              uses: ./.github/actions/sarif-summary # zizmor: ignore[self-repository]
+              with:
+                  sarif-file: .ci/hump-tower/biome.sarif
+                  title: hump-tower code lint
+
             # Line-weighted totals cut to one decimal like codecov.yml (Bun's "All files" row is an
             # unweighted average). Group depth 3 is the FSD layer and slice; 'excluded' must match
             # coveragePathIgnorePatterns in apps/hump-tower/bunfig.toml.
@@ -307,3 +391,79 @@ jobs:
                   flags: hump-tower
                   fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
                   disable_telem: true
+
+    repository:
+        name: Check repository
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        permissions:
+            contents: read # checkout
+        # harden-runner blocks proto's connectivity probes (google.com, clients3.google.com,
+        # detectportal.firefox.com); "0" skips them so proto still installs the tools. Don't allow
+        # those hosts.
+        env:
+            PROTO_OFFLINE: "0"
+        steps:
+            # Endpoints come from this job's audit runs; GitHub Actions and StepSecurity endpoints
+            # are allowed implicitly, telemetry is disabled instead. On a blocked connection, add
+            # the endpoint from the insights link in the log.
+            - name: Restrict outbound network traffic of the runner to the allowed endpoints
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: block
+                  allowed-endpoints: >
+                      api.github.com:443
+                      github.com:443
+                      ghcr.io:443
+                      pkg-containers.githubusercontent.com:443
+                      raw.githubusercontent.com:443
+                      release-assets.githubusercontent.com:443
+                      dl.google.com:443
+                      proxy.golang.org:443
+                      storage.googleapis.com:443
+                      vuln.go.dev:443
+                      registry.npmjs.org:443
+                      cli.codecov.io:443
+                      ingest.codecov.io:443
+                      keybase.io:443
+
+            # Full history: moon diffs against the base commit to find the affected projects.
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+
+            # auto-install installs moon from .prototools (otherwise the latest release); auto-setup
+            # installs Go and Bun from .moon/toolchains.yml, which 'moon ci' doesn't do itself.
+            - name: Set up proto, moon, Go and Bun
+              uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+              with:
+                  auto-install: true
+                  auto-setup: true
+                  cache: false
+
+            # Runs the runInCI tasks of root affected since the base commit (and the tasks they
+            # depend on); the base-commit logic lives in the composite action. The self-repository
+            # form ($/...) is not supported by actionlint v1.7.12 yet.
+            - name: Run the affected repository-wide lint tasks
+              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
+              with:
+                  project: root
+
+            # Fix hints of the failed root tasks and their per-finding annotations; only this
+            # project's files.
+            - name: Report the findings of the repository moon tasks as annotations
+              if: ${{ !cancelled() && hashFiles('.ci/annotations/root-*.txt') != '' }}
+              run: cat .ci/annotations/root-*.txt
+
+            # ci-* tasks allow failure so the others keep running; each failed one leaves
+            # .ci/failed/<project>-<check>.
+            - name: Check that every repository-wide lint task passed
+              if: ${{ !cancelled() && hashFiles('.ci/failed/root-*') != '' }}
+              run: |
+                  set -euo pipefail
+                  failed="$(find .ci/failed -type f -name 'root-*' -exec basename {} \; | sort | tr '\n' ' ')"
+                  echo "Failed checks: ${failed}"
+                  echo "::error title=Repository checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
+                  exit 1

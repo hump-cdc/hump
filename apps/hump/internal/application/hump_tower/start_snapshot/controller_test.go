@@ -55,6 +55,20 @@ func TestHandlerMapsErrors(t *testing.T) {
 	}
 }
 
+func TestHandlerPassesOtherErrorsThrough(t *testing.T) {
+	boom := errors.New("boom")
+
+	_, err := NewController(NewUseCase(&fakeRunner{err: boom})).Handler()(context.Background(), request(SnapshotStartTable{Table: "users"}))
+	if !errors.Is(err, boom) {
+		t.Fatalf("handler = %v, want %v", err, boom)
+	}
+
+	var statusErr huma.StatusError
+	if errors.As(err, &statusErr) {
+		t.Fatalf("handler = %v, want the error unmapped", err)
+	}
+}
+
 // fakeRunner records the tables it was started with and answers err.
 type fakeRunner struct {
 	snapshot.Runner

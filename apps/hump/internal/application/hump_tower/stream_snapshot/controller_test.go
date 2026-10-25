@@ -97,6 +97,49 @@ func TestHandlerSendsIdleWithoutRunner(t *testing.T) {
 	}
 }
 
+func TestHandlerStopsWhenAnUpdateFailsToSend(t *testing.T) {
+	runner := &fakeRunner{
+		current: snapshot.State{Status: snapshot.StatusIdle},
+		updates: make(chan snapshot.State, 1),
+	}
+	runner.updates <- snapshot.State{Status: snapshot.StatusDone}
+
+	sender := &fakeSender{}
+	sender.onSend = func() {
+		if len(sender.events()) == 2 {
+			sender.fail = true
+		}
+	}
+
+	serve(t, NewController(NewUseCase(runner)), sender)
+
+	if got := len(sender.events()); got != 2 {
+		t.Fatalf("sent %d events, want the handler to stop at the failed second one", got)
+	}
+	if !runner.unsubscribed {
+		t.Error("the handler returned without unsubscribing")
+	}
+}
+
+func TestEventsNamesEveryPayload(t *testing.T) {
+	events := NewController(nil).Events()
+
+	want := map[string]any{
+		"idle":       SnapshotIdleEvent{},
+		"processing": SnapshotProcessingEvent{},
+		"done":       SnapshotDoneEvent{},
+	}
+	for name, payload := range want {
+		if !reflect.DeepEqual(events[name], payload) {
+			t.Errorf("Events()[%q] = %#v, want %#v", name, events[name], payload)
+		}
+	}
+
+	if len(events) != len(want) {
+		t.Errorf("Events() has %d entries, want %d", len(events), len(want))
+	}
+}
+
 // fakeRunner hands out current and updates under id 1 and records the
 // unsubscribe; nothing else is reachable.
 type fakeRunner struct {

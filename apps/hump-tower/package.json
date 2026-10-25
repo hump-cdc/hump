@@ -58,8 +58,8 @@
     "@rsbuild/core": "2.2.12",
     "@rsbuild/plugin-react": "2.1.1",
     "@rsdoctor/rspack-plugin": "1.6.5",
-    "@storybook/addon-docs": "10.6.2",
-    "@storybook/react": "10.6.2",
+    "@storybook/addon-docs": "10.6.3",
+    "@storybook/react": "10.6.3",
     "@tailwindcss/postcss": "4.3.3",
     "@tanstack/router-cli": "1.167.41",
     "@testing-library/dom": "10.4.2",
@@ -69,7 +69,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "knip": "6.41.0",
-    "storybook": "10.6.2",
+    "storybook": "10.6.3",
     "storybook-react-rsbuild": "3.6.1",
     "typescript": "6.0.3"
   }

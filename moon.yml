@@ -12,13 +12,13 @@ workspace:
 tasks:
   actionlint:
     description: 'Lint workflow syntax, expressions and shell scripts'
-    # tools/actionlint is outside go.work (its deps conflict with golangci-lint's); -modfile is
-    # rejected in workspace mode, so the module runs in its own directory with GOWORK=off.
-    script: 'bash ./apps/hump/scripts/actionlint.sh'
+    # actionlint is a Go tool of apps/hump/tools/actionlint, a module outside go.work (its deps
+    # conflict with golangci-lint's); -modfile is rejected in workspace mode, so the module runs in
+    # its own directory with GOWORK=off. actionlint finds .github by walking up to the repo root.
+    script: 'GOWORK=off go -C apps/hump/tools/actionlint tool actionlint'
     toolchains: ['go']
     inputs:
       - '.github/**/*'
-      - 'apps/hump/scripts/actionlint.sh'
       - 'apps/hump/tools/actionlint/go.mod'
       - 'apps/hump/tools/actionlint/go.sum'
     options:
@@ -26,11 +26,21 @@ tasks:
       runInCI: false
   ci-actionlint:
     description: 'CI: actionlint with a fix hint in .ci/annotations'
-    script: 'bash ./apps/hump/scripts/actionlint.sh'
+    # Same command as actionlint. A failure also writes a fix hint to .ci/annotations and the
+    # marker .ci/failed/root-actionlint (root AGENTS.md, "moon"), then exits with its status.
+    script: |
+      set -euo pipefail
+      status=0
+      GOWORK=off go -C apps/hump/tools/actionlint tool actionlint || status=$?
+      if [[ "$status" -ne 0 && "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        mkdir -p "$workspaceRoot/.ci/annotations" "$workspaceRoot/.ci/failed"
+        echo "::error file=.github/workflows,title=Workflow lint failed::Fix the actionlint findings listed in the log, then check locally with: moon run root:actionlint" >>"$workspaceRoot/.ci/annotations/root-actionlint.txt"
+        echo actionlint >"$workspaceRoot/.ci/failed/root-actionlint"
+      fi
+      exit "$status"
     toolchains: ['go']
     inputs:
       - '.github/**/*'
-      - 'apps/hump/scripts/actionlint.sh'
       - 'apps/hump/tools/actionlint/go.mod'
       - 'apps/hump/tools/actionlint/go.sum'
     options:

@@ -74,6 +74,13 @@ payload: |
   {{ if unavailable .Next.blob }}unchanged{{ else }}{{ .Next.blob }}{{ end }}
 ```
 
+JSON has no spelling for infinite or not-a-number values, so `json` writes them as
+`null`: a `real` / `double precision` `NaN`, `Infinity` or `-Infinity`, and a
+`date` / `timestamp` / `timestamptz` `infinity` or `-infinity` (`yaml` writes the
+latter as `null` too). Printed directly, `{{ .Next.col }}` still shows `NaN`,
+`+Inf`, `infinity` and so on. A `numeric` `NaN` or `±Infinity` is written as the
+JSON string `"NaN"`, `"Infinity"` or `"-Infinity"`.
+
 ## Static vs. dynamic strings
 
 The parser classifies each string at load time:
@@ -1057,6 +1064,7 @@ Stringify every element of a `[]string` or `[]any`.
 #### `json`
 
 `json prettify v` — marshal to JSON; `prettify=true` indents with 2 spaces.
+NaN and infinite values are written as `null`.
 
 Input: `.Next = {"a": 1}`
 

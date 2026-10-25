@@ -25,10 +25,13 @@ tests.
 
 ## `Parse` is two passes over two different documents
 
-1. `expand` unmarshals the source into an ordered `yaml.MapSlice`, rewrites it, and **marshals it
-   back to a string**.
-2. That string, not the user's, is unmarshalled into `Configuration` with `yaml.Strict()` and
-   `decoder.Validate`.
+1. `expand` builds an ordered `yaml.MapSlice` from the source's AST (`expand_value.go`), rewrites
+   it, and **marshals it back to a string**. Strings are strings, null is nil, and every other
+   scalar is a `sourceScalar` written back as typed, so `table: 00000` stays `00000`. A string goccy
+   would not read back from its own output (`"\t"`, which it writes bare and reads as null) is
+   written double-quoted. goccy's own decode still runs first, only to report syntax errors and
+   duplicate keys.
+2. That string, not the user's, is unmarshalled into `Configuration` with `decoder.Unmarshal`.
 3. `crossValidate` compares sinks across tables.
 
 So the typed structs never see `preset`, a nested `tables` group, a table-level `operations` or
@@ -96,8 +99,16 @@ func (t *T) UnmarshalYAML(node ast.Node) error {
 ```
 
 `decoder.Decode` is `yaml.NodeToValue` with `yaml.Strict()` and the validator, which is what
-turns a `validate:"…"` failure into a token-anchored `yaml.Error`. A nested struct **without**
-its own `UnmarshalYAML` (`RabbitMQExchange`, `RabbitMQProperties`, `RabbitMQStreamConfig`,
+turns a `validate:"…"` failure into a token-anchored `yaml.Error`. Two more things happen there:
+
+- A `string`, `TableSchema` or `TableName` field gets a scalar's text as written (`scalar.go`):
+  goccy would format `00000` back as `0` and `.inf` as `+Inf`.
+- An unknown field is reported as the first unknown key in document order (`unknown_field.go`).
+  goccy picks one of a mapping's unknown keys at random, and reports a nested one before those of
+  the mapping around it. The walk stops at types with their own `UnmarshalYAML`, whose own
+  `Decode` does the same.
+
+A nested struct **without** its own `UnmarshalYAML` (`RabbitMQExchange`, `RabbitMQProperties`, `RabbitMQStreamConfig`,
 `NatsStream`) is decoded and validated by its parent, and gets its defaults in the parent's
 `setDefaults` (`NatsStream` gets none: `stream` is required). The inline-embedded `NatsCommon`
 and `RabbitMQCommon` have no `UnmarshalYAML` either; the parent's `UnmarshalYAML` calls their
@@ -218,6 +229,10 @@ topic name or header value.
 - **A broken template passes `Parse`.** `{{ .x ` or a misspelled function is kept as static text
   and sent as is on every row; see `pkg/template/AGENTS.md`. A templated field also accepts
   only a string scalar: `tls: true` is a bool, but `priority: 5` under `properties` is an error.
+- **An empty sink entry is an error.** `sinks: [~]` never reaches `sink.Config.UnmarshalYAML`,
+  so `Table.checkSinks` rejects it (`sink entry 1 of table public.users is empty`). Without that
+  it would leave a nil `Sink`, `Failure` and `Retry`, which `process_operation` and `main.go`
+  dereference. A null entry under `tables` is dropped by `expand` instead.
 - **Struct-level validator errors carry no position.** The NATS auth conflict surfaces as
   `Key: 'NatsCommon.auth' Error:Field validation for 'auth' failed on the 'natsauth' tag`.
 - **Allowed values are repeated by hand.** `oneof=insert update delete truncate` (`sink/config.go`)

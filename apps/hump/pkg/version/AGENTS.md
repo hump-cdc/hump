@@ -1,8 +1,8 @@
 # pkg/version — how this package hangs together
 
 Three string variables the linker fills in. `version.go` declares `Version`, `Commit` and `Date`;
-`scripts/ldflags.sh` prints the `-ldflags` that set them (with `-s -w`); the `hump` moon tasks
-(`build`, `run`, `run-cleanup`) use it:
+the `-ldflags` that set them (with `-s -w`) are inlined in the `script:` of the `build`, `run` and
+`run-cleanup` tasks in `apps/hump/moon.yml`:
 
 ```
 -X hump/pkg/version.Version=… -X hump/pkg/version.Commit=… -X hump/pkg/version.Date=…
@@ -12,9 +12,10 @@ Three string variables the linker fills in. `version.go` declares `Version`, `Co
 
 - **The path in `-X` is the coupling.** Renaming a variable or moving the package does not break the
   build (the linker ignores an `-X` that matches nothing); it just leaves every binary reporting
-  the defaults. Change every place that spells the path in the same edit: `scripts/ldflags.sh`,
-  `apps/hump/Dockerfile` (its own `-ldflags`, since the Docker context has no `.git` for
-  `ldflags.sh`) and the `openapi` task in `apps/hump-tower/moon.yml`.
+  the defaults. Change every place that spells the path in the same edit: the `build`, `run`
+  and `run-cleanup` tasks in `apps/hump/moon.yml`, `apps/hump/Dockerfile` (its own `-ldflags`,
+  since the Docker context has no `.git` for the commit) and the `openapi` task in
+  `apps/hump-tower/moon.yml`.
 - A plain `go build` or `go test` gets the defaults: `Version` is `development`, `Commit` and `Date`
   are empty. Code that reads them must be fine with that; `log.Scope` omits `commit` when it is
   empty.

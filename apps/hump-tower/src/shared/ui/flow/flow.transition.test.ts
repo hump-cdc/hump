@@ -1,8 +1,18 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 
+import { GlobalRegistrator } from '@happy-dom/global-registrator'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import type { Edge, Node } from '@xyflow/react'
 
-import { advanceTransition, createTransition, renderTransition } from './flow.transition'
+import { advanceTransition, createTransition, renderTransition, useFlowTransition } from './flow.transition'
+
+beforeAll(() => {
+    if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
+})
+afterAll(async () => {
+    if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister()
+})
+afterEach(cleanup)
 
 const node = (id: string, y: number): Node => ({ id, position: { x: 0, y }, data: {} })
 const edge = (source: string, target: string): Edge => ({ id: `${source}>${target}`, source, target })
@@ -46,5 +56,43 @@ describe('flow transition', () => {
         const settled = createTransition(left.nodes, left.edges)
         const back = advanceTransition(settled, [node('a', 300), b], [], 1000, 400)
         expect(back.from.get('a')).toEqual({ x: 0, y: 300, opacity: 0 })
+    })
+})
+
+describe('useFlowTransition', () => {
+    test('renders the first layout as-is and treats missing input as empty', () => {
+        const nodes = [node('a', 0)]
+        const { result, rerender } = renderHook(({ input }) => useFlowTransition(input, undefined), {
+            initialProps: { input: nodes as Node[] | undefined },
+        })
+        expect(result.current.nodes).toBe(nodes)
+        expect(result.current.edges).toEqual([])
+
+        rerender({ input: undefined })
+        expect(result.current.nodes.map(({ id }) => id)).toEqual(['a'])
+    })
+
+    test('tweens a layout change frame by frame, then settles on the targets', async () => {
+        const target = [node('a', 100)]
+        const { result, rerender } = renderHook(({ input }) => useFlowTransition(input, undefined, 40), {
+            initialProps: { input: [node('a', 0)] },
+        })
+
+        rerender({ input: target })
+        expect(result.current.nodes[0].position.y).toBeLessThan(100)
+
+        await act(() => Bun.sleep(120))
+        expect(result.current.nodes).toBe(target)
+    })
+
+    test('stops animating on unmount', async () => {
+        const { rerender, unmount } = renderHook(({ input }) => useFlowTransition(input, undefined, 40), {
+            initialProps: { input: [node('a', 0)] },
+        })
+
+        rerender({ input: [node('a', 100)] })
+        unmount()
+
+        await Bun.sleep(60)
     })
 })

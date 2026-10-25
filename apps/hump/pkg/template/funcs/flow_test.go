@@ -61,3 +61,22 @@ func TestFlowTemplate_Errors(t *testing.T) {
 		t.Fatalf("expected fail error")
 	}
 }
+
+func TestEmptyComplexAndPointer(t *testing.T) {
+	n := 1
+	cases := []struct {
+		name string
+		v    any
+		want bool
+	}{
+		{"zero complex", complex(0, 0), true},
+		{"complex", complex(0, 1), false},
+		{"nil pointer", (*int)(nil), true},
+		{"pointer", &n, false},
+	}
+	for _, tc := range cases {
+		if got := tmplEmpty(tc.v); got != tc.want {
+			t.Errorf("empty(%s) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

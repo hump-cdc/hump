@@ -2,6 +2,7 @@ package funcs
 
 import (
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,80 @@ func TestDecryptAESTemplate_BadInput(t *testing.T) {
 	notAligned := base64.StdEncoding.EncodeToString(make([]byte, 17))
 	if _, err := render(t, `{{ aes_decrypt "k" .Value }}`, V(notAligned)); err == nil {
 		t.Fatalf("expected not-block-aligned error")
+	}
+}
+
+func FuzzAESRoundTrip(f *testing.F) {
+	f.Add("secret", "hello world")
+	f.Add("", "")
+	f.Add("k", strings.Repeat("x", 16))
+	f.Add("\x00\xff", "\x10\x10\x10\x10")
+
+	f.Fuzz(func(t *testing.T, key, plaintext string) {
+		data := map[string]any{"Key": key, "Value": plaintext}
+
+		ciphertext := mustRender(t, `{{ aes_encrypt .Key .Value }}`, data)
+
+		data["Value"] = ciphertext
+		if got := mustRender(t, `{{ aes_decrypt .Key .Value }}`, data); got != plaintext {
+			t.Fatalf("aes_decrypt(aes_encrypt(%q)) = %q", plaintext, got)
+		}
+	})
+}
+
+func FuzzDecryptAES(f *testing.F) {
+	f.Add("k", "@@not-base64@@")
+	f.Add("k", "AAAA")
+	f.Add("k", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	f.Add("k", base64.StdEncoding.EncodeToString(make([]byte, 17)))
+
+	f.Fuzz(func(t *testing.T, key, ciphertext string) {
+		// Called directly: text/template turns a panic in a func into an
+		// error, which would hide it among the expected decryption failures.
+		got, err := tmplDecryptAES(key, ciphertext)
+		if err != nil {
+			return
+		}
+
+		raw, err := base64.StdEncoding.DecodeString(ciphertext)
+		if err != nil {
+			t.Fatalf("tmplDecryptAES(%q) = %q, want an error for invalid base64", ciphertext, got)
+		}
+
+		if len(got) > len(raw)-16 {
+			t.Fatalf("tmplDecryptAES(%q) = %d bytes, more than the %d-byte ciphertext minus the IV", ciphertext, len(got), len(raw))
+		}
+	})
+}
+
+func TestPkcs7Unpad(t *testing.T) {
+	block := func(last byte, fill byte) []byte {
+		b := []byte(strings.Repeat(string(fill), 15))
+		return append(b, last)
+	}
+	cases := []struct {
+		name string
+		in   []byte
+	}{
+		{"empty", nil},
+		{"not block-aligned", []byte{1, 2, 3}},
+		{"zero pad", block(0, 0)},
+		{"pad over block size", block(17, 17)},
+		{"inconsistent pad", block(2, 'x')},
+	}
+	for _, tc := range cases {
+		if _, err := pkcs7Unpad(tc.in, 16); err == nil {
+			t.Errorf("pkcs7Unpad(%s): expected error", tc.name)
+		}
+	}
+}
+
+func TestCryptoTemplatesPropagateRandError(t *testing.T) {
+	withFailingRand(t)
+
+	for _, src := range []string{`{{ randbytes 4 }}`, `{{ aes_encrypt "k" "p" }}`} {
+		if _, err := render(t, src, nil); !errors.Is(err, errRandFailed) {
+			t.Errorf("%s error = %v, want errRandFailed", src, err)
+		}
 	}
 }

@@ -2,6 +2,8 @@ package config
 
 import (
 	errs "errors"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,8 @@ import (
 	"hump/internal/domain"
 	"hump/internal/port/sink"
 	"hump/pkg/resilience"
+
+	"github.com/goccy/go-yaml"
 )
 
 func TestParse_KafkaSink(t *testing.T) {
@@ -320,11 +324,11 @@ func TestParse_UnknownPresetSurfaces(t *testing.T) {
 }
 
 func TestParse_NoTablesFailsValidation(t *testing.T) {
-	src := `tables: []
-`
-	_, err := Parse(src)
-	if err == nil {
-		t.Fatalf("expected validation error for empty tables")
+	for _, src := range []string{"tables: []\n", "", "# c\n", "---\n"} {
+		_, err := Parse(src)
+		if err == nil || !strings.Contains(err.Error(), "'Configuration.Tables'") || !strings.Contains(err.Error(), "'min' tag") {
+			t.Fatalf("Parse(%q) error = %v, want the min validation of Configuration.Tables", src, err)
+		}
 	}
 }
 
@@ -903,4 +907,224 @@ func TestConfiguration_ResolveAll(t *testing.T) {
 	if len(got) != 2 || got[0].Name != "users" || got[1].Name != "orders" {
 		t.Fatalf("ResolveAll = %+v, want the configured tables in order", got)
 	}
+}
+
+func TestParse_EmptySinkEntryRejected(t *testing.T) {
+	for _, sinks := range []string{
+		"    sinks: [~]\n",
+		"    sinks:\n      -\n",
+		"    sinks:\n      - http:\n          url: http://x\n      - null\n",
+	} {
+		_, err := Parse("tables:\n  - schema: public\n    table: users\n" + sinks)
+		if err == nil {
+			t.Fatalf("Parse with %q: want an error for the empty sink entry", sinks)
+		}
+
+		if !strings.Contains(err.Error(), "of table public.users is empty") {
+			t.Fatalf("Parse with %q error = %q, want it to name the empty entry", sinks, err)
+		}
+	}
+}
+
+func TestParse_BlockScalarTemplateKeepsItsValue(t *testing.T) {
+	tests := []struct {
+		body string
+		want string
+	}{
+		{body: "|\n            line one\n            line two\n", want: "line one\nline two\n"},
+		{body: "|-\n            id={{ .Next.id }}\n", want: "id={{ .Next.id }}"},
+		{body: ">-\n            a\n            b\n", want: "a b"},
+	}
+
+	for _, tt := range tests {
+		cfg, err := Parse("tables:\n  - schema: public\n    table: users\n    sinks:\n      - http:\n" +
+			"          url: http://x\n          body: " + tt.body + "          headers:\n            X-A: " +
+			strings.ReplaceAll(tt.body, "\n            ", "\n              "))
+		if err != nil {
+			t.Fatalf("Parse: %v", err)
+		}
+
+		h := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.HTTPSink)
+		if got := h.Body.Source(); got != tt.want {
+			t.Errorf("body %q = %q, want %q", tt.body, got, tt.want)
+		}
+		if got := h.Headers["X-A"].Source(); got != tt.want {
+			t.Errorf("header %q = %q, want %q", tt.body, got, tt.want)
+		}
+	}
+}
+
+func TestParse_WhitespaceTemplateSurvivesExpand(t *testing.T) {
+	for _, value := range []string{`"\t"`, `"\t\t"`, `"a\t"`, `"\n"`, `" \t"`} {
+		cfg, err := Parse("tables:\n  - schema: public\n    table: users\n    sinks:\n      - http:\n" +
+			"          url: http://x\n          body: " + value + "\n          headers:\n            X-A: " + value + "\n")
+		if err != nil {
+			t.Fatalf("Parse: %v", err)
+		}
+
+		want, err := strconv.Unquote(value)
+		if err != nil {
+			t.Fatalf("Unquote(%s): %v", value, err)
+		}
+
+		h := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.HTTPSink)
+		if got := h.Body.Source(); got != want {
+			t.Errorf("body %s = %q, want %q", value, got, want)
+		}
+		if header := h.Headers["X-A"]; header == nil || header.Source() != want {
+			t.Errorf("header %s = %v, want %q", value, header, want)
+		}
+	}
+}
+
+func TestParse_FirstUnknownFieldInDocumentOrder(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{name: "top level", src: "zzz: 1\naaa: 2\n", want: `unknown field "zzz"`},
+		{
+			name: "table before its sinks",
+			src:  "tables:\n  - schema: public\n    table: users\n    zzz: 1\n    aaa: 2\n    sinks: [{http: {url: http://x, q: 1}}]\n",
+			want: `unknown field "zzz"`,
+		},
+		{
+			name: "within a sink",
+			src:  "tables:\n  - schema: public\n    table: users\n    sinks: [{http: {url: http://x, zz: 1, aa: 2, mm: 3}}]\n",
+			want: `unknown field "zz"`,
+		},
+		{
+			name: "nested plain struct",
+			src:  "tables:\n  - schema: public\n    table: users\n    sinks: [{rabbitmq: {url: amqp://x, exchange: {zz: 1, name: e, aa: 2}}}]\n",
+			want: `unknown field "zz"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for range 50 {
+				_, err := Parse(tt.src)
+				if err == nil || !strings.Contains(err.Error(), tt.want) {
+					t.Fatalf("Parse error = %v, want %s", err, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestParse_StringFieldsKeepScalarText(t *testing.T) {
+	cfg, err := Parse(`tables:
+  - schema: 007
+    table: 00000
+    sinks:
+      - nats-jetstream:
+          url: nats://localhost:4222
+          stream:
+            name: 0x1F
+            subjects: [1.50, true]
+  - schema: .inf
+    table: 1e3
+    sinks:
+      - http:
+          url: http://x
+`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got := cfg.Tables[0]; got.Schema != "007" || got.Name != "00000" {
+		t.Errorf("table = %q.%q, want 007.00000", got.Schema, got.Name)
+	}
+	if got := cfg.Tables[1]; got.Schema != ".inf" || got.Name != "1e3" {
+		t.Errorf("table = %q.%q, want .inf.1e3", got.Schema, got.Name)
+	}
+
+	js := cfg.Tables[0].Sinks[0].Sink.(*sinkcfg.NatsJetStreamSink)
+	if js.Stream.Name != "0x1F" || !slices.Equal(js.Stream.Subjects, []string{"1.50", "true"}) {
+		t.Errorf("stream = %q %q, want 0x1F [1.50 true]", js.Stream.Name, js.Stream.Subjects)
+	}
+}
+
+func TestParse_NumericTableNamesStayDistinct(t *testing.T) {
+	cfg, err := Parse("tables:\n  - table: 1\n    sinks: [{http: {url: http://a}}]\n  - table: 2\n    sinks: [{http: {url: http://b}}]\n")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(cfg.Tables) != 2 || cfg.Tables[0].Name != "1" || cfg.Tables[1].Name != "2" {
+		t.Fatalf("tables = %+v, want 1 and 2 kept apart", cfg.Tables)
+	}
+}
+
+func FuzzParse(f *testing.F) {
+	for _, src := range []string{
+		"",
+		"# only a comment\n",
+		"tables: []\n",
+		"tables:\n  - schema: public\n    table: users\n    sinks:\n      - kafka:\n          url: localhost:9092\n          topic: users\n",
+		"tables:\n  - schema: public\n    table: users\n    replica: unmanaged\n    operations: [insert, delete]\n    sinks:\n" +
+			"      - http:\n          url: https://example.com/{{ .Table }}\n          headers:\n            X-Id: \"{{ .Next.id }}\"\n" +
+			"        failure: skip\n        retry:\n          maxAttempts: 3\n          backoff:\n            type: linear\n",
+		"sinks:\n  - name: k1\n    kafka:\n      url: localhost:9092\n      topic: orig\ntables:\n  - schema: public\n    table: tags\n" +
+			"    sinks:\n      - preset: k1\n        failure:\n          mode: skip\n",
+		"tables:\n  - sinks:\n      - http:\n          url: http://x\n    tables:\n      - schema: public\n        table: users\n" +
+			"      - schema: public\n        table: orders\n",
+		"tables:\n  - schema: public\n    table: a\n    sinks:\n      - nats-jetstream:\n          url: nats://localhost:4222\n" +
+			"          stream:\n            name: X\n            subjects: [x.*]\n          retention: limits\n" +
+			"  - schema: public\n    table: b\n    sinks:\n      - nats-jetstream:\n          url: nats://localhost:4222\n" +
+			"          stream:\n            name: X\n            subjects: [y.*]\n",
+		"tables:\n  - schema: public\n    table: users\n    sinks:\n      - rabbitmq:\n          url: amqp://localhost\n" +
+			"          exchange:\n            name: hump\n            type: topic\n      - rabbitmq-stream:\n          url: rabbitmq-stream://localhost\n",
+		"tables:\n  - &t\n    schema: public\n    table: users\n    sinks: [{nats-core: {url: nats://x, auth: {token: t, user: u}}}]\n  - *t\n",
+		"tables: {schema: public}\n",
+		"[1, 2, 3]\n",
+		"tables:\n  - schema: public\n    table: users\n    sinks: [~]\n",
+		"tables:\n  - #0000000000000\n    table: 00000\n    sinks:\n      -",
+		"1:\n0: ",
+		"tables:\n  - schema: public\n    table: users\n    zzz: 1\n    aaa: 2\n    sinks: [{http: {url: http://x, q: 1}}]\n",
+		"tables:\n  - schema: 007\n    table: 00000\n    sinks:\n      - http:\n          url: http://x\n" +
+			"          body: \"\\t\"\n          headers:\n            X-A: |\n              line one\n              line two\n",
+	} {
+		f.Add(src)
+	}
+
+	f.Fuzz(func(t *testing.T, src string) {
+		cfg, err := Parse(src)
+
+		again, againErr := Parse(src)
+		if (err == nil) != (againErr == nil) || err != nil && err.Error() != againErr.Error() {
+			t.Fatalf("Parse(%q) error = %v, then %v, want it deterministic", src, err, againErr)
+		}
+
+		if err != nil {
+			return
+		}
+
+		dump, err := yaml.Marshal(cfg)
+		if err != nil {
+			t.Fatalf("yaml.Marshal of Parse(%q) error = %v", src, err)
+		}
+
+		if againDump, err := yaml.Marshal(again); err != nil || string(againDump) != string(dump) {
+			t.Fatalf("Parse(%q) dumps as %q, then %q, %v, want it deterministic", src, dump, againDump, err)
+		}
+
+		// Validation rejects a configuration without tables, so none gets here.
+		if len(cfg.Tables) == 0 {
+			t.Fatalf("Parse(%q) = no tables, want a validation error", src)
+		}
+
+		for _, table := range cfg.Tables {
+			for i, sink := range table.Sinks {
+				if sink.Sink == nil || sink.Failure == nil || sink.Retry == nil {
+					t.Fatalf("Parse(%q) sink %d of %s.%s = %+v, want its definition and policies set", src, i, table.Schema, table.Name, sink)
+				}
+			}
+		}
+
+		if _, err := Parse(string(dump)); err != nil {
+			t.Fatalf("Parse(%q) dumps as %q, which does not parse again: %v", src, dump, err)
+		}
+	})
 }

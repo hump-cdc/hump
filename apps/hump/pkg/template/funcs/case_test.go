@@ -54,3 +54,9 @@ func TestCaseTemplates(t *testing.T) {
 		})
 	}
 }
+
+func TestTitleWordEmpty(t *testing.T) {
+	if got := titleWord(""); got != "" {
+		t.Fatalf("titleWord(\"\") = %q, want empty", got)
+	}
+}

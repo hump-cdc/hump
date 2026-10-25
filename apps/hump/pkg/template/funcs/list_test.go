@@ -86,3 +86,12 @@ func TestListTemplate_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestSeqWithoutArgsAndToAnySliceNil(t *testing.T) {
+	if got := mustRender(t, `{{ seq }}`, nil); got != "[]" {
+		t.Fatalf("seq = %q, want []", got)
+	}
+	if xs, err := toAnySlice(nil); xs != nil || err != nil {
+		t.Fatalf("toAnySlice(nil) = %v, %v, want nil, nil", xs, err)
+	}
+}

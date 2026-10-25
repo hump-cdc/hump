@@ -3,6 +3,7 @@ package getoperations
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -126,6 +127,35 @@ func TestHandlerRendersARecord(t *testing.T) {
 
 	if len(item.Attempts) != 2 || item.Attempts[0].Attempt != 1 || item.Attempts[1].Attempt != 2 {
 		t.Fatalf("attempts = %+v, want them numbered from 1", item.Attempts)
+	}
+}
+
+func TestHandlerRendersRecordMetadata(t *testing.T) {
+	cases := []struct {
+		name     string
+		metadata map[string]string
+		want     map[string]string
+	}{
+		{name: "filled", metadata: map[string]string{"http.status": "200"}, want: map[string]string{"http.status": "200"}},
+		{name: "never filled", metadata: nil, want: map[string]string{}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &fakeCollector{page: operationscollector.Page{
+				Records: []operationscollector.Record{{Metadata: tc.metadata}},
+			}}
+
+			resp, err := call(NewController(NewUseCase(collector)), request{})
+			if err != nil {
+				t.Fatalf("Handler() error = %v", err)
+			}
+
+			got := resp.Body.Items[0].Metadata
+			if got == nil || !maps.Equal(got, tc.want) {
+				t.Fatalf("Metadata = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 

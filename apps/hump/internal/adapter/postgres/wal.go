@@ -637,7 +637,7 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 
 // decodeText decodes a text-format column value using the pgtype codec
 // registered in m for oid, falling back to the raw string when the OID is
-// unknown to m.
+// unknown to m. A date or timestamp infinity comes back as an infiniteTime.
 func decodeText(m *pgtype.Map, oid uint32, data []byte) (any, error) {
 	dt, ok := m.TypeForOID(oid)
 	if !ok {
@@ -653,8 +653,26 @@ func decodeText(m *pgtype.Map, oid uint32, data []byte) (any, error) {
 		return uuidString(b), nil
 	}
 
+	if im, ok := val.(pgtype.InfinityModifier); ok {
+		return infiniteTime(im), nil
+	}
+
 	return val, nil
 }
+
+// infiniteTime is a date, timestamp or timestamptz infinity or -infinity. It
+// prints as PostgreSQL spells it and serializes as null, which JSON and YAML
+// have no better spelling for.
+type infiniteTime pgtype.InfinityModifier
+
+// String renders the value as "infinity" or "-infinity".
+func (t infiniteTime) String() string { return pgtype.InfinityModifier(t).String() }
+
+// MarshalJSON encodes the value as JSON null.
+func (infiniteTime) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
+
+// MarshalYAML encodes the value as YAML null.
+func (infiniteTime) MarshalYAML() (any, error) { return nil, nil }
 
 // uuidString formats a raw 16-byte UUID as its canonical
 // 8-4-4-4-12 lowercase hex string.

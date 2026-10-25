@@ -2,7 +2,9 @@ package funcs
 
 import (
 	"os"
+	"strings"
 	"testing"
+	"text/template"
 )
 
 // TestFuncs_AllRegistered ensures every advertised template function name is
@@ -109,4 +111,62 @@ func TestFuncs_Hostname(t *testing.T) {
 	if got := mustRender(t, `{{ hostname }}`, nil); got != want {
 		t.Fatalf("hostname = %q, want %q", got, want)
 	}
+}
+
+func FuzzFuncs_RowValue(f *testing.F) {
+	f.Add("hello world", 3)
+	f.Add("FooBar_baz-qux", 7)
+	f.Add("", 0)
+	f.Add("Ünïcødé ДАННЫЕ 数据", 12)
+	f.Add("\xff\xfe\x00 invalid utf-8", -4)
+	f.Add("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", 55)
+	f.Add("../../etc/passwd", 1000)
+
+	templates := make([]*template.Template, len(rowValueTemplates))
+	for i, src := range rowValueTemplates {
+		templates[i] = template.Must(template.New(src).Funcs(Funcs).Parse(src))
+	}
+
+	f.Fuzz(func(t *testing.T, value string, n int) {
+		data := map[string]any{"Value": value, "N": n % 1000}
+
+		for _, tmpl := range templates {
+			var got, again strings.Builder
+			if err := tmpl.Execute(&got, data); err != nil {
+				t.Fatalf("render(%q) with %q error = %v", tmpl.Name(), value, err)
+			}
+
+			if err := tmpl.Execute(&again, data); err != nil || again.String() != got.String() {
+				t.Fatalf("render(%q) with %q = %q, then %q, %v, want it deterministic", tmpl.Name(), value, got.String(), again.String(), err)
+			}
+		}
+	})
+}
+
+// rowValueTemplates apply every function that must accept any string row
+// value, as a template author would write them, without failing.
+var rowValueTemplates = []string{
+	`{{ .Value | camelcase }}`, `{{ .Value | capitalcase }}`, `{{ .Value | constantcase }}`,
+	`{{ .Value | dotcase }}`, `{{ .Value | headercase }}`, `{{ .Value | kebabcase }}`,
+	`{{ .Value | lower }}`, `{{ .Value | lowerfirst }}`, `{{ .Value | pascalcase }}`,
+	`{{ .Value | pascalsnakecase }}`, `{{ .Value | pathcase }}`, `{{ .Value | snakecase }}`,
+	`{{ .Value | upper }}`, `{{ .Value | upperfirst }}`,
+	`{{ .Value | initials }}`, `{{ .Value | nospace }}`, `{{ .Value | quote }}`, `{{ .Value | squote }}`,
+	`{{ .Value | swapcase }}`, `{{ .Value | trim }}`, `{{ .Value | trimall "x" }}`,
+	`{{ .Value | trimprefix "x-" }}`, `{{ .Value | trimsuffix "-x" }}`, `{{ .Value | replace "a" "b" }}`,
+	`{{ .Value | hasprefix "x" }}`, `{{ .Value | hassuffix "x" }}`, `{{ .Value | contains "x" }}`,
+	`{{ .Value | abbrev .N }}`, `{{ .Value | abbrevboth 4 .N }}`, `{{ .Value | trunc .N }}`,
+	`{{ .Value | substr 0 .N }}`, `{{ .Value | substr .N -1 }}`, `{{ .Value | wrap .N }}`,
+	`{{ .Value | wrapwith .N "|" }}`, `{{ .Value | indent 2 }}`, `{{ .Value | nindent 2 }}`,
+	`{{ .Value | repeat 2 }}`, `{{ cat .Value .Value }}`, `{{ plural "one" "many" .N }}`,
+	`{{ .Value | b64enc }}`, `{{ .Value | b64dec }}`, `{{ .Value | b32enc }}`, `{{ .Value | b32dec }}`,
+	`{{ .Value | sha256 }}`, `{{ .Value | adler32 }}`,
+	`{{ .Value | base }}`, `{{ .Value | clean }}`, `{{ .Value | dir }}`, `{{ .Value | ext }}`, `{{ .Value | isabs }}`,
+	`{{ .Value | trace_id }}`, `{{ .Value | span_id }}`,
+	`{{ .Value | json }}`, `{{ .Value | yaml false }}`, `{{ .Value | tostring }}`,
+	`{{ .Value | atoi }}`, `{{ .Value | int }}`, `{{ .Value | int64 }}`, `{{ .Value | float64 }}`, `{{ .Value | todecimal }}`,
+	`{{ .Value | html }}`, `{{ .Value | js }}`, `{{ .Value | urlquery }}`, `{{ len .Value }}`,
+	`{{ .Value | regexmatch "^[a-z]+$" }}`, `{{ .Value | regexreplaceall "[0-9]+" "#" }}`,
+	`{{ .Value | regexfindall "[a-z]+" -1 }}`, `{{ .Value | regexsplit "-" -1 }}`,
+	`{{ eq .Value "x" }}`, `{{ .Value | empty }}`, `{{ coalesce .Value "fallback" }}`,
 }

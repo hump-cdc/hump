@@ -3,8 +3,10 @@ package template
 import (
 	"hump/pkg/template/funcs"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/goccy/go-yaml"
 )
@@ -325,6 +327,59 @@ func TestUnmarshalYAML_BrokenTemplateFallsBackToStatic(t *testing.T) {
 	}
 	if h.Tmpl.Source() != "{{ .x " {
 		t.Fatalf("Source() = %q, want %q", h.Tmpl.Source(), "{{ .x ")
+	}
+}
+
+func TestUnmarshalYAML_BlockScalarKeepsDecodedValue(t *testing.T) {
+	type holder struct {
+		Tmpl Template `yaml:"tmpl"`
+	}
+
+	tests := []struct {
+		src  string
+		want string
+	}{
+		{src: "tmpl: |\n  a\n  b\n", want: "a\nb\n"},
+		{src: "tmpl: |-\n  {{ .Table }}\n\n", want: "{{ .Table }}"},
+		{src: "tmpl: |+\n  a\n\n", want: "a\n\n"},
+		{src: "tmpl: >\n  a\n  b\n\n  c\n", want: "a b\nc\n"},
+		{src: "tmpl: | # comment\n  x\n", want: "x\n"},
+	}
+
+	for _, tt := range tests {
+		var h holder
+		if err := yaml.Unmarshal([]byte(tt.src), &h); err != nil {
+			t.Fatalf("yaml.Unmarshal(%q): %v", tt.src, err)
+		}
+		if got := h.Tmpl.Source(); got != tt.want {
+			t.Errorf("Source() of %q = %q, want %q", tt.src, got, tt.want)
+		}
+	}
+}
+
+func TestMarshalYAML_QuotesSourceGoccyCannotReadBack(t *testing.T) {
+	type holder struct {
+		Tmpl Template `yaml:"tmpl"`
+	}
+
+	for _, src := range []string{"\t", "a\t", "\t -", "\n", "\n0", "plain"} {
+		tmpl, err := New(src)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+
+		out, err := yaml.Marshal(holder{Tmpl: *tmpl})
+		if err != nil {
+			t.Fatalf("yaml.Marshal(%q): %v", src, err)
+		}
+
+		var got holder
+		if err := yaml.Unmarshal(out, &got); err != nil {
+			t.Fatalf("yaml.Unmarshal(%q): %v", out, err)
+		}
+		if got.Tmpl.tmpl == nil || got.Tmpl.Source() != src {
+			t.Errorf("round trip of %q through %q = %+v, want the source back", src, out, got.Tmpl.tmpl)
+		}
 	}
 }
 
@@ -707,4 +762,74 @@ func TestNew_FuncMap_AllCallable(t *testing.T) {
 			t.Errorf("function %q is registered but not invoked by this test", name)
 		}
 	}
+}
+
+func FuzzNew(f *testing.F) {
+	for _, src := range []string{
+		"",
+		"hello world",
+		"events.{{ .Table }}.v1",
+		"{{ .x ",
+		"{{ nosuchfunc }}",
+		`{{"{{"}}`,
+		"{{ range .values }}{{ . }}{{ end }}",
+		"key: value\n- item",
+		"  leading and trailing  ",
+		"'quoted' \"double\" # comment",
+		"\x00\xff\xfe",
+		"\n",
+		"\n0",
+		"\t",
+		"line one\nline two\n",
+		"{{ .Table }}\n  indented\n\n",
+	} {
+		f.Add(src)
+	}
+
+	type holder struct {
+		Tmpl Template `yaml:"tmpl"`
+	}
+
+	f.Fuzz(func(t *testing.T, src string) {
+		tmpl, err := New(src)
+		if err != nil {
+			t.Fatalf("New(%q) error = %v, want nil for any source", src, err)
+		}
+
+		if tmpl.Source() != src {
+			t.Fatalf("Source() = %q, want %q", tmpl.Source(), src)
+		}
+
+		if !strings.Contains(src, "{{") && tmpl.IsDynamic() {
+			t.Fatalf("New(%q).IsDynamic() = true, want a source without {{ static", src)
+		}
+
+		if !tmpl.IsDynamic() {
+			got, err := tmpl.Render(map[string]any{"Table": "users"})
+			if err != nil || got != src {
+				t.Fatalf("static Render() = %q, %v, want %q verbatim", got, err, src)
+			}
+		}
+
+		// YAML text is UTF-8, so only a valid source can round-trip.
+		if !utf8.ValidString(src) {
+			return
+		}
+
+		marshaled, err := yaml.Marshal(holder{Tmpl: *tmpl})
+		if err != nil {
+			t.Fatalf("yaml.Marshal(%q) error = %v", src, err)
+		}
+
+		for _, doc := range []string{string(marshaled), "tmpl: " + strconv.Quote(src)} {
+			var got holder
+			if err := yaml.Unmarshal([]byte(doc), &got); err != nil {
+				t.Fatalf("yaml.Unmarshal(%q) of %q error = %v", doc, src, err)
+			}
+
+			if got.Tmpl.tmpl == nil || got.Tmpl.Source() != src || got.Tmpl.IsDynamic() != tmpl.IsDynamic() {
+				t.Fatalf("UnmarshalYAML(%q) = %+v, want the source %q back (dynamic %t)", doc, got.Tmpl.tmpl, src, tmpl.IsDynamic())
+			}
+		}
+	})
 }

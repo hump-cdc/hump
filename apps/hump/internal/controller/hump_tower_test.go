@@ -168,8 +168,6 @@ func TestSnapshotEstimateRouteRejectsATablelessBody(t *testing.T) {
 	}
 }
 
-// newTestOperationsCollector returns a connected collector that is closed when
-// the test ends.
 func TestEmbeddedShellPolicyAllowsTheThemeScript(t *testing.T) {
 	handler := middleware.Static(humpTowerFS, "hump_tower")
 
@@ -182,6 +180,8 @@ func TestEmbeddedShellPolicyAllowsTheThemeScript(t *testing.T) {
 	}
 }
 
+// newTestOperationsCollector returns a connected collector that is closed when
+// the test ends.
 func newTestOperationsCollector(t *testing.T) *operationscollectoradapter.Collector {
 	t.Helper()
 

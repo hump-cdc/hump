@@ -5,7 +5,13 @@ the Prometheus registry (`metric`). `cmd/hump/main.go` builds the health and met
 hands them to the adapters. `domain`, the ports, `config` and the `hump_tower` use cases do not
 import `log`.
 
-There are no tests under this directory.
+Each package has one test file. `health` checks the handler's status code and per-check failures
+(starts unhealthy, healthy once both are marked, `MarkUnhealthy` with and without a cause).
+`metric` checks that the factory prefixes `hump_` while `go_goroutines` stays unprefixed, and
+that `/metrics` serves the result. `log` covers `Scope`, `WithScope` and `WithTraceparent`.
+`init` reads the environment only once per process, so `TestInitHonoursEnvironment` starts the
+test binary again as a child with `LOG_FORMAT=json LOG_VERBOSE=true` and checks for a JSON Debug
+line. It passes `-test.gocoverdir` through to the child, so the child's coverage is counted.
 
 ## log
 

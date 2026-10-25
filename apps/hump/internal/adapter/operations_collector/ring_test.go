@@ -452,6 +452,33 @@ func TestClampBoundsValue(t *testing.T) {
 	}
 }
 
+func TestContainsFold(t *testing.T) {
+	cases := []struct {
+		name   string
+		hay    string
+		needle string
+		want   bool
+	}{
+		{name: "empty needle", hay: "anything", needle: "", want: true},
+		{name: "empty needle in empty hay", hay: "", needle: "", want: true},
+		{name: "case-insensitive match", hay: "Connection REFUSED", needle: "refused", want: true},
+		{name: "absent", hay: "timeout", needle: "refused", want: false},
+		{name: "needle longer than hay", hay: "ab", needle: "abc", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := containsFold(tc.hay, tc.needle); got != tc.want {
+				t.Errorf("containsFold(%q, %q) = %v, want %v", tc.hay, tc.needle, got, tc.want)
+			}
+
+			if got := containsFold([]byte(tc.hay), tc.needle); got != tc.want {
+				t.Errorf("containsFold([]byte(%q), %q) = %v, want %v", tc.hay, tc.needle, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRingWriteDoesNotAllocateInSteadyState(t *testing.T) {
 	r := newRing(8, 64, 0)
 	rec := ringRecord("a", 64)

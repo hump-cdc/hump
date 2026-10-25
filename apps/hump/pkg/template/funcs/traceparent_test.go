@@ -1,6 +1,9 @@
 package funcs
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const (
 	validTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -65,4 +68,41 @@ func TestSpanIDTemplate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzTraceparent(f *testing.F) {
+	f.Add(validTraceparent)
+	f.Add("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	f.Add("00-00000000000000000000000000000000-00f067aa0ba902b7-01")
+	f.Add("00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01")
+	f.Add("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra")
+	f.Add("")
+
+	f.Fuzz(func(t *testing.T, traceparent string) {
+		traceID := mustRender(t, `{{ .Value | trace_id }}`, V(traceparent))
+		spanID := mustRender(t, `{{ .Value | span_id }}`, V(traceparent))
+
+		if spanID == "" {
+			if traceID != traceparent {
+				t.Fatalf("trace_id(%q) = %q, want the input back when span_id rejects it", traceparent, traceID)
+			}
+
+			return
+		}
+
+		parts := strings.Split(traceparent, "-")
+		if len(parts) != 4 || parts[1] != traceID || parts[2] != spanID {
+			t.Fatalf("trace_id, span_id of %q = %q, %q, want its second and third fields", traceparent, traceID, spanID)
+		}
+
+		for _, id := range []string{traceID, spanID} {
+			if strings.Trim(id, "0123456789abcdef") != "" || strings.Trim(id, "0") == "" {
+				t.Fatalf("id %q of %q is not non-zero lowercase hex", id, traceparent)
+			}
+		}
+
+		if len(traceID) != 32 || len(spanID) != 16 {
+			t.Fatalf("trace_id, span_id of %q = %q, %q, want 32 and 16 hex digits", traceparent, traceID, spanID)
+		}
+	})
 }

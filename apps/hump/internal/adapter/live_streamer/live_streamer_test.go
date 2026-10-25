@@ -1,6 +1,7 @@
 package livestreamer
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -139,6 +140,31 @@ func TestStreamerDropsWindowsForASlowSubscriber(t *testing.T) {
 
 	if drops == 0 {
 		t.Fatal("the slow subscriber lost no window, want at least one")
+	}
+}
+
+func TestStreamerUnsubscribesASlowSubscriber(t *testing.T) {
+	s := newTestStreamer(t, &fakeCollector{})
+
+	slow, batches := s.Subscribe()
+	_, healthy := s.Subscribe()
+
+	for range subscriberBuffer + 1 {
+		write(s, "a")
+		receive(t, healthy)
+	}
+
+	s.Unsubscribe(slow)
+
+	for range batches {
+	}
+
+	s.mu.Lock()
+	_, ok := s.subs[slow]
+	s.mu.Unlock()
+
+	if ok {
+		t.Fatal("the slow subscriber is still registered after Unsubscribe")
 	}
 }
 
@@ -286,6 +312,31 @@ func TestStreamerIgnoresAStaleTimer(t *testing.T) {
 	}
 }
 
+func TestStreamerFlushOfAnEmptyWindowSendsNothing(t *testing.T) {
+	s := newTestStreamer(t, &fakeCollector{})
+
+	_, batches := s.Subscribe()
+
+	s.mu.Lock()
+	generation := s.generation
+	s.mu.Unlock()
+
+	s.flush(generation)
+
+	select {
+	case batch := <-batches:
+		t.Fatalf("got batch %v for an empty window, want none", targets(batch))
+	default:
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.timer != nil {
+		t.Fatal("an empty flush left the timer armed")
+	}
+}
+
 func TestStreamerUnsubscribeClosesTheChannel(t *testing.T) {
 	s := newTestStreamer(t, &fakeCollector{})
 
@@ -312,6 +363,20 @@ func TestStreamerCloseClosesEverySubscriber(t *testing.T) {
 	}
 	if _, ok := <-second; ok {
 		t.Fatal("the second subscriber's channel survived close")
+	}
+}
+
+func TestStreamerShutdownHookClosesEverySubscriber(t *testing.T) {
+	s := newTestStreamer(t, &fakeCollector{})
+
+	_, batches := s.Subscribe()
+
+	if err := s.onShutdown(context.Background()); err != nil {
+		t.Fatalf("onShutdown() error = %v", err)
+	}
+
+	if _, ok := <-batches; ok {
+		t.Fatal("the subscriber's channel survived the shutdown hook")
 	}
 }
 

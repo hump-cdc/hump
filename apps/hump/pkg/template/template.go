@@ -5,9 +5,11 @@ package template
 import (
 	"errors"
 	"hump/pkg/template/funcs"
+	"strconv"
 	"strings"
 	"text/template"
 
+	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 )
 
@@ -59,21 +61,33 @@ func (t *Template) IsDynamic() bool {
 	return t.tmpl.IsDynamic()
 }
 
-// MarshalYAML implements yaml.Marshaler by emitting the template's source.
+// MarshalYAML implements yaml.Marshaler by emitting the template's source,
+// double-quoted when goccy would not read its own output back as the source.
 func (t Template) MarshalYAML() (any, error) {
-	return t.tmpl.Source(), nil
-}
-
-// UnmarshalYAML implements yaml.NodeUnmarshaler. It expects a scalar node and
-// parses its value as a template source.
-func (t *Template) UnmarshalYAML(node ast.Node) error {
-	scalar, ok := node.(ast.ScalarNode)
-	if !ok {
-		return errors.New("should be string")
+	source := t.tmpl.Source()
+	if !roundTripsYAML(source) {
+		return quotedSource(source), nil
 	}
 
-	value, ok := scalar.GetValue().(string)
-	if !ok {
+	return source, nil
+}
+
+// UnmarshalYAML implements yaml.NodeUnmarshaler. It expects a string scalar,
+// quoted, plain or block, and parses its value as a template source.
+func (t *Template) UnmarshalYAML(node ast.Node) error {
+	var value string
+	switch n := node.(type) {
+	case *ast.LiteralNode:
+		// GetValue of a block scalar is its source text, header and
+		// indentation included; the decoded value is on the inner node.
+		value = n.Value.Value
+	case ast.ScalarNode:
+		s, ok := n.GetValue().(string)
+		if !ok {
+			return errors.New("should be string")
+		}
+		value = s
+	default:
 		return errors.New("should be string")
 	}
 
@@ -107,4 +121,30 @@ func isTemplate(source string) (*template.Template, bool) {
 	}
 
 	return tmpl, true
+}
+
+// quotedSource is a template source written as a YAML double-quoted scalar.
+type quotedSource string
+
+// MarshalYAML writes the source double-quoted, escaping what YAML needs escaped.
+func (s quotedSource) MarshalYAML() ([]byte, error) {
+	return []byte(strconv.Quote(string(s))), nil
+}
+
+// roundTripsYAML reports whether goccy reads s back unchanged from its own
+// output; it writes "\t" bare, for one, which then reads back as null.
+func roundTripsYAML(s string) bool {
+	out, err := yaml.Marshal(map[string]string{"v": s})
+	if err != nil {
+		return false
+	}
+
+	var back map[string]any
+	if err := yaml.Unmarshal(out, &back); err != nil {
+		return false
+	}
+
+	got, ok := back["v"].(string)
+
+	return ok && got == s
 }

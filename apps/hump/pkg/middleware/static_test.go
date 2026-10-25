@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/sha256"
+	"embed"
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
@@ -122,6 +123,40 @@ func TestStaticHandlerNoPolicyOnAssets(t *testing.T) {
 
 	if csp := rec.Header().Get("Content-Security-Policy"); csp != "" {
 		t.Errorf("Content-Security-Policy = %q, want none on an asset", csp)
+	}
+}
+
+func TestStaticInvalidPathNotFound(t *testing.T) {
+	handler := Static(embed.FS{}, "../outside")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestStaticWithoutShellNotFound(t *testing.T) {
+	handler := Static(embed.FS{}, ".")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want no SPA shell", ct)
+	}
+}
+
+func TestStaticRoutesMalformedManifest(t *testing.T) {
+	assets := testAssets()
+	assets["routes.json"] = &fstest.MapFile{Data: []byte(`{"not":"a list"}`)}
+
+	if routes := (&static{assets: assets}).routes(); len(routes) != 0 {
+		t.Errorf("routes = %v, want none", routes)
 	}
 }
 

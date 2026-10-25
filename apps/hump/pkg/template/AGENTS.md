@@ -37,8 +37,11 @@ Other edges:
 - A **zero** `Template{}` is not: its inner variant is nil and every method panics. Build one with
   `New` or by unmarshalling.
 - `UnmarshalYAML` accepts only a string scalar. A YAML number or bool in a templated field is
-  rejected with `should be string` rather than converted.
-- `MarshalYAML` emits the source, so a config round-trips with its templates unrendered.
+  rejected with `should be string` rather than converted. A block scalar (`|`, `>`) takes its
+  decoded value from the inner node: goccy's `GetValue` on a `LiteralNode` is the source text,
+  header and indentation included.
+- `MarshalYAML` emits the source, so a config round-trips with its templates unrendered. A source
+  goccy would not read back from its own output (`"\t"`, `"\n"`) is emitted double-quoted.
 - It is `text/template`: nothing is escaped for the destination format. `json`, `quote`, `urlquery`
   and friends are the author's job.
 

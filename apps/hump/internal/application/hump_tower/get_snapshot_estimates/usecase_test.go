@@ -103,6 +103,36 @@ func TestEstimateCapsConcurrentCounts(t *testing.T) {
 	}
 }
 
+func TestEstimateCapsConcurrentCountsAtTheOption(t *testing.T) {
+	cases := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "positive", limit: 2, want: 2},
+		{name: "non-positive keeps the default", limit: 0, want: defaultMaxConcurrentEstimates},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := newFakeDatabase()
+			db.delay = 20 * time.Millisecond
+
+			requests := scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true})
+
+			got := collect(t, NewUseCase(db, WithMaxConcurrentEstimates(tc.limit)).Estimate(context.Background(), requests))
+
+			if peak := db.peakActive(); peak != tc.want {
+				t.Errorf("peak concurrent counts = %d, want %d", peak, tc.want)
+			}
+
+			if len(got) != len(requests) {
+				t.Errorf("got %d estimates, want one per table", len(got))
+			}
+		})
+	}
+}
+
 func TestEstimateStopsWhenCancelled(t *testing.T) {
 	db := newFakeDatabase()
 	db.block = make(chan struct{})

@@ -3,6 +3,8 @@
 package config
 
 import (
+	"fmt"
+
 	"hump/config/decoder"
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
@@ -37,6 +39,10 @@ func (t *Table) UnmarshalYAML(node ast.Node) error {
 		return err
 	}
 
+	if err := t.checkSinks(node); err != nil {
+		return err
+	}
+
 	t.setDefaults()
 
 	return nil
@@ -46,6 +52,42 @@ func (t *Table) setDefaults() {
 	if t.Replica == "" {
 		t.Replica = domain.ReplicaIdentityFull
 	}
+}
+
+// checkSinks rejects an empty sink entry such as `sinks: [~]`. The decoder
+// leaves it a zero sinkcfg.Config without calling its UnmarshalYAML, so it
+// would otherwise reach the bindings with a nil Sink, Failure and Retry.
+func (t *Table) checkSinks(node ast.Node) error {
+	var items []ast.Node
+	if mapping, ok := node.(*ast.MappingNode); ok {
+		if sinks, ok := decoder.KeyValue(mapping, "sinks").(*ast.SequenceNode); ok {
+			items = sinks.Values
+		}
+	}
+
+	for i, sink := range t.Sinks {
+		if sink.Sink != nil {
+			continue
+		}
+
+		line := decoder.NodeLine(node)
+		if i < len(items) {
+			line = decoder.NodeLine(items[i])
+		}
+
+		return fmt.Errorf("line %d: sink entry %d of table %s is empty", line, i+1, t.displayName())
+	}
+
+	return nil
+}
+
+// displayName returns the table as schema.table, or just table without a schema.
+func (t *Table) displayName() string {
+	if t.Schema == "" {
+		return string(t.Name)
+	}
+
+	return string(t.Schema) + "." + string(t.Name)
 }
 
 func crossValidate(tables []Table) error {

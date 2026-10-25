@@ -143,6 +143,74 @@ func TestHandlerStopsWhenTheClientIsGone(t *testing.T) {
 	}
 }
 
+func TestHandlerStopsWhenASendFails(t *testing.T) {
+	processing := snapshot.State{Status: snapshot.StatusProcessing, Tables: []snapshot.Table{
+		{CompletedRows: 1, EstimatedRows: 2},
+	}}
+
+	cases := []struct {
+		name    string
+		batches []livestream.Batch
+		states  []snapshot.State
+		failAt  int
+	}{
+		{name: "current snapshot", failAt: 2},
+		{name: "operations", batches: []livestream.Batch{{}}, failAt: 3},
+		{name: "snapshot change", states: []snapshot.State{processing}, failAt: 3},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var log []string
+			stream := &fakeStreamer{log: &log, batches: make(chan livestream.Batch, len(tc.batches))}
+			for _, batch := range tc.batches {
+				stream.batches <- batch
+			}
+
+			runner := &fakeRunner{
+				log:     &log,
+				current: snapshot.State{Status: snapshot.StatusIdle},
+				updates: make(chan snapshot.State, len(tc.states)),
+			}
+			for _, state := range tc.states {
+				runner.updates <- state
+			}
+
+			sender := &fakeSender{}
+			sender.onSend = func() {
+				if len(sender.events()) == tc.failAt {
+					sender.fail = true
+				}
+			}
+
+			serve(context.Background(), t, NewController(NewUseCase(nil, nil, stream, runner)), sender)
+
+			if got := len(sender.events()); got != tc.failAt {
+				t.Fatalf("sent %d events, want the handler to stop at the failed send %d", got, tc.failAt)
+			}
+		})
+	}
+}
+
+func TestEventsNamesEveryPayload(t *testing.T) {
+	events := NewController(nil).Events()
+
+	want := map[string]any{
+		"welcome":    WelcomeEvent{},
+		"operations": OperationsEvent{},
+		"snapshot":   SnapshotEvent{},
+	}
+	for name, payload := range want {
+		if !reflect.DeepEqual(events[name], payload) {
+			t.Errorf("Events()[%q] = %#v, want %#v", name, events[name], payload)
+		}
+	}
+
+	if len(events) != len(want) {
+		t.Errorf("Events() has %d entries, want %d", len(events), len(want))
+	}
+}
+
 // fakeSender records every payload sent; fail makes every send fail and
 // onSend runs after each one.
 type fakeSender struct {

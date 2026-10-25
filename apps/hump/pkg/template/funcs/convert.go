@@ -2,8 +2,10 @@ package funcs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 )
 
@@ -153,7 +155,8 @@ func tmplToStrings(list any) []string {
 //	{{.X | json true}}   // indented (two spaces per level)
 //
 // The piped value is always the final argument; an optional leading bool
-// selects pretty-printing. Marshalling errors are propagated to the template
+// selects pretty-printing. NaN and ±Inf floats, which JSON cannot represent,
+// are written as null. Other marshalling errors are propagated to the template
 // engine.
 func tmplJSON(args ...any) (string, error) {
 	var (
@@ -173,20 +176,77 @@ func tmplJSON(args ...any) (string, error) {
 	default:
 		return "", fmt.Errorf("json: expected 1 or 2 arguments, got %d", len(args))
 	}
-	var (
-		b   []byte
-		err error
-	)
-	if prettify {
-		b, err = json.MarshalIndent(v, "", "  ")
-	} else {
-		b, err = json.Marshal(v)
+	b, err := marshalJSON(v, prettify)
+
+	var unsupported *json.UnsupportedValueError
+	if errors.As(err, &unsupported) {
+		b, err = marshalJSON(finiteJSONValue(reflect.ValueOf(v), 0), prettify)
 	}
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
 }
+
+// marshalJSON marshals v, indented with two spaces when prettify is set.
+func marshalJSON(v any, prettify bool) ([]byte, error) {
+	if prettify {
+		return json.MarshalIndent(v, "", "  ")
+	}
+	return json.Marshal(v)
+}
+
+// finiteJSONValue returns v with every NaN or ±Inf float in its maps, slices,
+// arrays, pointers and interfaces replaced by nil. A value that marshals itself,
+// or one deeper than finiteJSONMaxDepth, such as a cycle, is kept as is.
+func finiteJSONValue(v reflect.Value, depth int) any {
+	if !v.IsValid() {
+		return nil
+	}
+	if depth > finiteJSONMaxDepth || v.Type().Implements(jsonMarshalerType) {
+		return v.Interface()
+	}
+
+	switch v.Kind() {
+	case reflect.Float32, reflect.Float64:
+		if f := v.Float(); math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return nil
+		}
+		return finiteJSONValue(v.Elem(), depth+1)
+	case reflect.Map:
+		if v.IsNil() || v.Type().Key().Kind() != reflect.String {
+			break
+		}
+		out := make(map[string]any, v.Len())
+		for it := v.MapRange(); it.Next(); {
+			out[it.Key().String()] = finiteJSONValue(it.Value(), depth+1)
+		}
+		return out
+	case reflect.Slice, reflect.Array:
+		if v.Kind() == reflect.Slice && (v.IsNil() || v.Type().Elem().Kind() == reflect.Uint8) {
+			break
+		}
+		out := make([]any, v.Len())
+		for i := range v.Len() {
+			out[i] = finiteJSONValue(v.Index(i), depth+1)
+		}
+		return out
+	default:
+	}
+
+	return v.Interface()
+}
+
+// jsonMarshalerType is the type of json.Marshaler, for finiteJSONValue.
+var jsonMarshalerType = reflect.TypeFor[json.Marshaler]()
+
+// finiteJSONMaxDepth caps the finiteJSONValue walk, so a cyclic value reaches
+// encoding/json, which reports the cycle, instead of overflowing the stack.
+const finiteJSONMaxDepth = 1000
 
 // tmplFromJSON decodes a JSON object string into map[string]any. Errors are
 // surfaced to the template engine.

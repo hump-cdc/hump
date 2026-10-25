@@ -139,7 +139,7 @@ jobs:
                       exit 1
                   fi
                   if ! jq -e '.runs' "$SARIF_FILE" >/dev/null 2>&1; then
-                      echo "::error file=apps/hump/scripts/ci.sh,title=Vulnerability scan did not complete::hump:ci-vulncheck wrote no valid ${SARIF_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                      echo "::error file=scripts/hump-ci.sh,title=Vulnerability scan did not complete::hump:ci-vulncheck wrote no valid ${SARIF_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
                       exit 1
                   fi
 
@@ -204,8 +204,8 @@ jobs:
               if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
               run: cat .ci/annotations/*.txt
 
-            # ci.sh writes audit.json first, so a missing one means the task stopped before the
-            # scan.
+            # scripts/hump-tower-ci.sh writes audit.json first, so a missing one means the task
+            # stopped before the scan.
             - name: Check that the npm vulnerability scan passed
               if: ${{ !cancelled() }}
               env:
@@ -217,7 +217,7 @@ jobs:
                       exit 1
                   fi
                   if [[ ! -f "$REPORT_FILE" ]]; then
-                      echo "::error file=apps/hump-tower/scripts/ci.sh,title=npm vulnerability scan did not complete::hump-tower:ci-audit wrote no ${REPORT_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+                      echo "::error file=scripts/hump-tower-ci.sh,title=npm vulnerability scan did not complete::hump-tower:ci-audit wrote no ${REPORT_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
                       exit 1
                   fi
 

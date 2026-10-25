@@ -370,6 +370,23 @@ func TestWorkerPool_droppedErrors(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_reportError_ignoresNil(t *testing.T) {
+	wp := New[struct{}](WithErrorBufferSize(1))
+	defer wp.Shutdown()
+
+	wp.reportError(nil)
+
+	if wp.hasError.Load() {
+		t.Error("a nil error marked the batch as failed")
+	}
+	if got := len(wp.Errors()); got != 0 {
+		t.Errorf("got %d buffered errors, want 0", got)
+	}
+	if got := wp.DroppedErrors(); got != 0 {
+		t.Errorf("got %d dropped errors, want 0", got)
+	}
+}
+
 func TestWorkerPool_errors_closedOnShutdown(t *testing.T) {
 	wp := New[struct{}]()
 

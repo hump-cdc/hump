@@ -610,3 +610,46 @@ func TestCanonicalYAML_StableForEquivalentMaps(t *testing.T) {
 		t.Fatalf("want equal canonical forms, got %q vs %q", ka, kb)
 	}
 }
+
+func TestCanonicalYAML_QuotesStringsGoccyCannotReadBack(t *testing.T) {
+	for _, value := range []string{"\t", "\t\t", "a\t", "\t -", "\n", "\n0", "plain"} {
+		out, err := canonicalYAML(yaml.MapSlice{{Key: "v", Value: value}})
+		if err != nil {
+			t.Fatalf("canonicalYAML(%q): %v", value, err)
+		}
+
+		var back map[string]any
+		if err := yaml.Unmarshal([]byte(out), &back); err != nil {
+			t.Fatalf("yaml.Unmarshal(%q): %v", out, err)
+		}
+		if back["v"] != value {
+			t.Errorf("canonicalYAML(%q) = %q, which reads back as %#v", value, out, back["v"])
+		}
+	}
+}
+
+func TestExpand_KeepsScalarText(t *testing.T) {
+	out, err := expand("tables:\n  - schema: 007\n    table: 00000\n    sinks:\n      - kafka:\n" +
+		"          url: x\n        retry:\n          maxAttempts: 03\n")
+	if err != nil {
+		t.Fatalf("expand: %v", err)
+	}
+
+	for _, want := range []string{"schema: 007\n", "table: 00000\n", "maxAttempts: 03\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expand() = %q, want it to contain %q", out, want)
+		}
+	}
+}
+
+func TestExpand_ResolvesAnchorsAndMergeKeys(t *testing.T) {
+	out, err := expand("base: &b\n  url: x\n  topic: t\ntables:\n  - schema: public\n    table: users\n" +
+		"    sinks:\n      - kafka:\n          <<: *b\n          topic: own\n")
+	if err != nil {
+		t.Fatalf("expand: %v", err)
+	}
+
+	if want := "  - kafka:\n      topic: own\n      url: x\n"; !strings.Contains(out, want) {
+		t.Errorf("expand() = %q, want the merged url and the sink's own topic", out)
+	}
+}

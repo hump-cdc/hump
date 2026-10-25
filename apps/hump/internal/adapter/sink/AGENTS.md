@@ -129,10 +129,26 @@ being cached as a permanent failure. The differences:
 
 ## Tests
 
-`rabbitmq/returns_test.go` is the only test here: it builds a `rabbitConn` with hand-made
-confirm/return channels, so the publish-outcome logic is exercised without a broker. One case
-asserts the ack path finishes in under 5ms — a regression lock on a removed 50ms straggler
-wait, not a performance nicety. There are no broker integration tests here;
+None of these tests needs a real broker, and none adds a test dependency (no kfake, nats-server
+or testcontainers):
+
+- **HTTP** runs against `httptest.NewServer`.
+- **NATS, RabbitMQ, RabbitMQ Streams** each have a `fake_server_test.go`: a small loopback
+  server that speaks just enough of the wire protocol for the real client library. It is
+  stdlib-only, except that the RabbitMQ fake takes reply codes from `amqp091-go`. In the two
+  RabbitMQ fakes, hooks set each declare and publish outcome and `dropClients` simulates a lost
+  connection. `nats/reconciler_test.go` also uses `fakeJS`, a stub of the `jetstream.JetStream`
+  interface.
+- **Kafka** uses a cached client that is already closed (produce fails with
+  `kgo.ErrClientClosed`) and a seed on a closed local port (produce runs into the deadline). A
+  successful produce is not tested, because that needs a broker.
+- `shutdown.Shutdown` runs only once per process (`sync.Once` in the global registry), so each
+  package calls it in one dedicated test.
+- `sink_test.go` covers the dispatch over definition types.
+
+`rabbitmq/returns_test.go` builds a `rabbitConn` with hand-made confirm/return channels to test
+the publish-outcome logic directly. One case asserts the ack path finishes in under 5ms. It
+guards against the return of a removed 50ms straggler wait; it is not a performance target.
 `dev/docker-compose.yml` at the repo root brings up Kafka, NATS and RabbitMQ for manual runs.
 
 `newTestConn` sits above `TestAwaitPublishResult`, not below the last test as the `go` skill

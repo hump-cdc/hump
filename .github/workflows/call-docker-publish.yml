@@ -66,17 +66,41 @@ jobs:
                   persist-credentials: false
 
             # The Docker build has no .git, so the ldflags of the hump:build task cannot read the
-            # commit there.
-            - name: Compute the version, commit and build date of the image
+            # commit there. The docs are versioned per minor release (docs/v<major>.<minor>.0); the
+            # base image comes from the last FROM of the Dockerfile.
+            - name: Compute the version, commit, build date, docs version and base image of the image
               id: version
               env:
                   TAG: ${{ github.ref_name }}
               run: |
                   set -euo pipefail
+                  version="${TAG#v}"
+                  core="${version%%[-+]*}"
+                  if [[ ! "$core" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+                      echo "::error title=Release tag is not a semantic version::Tag '${TAG}' is not v<major>.<minor>.<patch>[-pre]. Publish the release from a tag like v1.2.3 or v1.2.3-rc.1."
+                      exit 1
+                  fi
+                  docs_version="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.0"
+
+                  base_ref="$(awk 'toupper($1) == "FROM" { for (i = 2; i <= NF; i++) if ($i !~ /^--/) { ref = $i; break } } END { print ref }' apps/hump/Dockerfile)"
+                  base_name="${base_ref%%@*}"
+                  base_digest=""
+                  if [[ "$base_ref" == *@* ]]; then
+                      base_digest="${base_ref#*@}"
+                  fi
+                  if [[ -z "$base_name" || -z "$base_digest" ]]; then
+                      echo "Last FROM image reference: '${base_ref}'"
+                      echo "::error file=apps/hump/Dockerfile,title=Base image is not pinned by digest::The last FROM of apps/hump/Dockerfile must reference the base image as <name>:<tag>@sha256:<digest> (found '${base_ref}'). Pin it by digest, e.g. docker.io/chainguard/static:latest@sha256:..."
+                      exit 1
+                  fi
+
                   {
-                      echo "version=${TAG#v}"
+                      echo "version=${version}"
                       echo "commit=${GITHUB_SHA::7}"
                       echo "date=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)"
+                      echo "docs_version=${docs_version}"
+                      echo "base_name=${base_name}"
+                      echo "base_digest=${base_digest}"
                   } >> "$GITHUB_OUTPUT"
 
             # The Dockerfile uses FROM --platform=$BUILDPLATFORM and cross-compiles, so no QEMU.
@@ -92,7 +116,10 @@ jobs:
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
 
             # Pre-releases get only the full version tag (no major, major.minor or latest), and v0.x
-            # gets no major tag. The annotation levels also annotate the index.
+            # gets no major tag. The annotation levels also annotate the index. labels and
+            # annotations are independent inputs, so both get the same list: it overrides the
+            # vendor, authors and url inherited from the Chainguard base image, and base.* come from
+            # the Dockerfile, so Dependabot base image bumps stay in sync.
             - name: Compute the image tags, labels and annotations
               id: meta
               uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -104,6 +131,20 @@ jobs:
                       type=semver,pattern={{version}}
                       type=semver,pattern={{major}}.{{minor}}
                       type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+                  labels: |
+                      org.opencontainers.image.url=https://hump.dev
+                      org.opencontainers.image.documentation=https://hump.dev/docs/${{ steps.version.outputs.docs_version }}
+                      org.opencontainers.image.vendor=humpcdc
+                      org.opencontainers.image.authors=Sergey Zwezdin (sergey@zwezdin.com)
+                      org.opencontainers.image.base.name=${{ steps.version.outputs.base_name }}
+                      org.opencontainers.image.base.digest=${{ steps.version.outputs.base_digest }}
+                  annotations: |
+                      org.opencontainers.image.url=https://hump.dev
+                      org.opencontainers.image.documentation=https://hump.dev/docs/${{ steps.version.outputs.docs_version }}
+                      org.opencontainers.image.vendor=humpcdc
+                      org.opencontainers.image.authors=Sergey Zwezdin (sergey@zwezdin.com)
+                      org.opencontainers.image.base.name=${{ steps.version.outputs.base_name }}
+                      org.opencontainers.image.base.digest=${{ steps.version.outputs.base_digest }}
 
             - name: Build and push the multi-arch image with SBOM and provenance
               id: build

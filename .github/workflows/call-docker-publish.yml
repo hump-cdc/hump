@@ -66,8 +66,8 @@ jobs:
                   persist-credentials: false
 
             # The Docker build has no .git, so the ldflags of the hump:build task cannot read the
-            # commit there. The docs are versioned per minor release (docs/v<major>.<minor>.0); the
-            # base image comes from the last FROM of the Dockerfile.
+            # commit there. The docs are versioned per release (docs/v<major>.<minor>.<patch>, without
+            # the pre-release suffix); the base image comes from the last FROM of the Dockerfile.
             - name: Compute the version, commit, build date, docs version and base image of the image
               id: version
               env:
@@ -76,11 +76,11 @@ jobs:
                   set -euo pipefail
                   version="${TAG#v}"
                   core="${version%%[-+]*}"
-                  if [[ ! "$core" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+                  if [[ ! "$core" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                       echo "::error title=Release tag is not a semantic version::Tag '${TAG}' is not v<major>.<minor>.<patch>[-pre]. Publish the release from a tag like v1.2.3 or v1.2.3-rc.1."
                       exit 1
                   fi
-                  docs_version="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.0"
+                  docs_version="v${core}"
 
                   base_ref="$(awk 'toupper($1) == "FROM" { for (i = 2; i <= NF; i++) if ($i !~ /^--/) { ref = $i; break } } END { print ref }' apps/hump/Dockerfile)"
                   base_name="${base_ref%%@*}"

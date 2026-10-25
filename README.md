@@ -81,7 +81,7 @@ docker buildx imagetools inspect docker.io/humpcdc/hump:<version>
 
 ### Verifying the image
 
-Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/call-docker-publish.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week.
+Images are published from the `v*` release tags of `hump-cdc/hump` by the reusable workflow `.github/workflows/call-docker-publish.yml`. It signs the multi-arch index digest with keyless cosign (Sigstore, GitHub OIDC) and pushes two attestations to the registry: GitHub build provenance (SLSA Build L3) and an SPDX SBOM. BuildKit attaches its own SBOM and provenance as well. Trivy rescans the published image right after the push, and the latest release image again every week. The release workflow also runs the signature and attestation checks below on every published digest.
 
 Check the signature:
 

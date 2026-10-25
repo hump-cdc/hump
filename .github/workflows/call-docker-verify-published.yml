@@ -1,0 +1,100 @@
+name: "Docker: verify published image"
+
+# Reusable: runs the README verification commands (cosign signature, build provenance and SBOM
+# attestations) against the published digest, after a release (release-docker-publish.yml). No
+# environment, no secrets and no checkout: the commands need no repository files and Docker Hub
+# allows anonymous pulls.
+on:
+    workflow_call:
+        inputs:
+            digest:
+                description: Digest of the multi-arch image index of docker.io/humpcdc/hump (sha256:...) to verify
+                type: string
+                required: true
+
+permissions: {}
+
+defaults:
+    run:
+        shell: bash
+
+# No cache anywhere, as in the other Docker workflows.
+jobs:
+    verify:
+        name: Verify signature and attestations
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            contents: read # read the repository metadata for gh attestation verify
+            attestations: read # read the GitHub attestations API for gh attestation verify
+        env:
+            IMAGE: docker.io/humpcdc/hump
+        steps:
+            # Audit mode logs outbound connections; switch to block once the audit runs show this
+            # job's endpoints.
+            - name: Audit outbound network traffic of the runner
+              uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+              with:
+                  egress-policy: audit
+
+            - name: Validate the digest of the published image
+              env:
+                  DIGEST: ${{ inputs.digest }}
+              run: |
+                  set -euo pipefail
+                  if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                      echo "::error file=.github/workflows/call-docker-verify-published.yml,title=Invalid image digest input::The 'digest' input '${DIGEST}' is not a sha256:<64 hex> digest. Pass the index digest that call-docker-publish.yml outputs."
+                      exit 1
+                  fi
+                  echo "Verifying ${IMAGE}@${DIGEST}"
+
+            # Same cosign as call-docker-publish.yml, which signs the image.
+            - name: Install cosign
+              uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+              with:
+                  cosign-release: "v3.1.3"
+
+            # The identity is the one in README.md ("Verifying the image"); keep them identical.
+            - name: Verify the keyless cosign signature of the published image
+              env:
+                  DIGEST: ${{ inputs.digest }}
+              run: |
+                  set -euo pipefail
+                  ref="${IMAGE}@${DIGEST}"
+                  identity='^https://github\.com/hump-cdc/hump/\.github/workflows/call-docker-publish\.yml@refs/tags/v'
+                  issuer='https://token.actions.githubusercontent.com'
+                  if ! cosign verify "$ref" --certificate-identity-regexp "$identity" --certificate-oidc-issuer "$issuer"; then
+                      echo "::error file=.github/workflows/call-docker-publish.yml,title=Cosign signature of the published image does not verify::cosign found no valid keyless signature of ${ref} from call-docker-publish.yml on a v* tag (error above). Check the signing step of the 'Publish' job and that the identity in README.md still matches the workflow path. Reproduce locally: cosign verify ${ref} --certificate-identity-regexp '${identity}' --certificate-oidc-issuer ${issuer}"
+                      exit 1
+                  fi
+                  echo "Cosign signature of ${ref} verified."
+
+            # gh prints nothing on success without a TTY, hence the explicit success line.
+            - name: Verify the build provenance attestation of the published image
+              env:
+                  DIGEST: ${{ inputs.digest }}
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  ref="oci://${IMAGE}@${DIGEST}"
+                  signer="${GITHUB_REPOSITORY}/.github/workflows/call-docker-publish.yml"
+                  if ! gh attestation verify "$ref" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer" --source-ref "$GITHUB_REF" --deny-self-hosted-runners; then
+                      echo "::error file=.github/workflows/call-docker-publish.yml,title=Build provenance attestation of the published image does not verify::gh found no valid build provenance attestation of ${ref} signed by ${signer} for ${GITHUB_REF} (error above). Check the provenance attestation step of the 'Publish' job. Reproduce locally: gh attestation verify ${ref} --repo ${GITHUB_REPOSITORY} --signer-workflow ${signer} --source-ref ${GITHUB_REF} --deny-self-hosted-runners"
+                      exit 1
+                  fi
+                  echo "Build provenance attestation of ${ref} verified."
+
+            - name: Verify the SPDX SBOM attestation of the published image
+              env:
+                  DIGEST: ${{ inputs.digest }}
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  ref="oci://${IMAGE}@${DIGEST}"
+                  signer="${GITHUB_REPOSITORY}/.github/workflows/call-docker-publish.yml"
+                  predicate='https://spdx.dev/Document/v2.3'
+                  if ! gh attestation verify "$ref" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer" --source-ref "$GITHUB_REF" --deny-self-hosted-runners --predicate-type "$predicate"; then
+                      echo "::error file=.github/workflows/call-docker-publish.yml,title=SBOM attestation of the published image does not verify::gh found no valid SPDX SBOM attestation of ${ref} signed by ${signer} for ${GITHUB_REF} (error above). Check the SBOM generation and attestation steps of the 'Publish' job. Reproduce locally: gh attestation verify ${ref} --repo ${GITHUB_REPOSITORY} --signer-workflow ${signer} --source-ref ${GITHUB_REF} --deny-self-hosted-runners --predicate-type ${predicate}"
+                      exit 1
+                  fi
+                  echo "SBOM attestation of ${ref} verified."

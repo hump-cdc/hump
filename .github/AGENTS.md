@@ -14,9 +14,10 @@ in the root `AGENTS.md`.
 | `main-scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
 | `call-docker-scan.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
 | `ci-docker-scan.yml` | `Docker: scan` | Calls `call-docker-scan.yml` on every PR and push to `main` |
-| `release-docker-publish.yml` | `Docker: publish` | On a `v*` release: calls `call-docker-scan.yml`, `call-docker-publish.yml`, then `call-docker-scan-published.yml` on the pushed digest |
+| `release-docker-publish.yml` | `Docker: publish` | On a `v*` release: calls `call-docker-scan.yml`, `call-docker-publish.yml`, then `call-docker-scan-published.yml` and `call-docker-verify-published.yml` on the pushed digest |
 | `call-docker-publish.yml` | `Docker: publish image` | Reusable: pushes, signs and attests `docker.io/humpcdc/hump` |
 | `call-docker-scan-published.yml` | `Docker: scan published image` | Reusable: scans the pushed image by digest (or the latest release image) with Trivy |
+| `call-docker-verify-published.yml` | `Docker: verify published image` | Reusable: runs the README checks on the pushed digest: cosign signature, build provenance and SBOM attestations |
 
 Don't break these:
 

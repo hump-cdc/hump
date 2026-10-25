@@ -20,7 +20,7 @@ A useful report includes:
 | `main` | Yes |
 | Older releases | No |
 
-Fixes land in `main` and ship in the next release. They are not backported.
+Fixes land in `main` and ship in the next release. They are not backported. Compatibility between releases is described in [VERSIONING.md](VERSIONING.md).
 
 ## What happens next
 

@@ -28,12 +28,16 @@ jobs:
             security-events: write # upload SARIF to code scanning
 
     # Runs in the production environment (v* tags, reviewer approval, DOCKERHUB_TOKEN). The Sigstore
-    # signer identity is call-docker-publish.yml (SLSA Build L3).
+    # signer identity is call-docker-publish.yml (SLSA Build L3). DOCKERHUB_TOKEN stays a production
+    # environment secret, but without secrets: inherit the called workflow gets an empty secrets
+    # context, even inside its environment job. Passing it by name is not possible: this caller job
+    # has no environment, so secrets.DOCKERHUB_TOKEN is empty here (hence the secrets-inherit ignore).
     publish:
         name: Publish
         needs: scan
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: ./.github/workflows/call-docker-publish.yml # zizmor: ignore[self-repository]
+        uses: ./.github/workflows/call-docker-publish.yml # zizmor: ignore[self-repository,secrets-inherit]
+        secrets: inherit
         permissions:
             contents: read # checkout
             id-token: write # keyless cosign signature and attestations (Sigstore OIDC)

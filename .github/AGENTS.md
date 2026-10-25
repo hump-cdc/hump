@@ -30,8 +30,10 @@ Don't break these:
   `hump-cdc/hump/.github/workflows/call-docker-publish.yml@refs/tags/v*`. Rename or move it only
   together with the verification docs.
 - Caller permissions cap the called workflow, so the `Publish` job grants `contents: read`,
-  `id-token: write` and `attestations: write`. Secrets are scoped to environment `production`;
-  the caller passes none. Docker workflows use no moon, no repository scripts and no cache.
+  `id-token: write` and `attestations: write`. Secrets are scoped to environment `production`,
+  but the caller must pass `secrets: inherit`: without it the called workflow's secrets context is
+  empty, environment secrets included. Docker workflows use no moon, no repository scripts and no
+  cache.
 - Reusable workflows are called by local path with `# zizmor: ignore[self-repository]`
   (actionlint v1.7.12 lacks `$/...`). They set their own `permissions: {}`, `defaults` and job
   `timeout-minutes`, and no `concurrency` (the caller's group applies).

@@ -130,7 +130,7 @@ services:
 
     # RabbitMQ (classic AMQP + Streams)
     rabbitmq:
-        image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
+        image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
         restart: unless-stopped
         hostname: rabbitmq
         ports:
@@ -147,7 +147,7 @@ services:
 
     # Declares the classic-AMQP exchange and binds a catch-all demo queue
     rabbitmq-init:
-        image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
+        image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
         depends_on:
             - rabbitmq
         restart: "no"

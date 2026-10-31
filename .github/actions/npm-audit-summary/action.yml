@@ -1,0 +1,98 @@
+name: npm audit report to job summary
+description: Render one Bun audit JSON result, preserve exclusions and fail on findings or scan errors. Does not run an audit.
+inputs:
+    file:
+        description: Path to the unmodified bun audit --json output.
+        required: true
+    status:
+        description: Exit code of the audit process, not moon.
+        required: true
+    ignores:
+        description: Whitespace-separated advisory tokens passed to bun audit with --ignore.
+        required: false
+        default: ""
+runs:
+    using: composite
+    steps:
+        - name: Render npm advisory details and enforce the audit result
+          shell: bash
+          env:
+              AUDIT_FILE: ${{ inputs.file }}
+              AUDIT_STATUS: ${{ inputs.status }}
+              AUDIT_IGNORES: ${{ inputs.ignores }}
+          run: |
+              set -euo pipefail
+              python3 - <<'PY'
+              import html
+              import json
+              import os
+              import subprocess
+              import sys
+              from pathlib import Path
+
+              fix = "Upgrade the listed packages to fixed versions at least 7 days old, update exact package.json dependencies or overrides, run 'bun install' at the repository root and commit package.json and bun.lock. Reproduce with: moon run hump-tower:audit"
+              retry = "Check the audit step's stderr and network access to registry.npmjs.org, then rerun 'moon run hump-tower:audit'; the workflow must capture unmodified 'bun audit --json' output and its exit code."
+              escape = lambda value: html.escape(str(value), quote=True)
+
+              def publish(body):
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                      summary.write(body + '\n')
+
+              try:
+                  status = int(os.environ['AUDIT_STATUS'])
+                  data = json.loads(Path(os.environ['AUDIT_FILE']).read_text())
+                  if not isinstance(data, dict):
+                      raise ValueError('expected an advisory object keyed by npm package')
+                  ignores = os.environ['AUDIT_IGNORES'].split()
+                  # Bun 1.4.3 emits the raw bulk response before applying --ignore.
+                  # Mirror its id-equality / URL-substring matching, without another scan.
+                  rows = []
+                  for package, advisories in data.items():
+                      if not isinstance(advisories, list):
+                          raise ValueError('expected an array of advisories for each package')
+                      for advisory in advisories:
+                          if not isinstance(advisory, dict) or not all(isinstance(advisory.get(k), str) for k in ('url', 'title', 'severity', 'vulnerable_versions')) or 'id' not in advisory:
+                              raise ValueError('incomplete advisory in audit JSON')
+                          excluded = any(token == str(advisory['id']) or token in advisory['url'] for token in ignores)
+                          rows.append((package, advisory, excluded))
+                  blocking = sum(not row[2] for row in rows)
+                  if status not in (0, 1) or (status == 0 and blocking) or (status == 1 and not blocking):
+                      raise ValueError(f'audit exit code {status} disagrees with {blocking} blocking advisories')
+                  # Read the existing lockfile only, never install or scan again. Bun parses JSONC.
+                  result = subprocess.run(['bun', '-e', 'console.log(JSON.stringify(require("./bun.lock").packages))'], check=True, capture_output=True, text=True)
+                  versions = {}
+                  for entry in json.loads(result.stdout).values():
+                      resolution = entry[0]
+                      package, _, version = resolution.rpartition('@')
+                      versions.setdefault(package, set()).add(version)
+                  body = [f'## npm vulnerability audit\n\n{blocking} blocking advisories; {len(rows) - blocking} excluded advisories.']
+                  for excluded, heading in ((False, 'Blocking advisories'), (True, 'Excluded advisories (policy exceptions)')):
+                      selected = [row for row in rows if row[2] == excluded]
+                      if not selected:
+                          continue
+                      body += [f'\n### {heading}\n', '<table><tr><th>Package</th><th>Installed versions (all locked)</th><th>Vulnerable range</th><th>Severity</th><th>Advisory</th></tr>']
+                      for package, advisory, _ in selected:
+                          url = advisory['url']
+                          if not url.startswith('https://github.com/advisories/'):
+                              raise ValueError('advisory URL is not a GitHub advisory HTTPS URL')
+                          installed = ', '.join(sorted(versions.get(package, []))) or 'not present in lockfile'
+                          body.append(f'<tr><td>{escape(package)}</td><td>{escape(installed)}</td><td>{escape(advisory["vulnerable_versions"])}</td><td>{escape(advisory["severity"])}</td><td><a href="{escape(url)}">{escape(advisory["title"])}</a></td></tr>')
+                          print('  ' + json.dumps({'policy': 'excluded' if excluded else 'blocking', 'package': package, 'installed': installed, **advisory}, ensure_ascii=True))
+                      body.append('</table>')
+                  if ignores:
+                      body.append('<p>Applied ignore tokens: ' + escape(', '.join(ignores)) + '</p>')
+                  if not rows:
+                      body.append('\nNo vulnerabilities found.')
+                  if blocking:
+                      body.append('<p>' + escape(fix) + '</p>')
+                  publish('\n'.join(body))
+              except Exception as error:
+                  print('  Audit reporting error: ' + ascii(str(error)))
+                  publish('## npm vulnerability audit\n\n**Tool/report error: scan success could not be established.**\n\n' + retry)
+                  print('::error file=bun.lock,title=npm vulnerability scan did not complete::' + retry)
+                  sys.exit(1)
+              print(f'  npm audit: {blocking} blocking, {len(rows) - blocking} excluded advisories.')
+              if blocking:
+                  print('::error file=bun.lock,title=npm dependencies have known vulnerabilities::' + fix)
+                  sys.exit(1)
+              PY

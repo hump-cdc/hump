@@ -8,7 +8,7 @@ project:
   description: 'hump web UI (React, rsbuild, bun), built into apps/hump/internal/controller/hump_tower and embedded in the hump binary.'
 
 taskOptions:
-  runInCI: false
+  runInCI: 'always'
 
 tasks:
   openapi:
@@ -24,7 +24,7 @@ tasks:
     inputs: ['/apps/hump/**/*.go', '/apps/hump/go.mod', '/apps/hump/go.sum']
     outputs: ['src/shared/api/openapi.json']
     options:
-      runInCI: true
+      runInCI: 'always'
   build:
     description: 'Build the UI into ../hump/internal/controller/hump_tower (prebuild runs openapi-ts)'
     command: 'bun run build'
@@ -48,7 +48,7 @@ tasks:
       - '/bunfig.toml'
     outputs: ['/apps/hump/internal/controller/hump_tower']
     options:
-      runInCI: true
+      runInCI: 'always'
   dev:
     description: 'rsbuild dev server on :3000, calling the hump API on :3200 (hump:run allows it via CORS)'
     command: 'bun run dev'
@@ -90,75 +90,46 @@ tasks:
   audit:
     description: 'Known vulnerabilities in the npm packages of the root bun.lock (bun audit)'
     command: 'bun audit'
-    # The advisories change without any change here, so the result is never cached. Unlike
-    # ci-audit, it also lists the advisories in AUDIT_IGNORES (scripts/hump-tower-ci.sh).
-    preset: 'utility'
-  ci-knip:
-    description: 'CI: knip with GitHub annotations in .ci/annotations'
-    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh knip'
-    # The default inputs (the whole project) plus the script outside it; the same in the ci-* below.
-    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
-    # knip sees the freshly generated API client.
-    deps: ['build']
+    # Local audit includes all advisories; Actions supplies its reviewed exceptions as flags.
     options:
       cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-biome:
-    description: 'CI: biome with a SARIF report in .ci/hump-tower'
-    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh biome'
-    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
-    # biome sees the freshly generated API client.
-    deps: ['build']
+      runInCI: 'always'
+  registry-check:
+    description: 'Verify npm packages and configuration use only registry.npmjs.org'
+    script: |
+      set -euo pipefail
+      root="$MOON_WORKSPACE_ROOT"
+      status=0
+      # shellcheck disable=SC2016
+      if ! offenders="$(bun -e '
+        const lock = require(process.argv[1])
+        for (const [key, [resolution, registry]] of Object.entries(lock.packages)) {
+          const spec = resolution.slice(resolution.lastIndexOf("@") + 1)
+          if (/^(workspace|link|file):/.test(spec)) continue
+          const isNpm = /^\d/.test(spec) && typeof registry === "string"
+          if (isNpm && (registry === "" || registry.startsWith("https://registry.npmjs.org/"))) continue
+          console.log(`${key} -> ${resolution}${typeof registry === "string" && registry ? ` (${registry})` : ""}`)
+        }
+      ' "$root/bun.lock")"; then
+        echo "Could not parse bun.lock. Fix the error above or regenerate it with bun install in the repository root." >&2
+        exit 1
+      fi
+      if [[ -n "$offenders" ]]; then
+        echo "Packages outside registry.npmjs.org:"
+        echo "$offenders"
+        echo "Replace them with versions from https://registry.npmjs.org/, run bun install in the repository root and commit package.json and bun.lock." >&2
+        status=1
+      fi
+      shopt -s nullglob
+      for file in "$root"/{,apps/*/,packages/*/}{.npmrc,bunfig.toml}; do
+        [[ -f "$file" ]] || continue
+        if [[ "$file" == */.npmrc ]] || grep -q -E '^[[:space:]]*(registry[[:space:]]*=|\[install\.(registry|scopes)\])' "$file"; then
+          echo "Remove the registry settings (or .npmrc) from ${file#"$root"/}, so Bun resolves every package from https://registry.npmjs.org/." >&2
+          status=1
+        fi
+      done
+      exit "$status"
+    inputs: ['/bun.lock', '/bunfig.toml', '/.npmrc', '/apps/*/bunfig.toml', '/apps/*/.npmrc', '/packages/*/bunfig.toml', '/packages/*/.npmrc']
     options:
       cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-test:
-    description: 'CI: tests with lcov coverage and JUnit in .ci/hump-tower'
-    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh test'
-    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
-    # The tests see the freshly generated API client.
-    deps: ['build']
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-typecheck:
-    description: 'CI: TypeScript type check with a fix hint in .ci/annotations'
-    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh typecheck'
-    inputs: ['**/*', '/scripts/hump-tower-ci.sh']
-    # tsc sees the freshly generated API client.
-    deps: ['build']
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-audit:
-    description: 'CI: bun audit of the root bun.lock and a check that every package comes from registry.npmjs.org, with a fix hint in .ci/annotations'
-    script: 'bash $workspaceRoot/scripts/hump-tower-ci.sh audit'
-    # The root bun.lock covers every workspace; GitHub's dependency graph sees only the direct npm
-    # dependencies, so Dependabot alerts miss the transitive ones.
-    inputs:
-      - 'package.json'
-      - 'bunfig.toml'
-      - '/scripts/hump-tower-ci.sh'
-      - '/package.json'
-      - '/bun.lock'
-      - '/bunfig.toml'
-      - '/apps/*/package.json'
-      - '/packages/*/package.json'
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
+      runInCI: 'always'

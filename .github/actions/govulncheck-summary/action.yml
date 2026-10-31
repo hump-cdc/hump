@@ -1,0 +1,122 @@
+name: Go vulnerability report to job summary
+description: Convert one completed govulncheck JSON stream to text and repository-relative SARIF, publish details and enforce its result. Does not scan.
+inputs:
+    file:
+        description: Path to the unmodified govulncheck JSON stream.
+        required: true
+    status:
+        description: Exit code of the JSON scan process, not moon.
+        required: true
+    sarif:
+        description: Output path for the converted SARIF report.
+        required: true
+runs:
+    using: composite
+    steps:
+        - name: Convert Go vulnerability findings and enforce the scan result
+          shell: bash
+          env:
+              VULN_FILE: ${{ inputs.file }}
+              VULN_STATUS: ${{ inputs.status }}
+              VULN_SARIF: ${{ inputs.sarif }}
+          run: |
+              set -euo pipefail
+              python3 - <<'PY'
+              import html
+              import json
+              import os
+              import re
+              import subprocess
+              import sys
+              from pathlib import Path
+
+              fix = "Upgrade vulnerable modules or the Go toolchain to the fixed versions listed below (respect the 7-day minimum release age), run 'moon run hump:tidy' and commit go.mod and go.sum. Reproduce with: moon run hump:vulncheck"
+              retry = "Check the scan/conversion logs and access to vuln.go.dev, then run 'moon run hump:vulncheck'. Capture its complete -format=json stream and exit status before converting it."
+              escape = lambda value: html.escape(str(value), quote=True)
+
+              def publish(body):
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                      summary.write(body + '\n')
+
+              try:
+                  target = Path(os.environ['VULN_SARIF'])
+                  # A failed conversion must not leave an old uploadable SARIF report.
+                  target.unlink(missing_ok=True)
+                  if os.environ['VULN_STATUS'] != '0':
+                      raise ValueError('JSON scan failed with exit status ' + os.environ['VULN_STATUS'])
+                  raw = Path(os.environ['VULN_FILE']).read_text()
+                  decoder = json.JSONDecoder()
+                  messages = []
+                  remaining = raw.lstrip()
+                  while remaining:
+                      message, end = decoder.raw_decode(remaining)
+                      if not isinstance(message, dict) or len(message) != 1 or not set(message) <= {'config', 'progress', 'SBOM', 'osv', 'finding'}:
+                          raise ValueError('invalid govulncheck protocol message')
+                      messages.append(message)
+                      remaining = remaining[end:].lstrip()
+                  if not messages or messages[0].get('config', {}).get('protocol_version') != 'v1.0.0':
+                      raise ValueError('missing govulncheck protocol configuration')
+                  config = messages[0]['config']
+                  if config.get('scan_mode') != 'source' or config.get('scan_level') != 'symbol' or not any('SBOM' in message for message in messages):
+                      raise ValueError('expected a completed symbol-level source scan with SBOM')
+                  # Invoke only the pinned tool's conversion mode: no second vulnerability scan.
+                  command = ['go', '-C', 'apps/hump', 'tool', '-modfile=tools/govulncheck/go.mod', 'govulncheck', '-mode=convert']
+                  env = {**os.environ, 'GOWORK': 'off'}
+                  text = subprocess.run(command + ['-format=text'], input=raw, text=True, capture_output=True, env=env)
+                  sarif = subprocess.run(command + ['-format=sarif'], input=raw, text=True, capture_output=True, env=env)
+                  for label, result in (('Text', text), ('SARIF', sarif)):
+                      for line in result.stderr.splitlines():
+                          print('  ' + label + ' conversion: ' + ascii(line))
+                  if text.returncode not in (0, 3) or sarif.returncode != 0:
+                      raise ValueError(f'conversion failed: text={text.returncode}, SARIF={sarif.returncode}')
+                  report = json.loads(sarif.stdout)
+                  if report.get('version') != '2.1.0' or not isinstance(report.get('runs'), list) or not report['runs']:
+                      raise ValueError('conversion produced no valid SARIF runs')
+
+                  def rebase(value):
+                      if isinstance(value, dict):
+                          if value.get('uriBaseId') == '%SRCROOT%' and isinstance(value.get('uri'), str) and not value['uri'].startswith('apps/hump/'):
+                              value['uri'] = 'apps/hump/' + value['uri']
+                          for item in value.values():
+                              rebase(item)
+                      elif isinstance(value, list):
+                          for item in value:
+                              rebase(item)
+
+                  rebase(report)
+                  findings = [message['finding'] for message in messages if 'finding' in message]
+                  rows = {}
+                  for finding in findings:
+                      identifier = finding.get('osv', '')
+                      if not re.fullmatch(r'GO-\d{4}-\d+', identifier) or not finding.get('trace'):
+                          raise ValueError('invalid Go vulnerability identifier or missing trace')
+                      frame = finding['trace'][0]
+                      called = bool(frame.get('function'))
+                      key = (identifier, frame.get('module', ''), frame.get('version', ''), finding.get('fixed_version', 'No fix available'))
+                      rows[key] = rows.get(key, False) or called
+                  blocking = sum(rows.values())
+                  if bool(blocking) != (text.returncode == 3):
+                      raise ValueError('text conversion exit status disagrees with called-symbol findings')
+                  body = [f'## Go vulnerability scan\n\n{blocking} called vulnerabilities (blocking); {len(rows) - blocking} module/package-only findings (not called, non-blocking). No policy exceptions applied.']
+                  if rows:
+                      body.append('<table><tr><th>Advisory</th><th>Module</th><th>Installed version</th><th>Fixed version</th><th>Result</th></tr>')
+                      for (identifier, module, version, fixed), called in sorted(rows.items()):
+                          body.append(f'<tr><td><a href="https://pkg.go.dev/vuln/{identifier}">{identifier}</a></td><td>{escape(module)}</td><td>{escape(version)}</td><td>{escape(fixed)}</td><td>{"Blocking: called" if called else "Non-blocking: not called"}</td></tr>')
+                      body.append('</table>')
+                  body.append('<details><summary>govulncheck text and call traces</summary><pre>' + escape(text.stdout) + '</pre></details>')
+                  if blocking:
+                      body.append('<p>' + escape(fix) + '</p>')
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_text(json.dumps(report) + '\n')
+                  for line in text.stdout.splitlines():
+                      print('  ' + line)
+                  publish('\n'.join(body))
+              except Exception as error:
+                  print('  Go vulnerability reporting error: ' + ascii(str(error)))
+                  publish('## Go vulnerability scan\n\n**Tool/report error: scan success could not be established.**\n\n' + retry)
+                  print('::error file=apps/hump/go.mod,title=Go vulnerability scan did not complete::' + retry)
+                  sys.exit(1)
+              if blocking:
+                  print('::error file=apps/hump/go.mod,title=Code calls known vulnerabilities::' + fix)
+                  sys.exit(1)
+              PY

@@ -54,8 +54,7 @@ jobs:
               with:
                   advanced-security: true
 
-    # ci-check.yml scans only when apps/hump changes; this job also catches newly published
-    # vulnerabilities.
+    # Weekly runs also catch vulnerabilities published without a repository change.
     govulncheck:
         name: Go vulnerability report
         runs-on: ubuntu-24.04
@@ -95,24 +94,37 @@ jobs:
 
             # Same inputs as in ci-check.yml; Go comes from .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
+              id: setup
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
                   auto-install: true
                   auto-setup: true
                   cache: false
 
-            # hump:ci-vulncheck writes the SARIF and, on findings or errors, a fix hint and a
-            # .ci/failed marker; it allows failure, so the last step fails the job after the upload.
-            # CI=true makes the runInCI: 'only' task run.
             - name: Scan apps/hump for known Go vulnerabilities
-              env:
-                  CI: "true"
+              id: scan
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
               run: |
                   set -euo pipefail
-                  if ! moon run hump:ci-vulncheck; then
-                      echo "::error title=Vulnerability scan did not run::moon could not run hump:ci-vulncheck; see this step's log. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
+                  if ! mkdir -p .ci/hump; then
+                      echo "::error file=.github/workflows/main-security-scan.yml,title=Go report directory unavailable::Check runner disk space and permissions, then rerun the job to create .ci/hump."
                       exit 1
                   fi
+                  status=0
+                  moon --cache off --quiet --log off run hump:vulncheck --output-style stream -- -json > .ci/hump/govulncheck.json || status=$?
+                  echo "status=$status" >> "$GITHUB_OUTPUT"
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=apps/hump/go.mod,title=Go vulnerability scan failed::Resolve the scan error above and reproduce with 'moon run hump:vulncheck'."
+                      exit "$status"
+                  fi
+
+            - name: Render and validate Go vulnerability results
+              if: ${{ !cancelled() && steps.scan.outputs.status != '' }}
+              uses: ./.github/actions/govulncheck-summary # zizmor: ignore[self-repository]
+              with:
+                  file: .ci/hump/govulncheck.json
+                  status: ${{ steps.scan.outputs.status }}
+                  sarif: .ci/hump/govulncheck.sarif
 
             # Runs also when the scan found vulnerabilities, so the Security tab shows them.
             - name: Upload Go vulnerability findings to the Security tab
@@ -122,29 +134,17 @@ jobs:
                   sarif_file: .ci/hump/govulncheck.sarif
                   category: govulncheck
 
-            - name: Report the Go vulnerability scan findings as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
-              run: cat .ci/annotations/*.txt
-
-            # A failed govulncheck build leaves a marker; a failed SARIF run doesn't, so a missing
-            # or invalid report fails the job too.
-            - name: Check that the Go vulnerability scan passed
-              if: ${{ !cancelled() }}
-              env:
-                  SARIF_FILE: .ci/hump/govulncheck.sarif
-              run: |
-                  set -euo pipefail
-                  if [[ -f .ci/failed/hump-vulncheck ]]; then
-                      echo "::error file=apps/hump/go.mod,title=Go vulnerability scan failed::The annotation above names the fix; the findings are in the Security tab (category govulncheck). Reproduce locally with: CI=true moon run hump:ci-vulncheck"
-                      exit 1
-                  fi
-                  if ! jq -e '.runs' "$SARIF_FILE" >/dev/null 2>&1; then
-                      echo "::error file=scripts/hump-ci.sh,title=Vulnerability scan did not complete::hump:ci-vulncheck wrote no valid ${SARIF_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump:ci-vulncheck"
-                      exit 1
-                  fi
+            - name: Upload Go vulnerability machine reports
+              if: ${{ !cancelled() && hashFiles('.ci/hump/govulncheck.*') != '' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: security-go-vulnerability-reports
+                  path: .ci/hump/govulncheck.*
+                  include-hidden-files: true
+                  if-no-files-found: error
 
     # bun audit covers direct and transitive packages of bun.lock (Dependabot alerts only direct
-    # ones). No SARIF, so the findings are in the log and annotations.
+    # ones). Findings are rendered in the log and job summary; JSON is retained as an artifact.
     npm-audit:
         name: npm vulnerability report
         runs-on: ubuntu-24.04
@@ -181,45 +181,68 @@ jobs:
 
             # Same inputs as in ci-check.yml; Bun comes from .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
+              id: setup
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
                   auto-install: true
                   auto-setup: true
                   cache: false
 
-            # hump-tower:ci-audit runs bun audit and checks that every package comes from
-            # registry.npmjs.org; it allows failure, so the last step fails the job. CI=true makes
-            # the runInCI: 'only' task run.
+            - name: Check npm dependency registry policy
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump-tower:registry-check; then
+                      echo "::error file=bun.lock,title=npm registry policy check failed::Remove npm registry overrides and replace non-registry.npmjs.org dependencies listed above, then run 'bun install' and 'moon run hump-tower:registry-check' and commit the manifests and lockfile."
+                      exit 1
+                  fi
+
             - name: Scan the npm dependencies in bun.lock for known vulnerabilities
-              env:
-                  CI: "true"
+              id: audit
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
               run: |
                   set -euo pipefail
-                  if ! moon run hump-tower:ci-audit; then
-                      echo "::error title=npm vulnerability scan did not run::moon could not run hump-tower:ci-audit; see this step's log. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
+                  if ! mkdir -p .ci/hump-tower; then
+                      echo "::error file=.github/workflows/main-security-scan.yml,title=npm report directory unavailable::Check runner disk space and permissions, then rerun the job to create .ci/hump-tower."
                       exit 1
+                  fi
+                  ignores=(
+                      # happy-dom (dev, via @happy-dom/global-registrator, test DOM only): fixed in 21.0.4, published
+                      # 2026-10-20; also a major upgrade from 20.14.6. Revisit on 2026-10-28.
+                      --ignore=GHSA-834v-8h66-3h79
+                      # fast-uri (dev, via ajv): fixed in 3.1.9, published 2026-10-19; 3.1.8 (root package.json
+                      # overrides) fixes the rest. Revisit on 2026-10-27.
+                      --ignore=GHSA-w74x-v6f9-j3xg
+                      --ignore=GHSA-xhq7-xmqj-769h
+                      --ignore=GHSA-wjr9-j795-jxcr
+                      --ignore=GHSA-333x-w4r6-6crp
+                  )
+                  status=0
+                  moon --cache off --quiet --log off run hump-tower:audit --output-style stream -- --json "${ignores[@]}" > .ci/hump-tower/audit.json || status=$?
+                  echo "status=$status" >> "$GITHUB_OUTPUT"
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=bun.lock,title=npm audit failed::Review the detailed audit report in the following step; upgrade affected packages to fixed versions at least 7 days old, run 'bun install' and commit manifests and bun.lock. Reproduce with 'moon run hump-tower:audit'."
+                      exit "$status"
                   fi
 
-            - name: Report the npm vulnerability scan findings as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/*.txt') != '' }}
-              run: cat .ci/annotations/*.txt
+            - name: Render and validate npm vulnerability results
+              if: ${{ !cancelled() && steps.audit.outputs.status != '' }}
+              uses: ./.github/actions/npm-audit-summary # zizmor: ignore[self-repository]
+              with:
+                  file: .ci/hump-tower/audit.json
+                  status: ${{ steps.audit.outputs.status }}
+                  ignores: >-
+                      GHSA-834v-8h66-3h79 GHSA-w74x-v6f9-j3xg GHSA-xhq7-xmqj-769h
+                      GHSA-wjr9-j795-jxcr GHSA-333x-w4r6-6crp
 
-            # scripts/hump-tower-ci.sh writes audit.json first, so a missing one means the task
-            # stopped before the scan.
-            - name: Check that the npm vulnerability scan passed
-              if: ${{ !cancelled() }}
-              env:
-                  REPORT_FILE: .ci/hump-tower/audit.json
-              run: |
-                  set -euo pipefail
-                  if [[ -f .ci/failed/hump-tower-audit ]]; then
-                      echo "::error file=bun.lock,title=npm vulnerability scan failed::The annotation above names the fix; the findings are in the log of the scan step. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
-                      exit 1
-                  fi
-                  if [[ ! -f "$REPORT_FILE" ]]; then
-                      echo "::error file=scripts/hump-tower-ci.sh,title=npm vulnerability scan did not complete::hump-tower:ci-audit wrote no ${REPORT_FILE}; see the log of the scan step for the cause. Reproduce locally with: CI=true moon run hump-tower:ci-audit"
-                      exit 1
-                  fi
+            - name: Upload npm vulnerability machine report
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/audit.json') != '' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: security-npm-vulnerability-report
+                  path: .ci/hump-tower/audit.json
+                  include-hidden-files: true
+                  if-no-files-found: error
 
     # Rescans the latest release image on every run so newly published vulnerabilities show up;
     # without a stable release the job ends with a notice.

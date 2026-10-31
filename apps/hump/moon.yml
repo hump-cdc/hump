@@ -8,7 +8,7 @@ project:
   description: 'PostgreSQL change data capture service (Go module `hump`); embeds the hump-tower UI.'
 
 env:
-  # Matches the released binary; ci-test turns it on for -race.
+  # Matches the released binary; test-race enables cgo for the race detector.
   CGO_ENABLED: '0'
 
 fileGroups:
@@ -16,8 +16,8 @@ fileGroups:
   embedded: ['internal/controller/hump_tower/**/*']
 
 taskOptions:
-  # Developer tasks; CI runs tidy, build and ci-*.
-  runInCI: false
+  # Actions explicitly invokes ordinary tasks, independently of affected-project selection.
+  runInCI: 'always'
 
 tasks:
   build:
@@ -31,12 +31,14 @@ tasks:
     options:
       # Stamps commit and date; in CI it also forces the UI rebuild for the embed drift check.
       cache: false
-      runInCI: true
+      runInCI: 'always'
   run:
     description: 'Run hump against the dev environment (start it with moon run root:dev-up)'
     script: 'exec go run -ldflags "-s -w -X hump/pkg/version.Version=${VERSION:-0.0.0} -X hump/pkg/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X hump/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/hump -f ../../dev/hump.yaml'
     deps: ['hump-tower:build']
     preset: 'server'
+    options:
+      runInCI: false
     # Fallbacks only: task env does not override the caller's environment.
     env:
       DATABASE_URL: 'postgres://hump:hump@localhost:5437/hump?sslmode=disable'
@@ -60,8 +62,18 @@ tasks:
       LOG_FORMAT: 'pretty'
   test:
     description: 'Run all unit tests'
-    script: 'go tool gotestsum --format testdox ./...'
+    command: 'go tool gotestsum --format testdox'
     inputs: ['@group(sources)']
+  test-race:
+    description: 'Run all unit tests with the race detector (accepts gotestsum and Go test arguments)'
+    command: 'go tool gotestsum --format testname'
+    env:
+      CGO_ENABLED: '1'
+      GOFLAGS: '-race'
+    inputs: ['@group(sources)']
+    options:
+      # Race is a property of this task, not an optional caller default.
+      envOverride: true
   test-integration:
     description: 'Run opt-in string literal integration tests against an isolated PostgreSQL 17 with default strings off'
     script: |
@@ -120,7 +132,7 @@ tasks:
     preset: 'utility'
   lint:
     description: 'golangci-lint with .golangci.yml'
-    script: 'go tool golangci-lint run'
+    command: 'go tool golangci-lint run'
     inputs: ['@group(sources)', '.golangci.yml']
   lint-fix:
     description: 'golangci-lint with automatic fixes'
@@ -137,46 +149,43 @@ tasks:
     options:
       # CI diffs the result in a later workflow step.
       cache: false
-      runInCI: true
-  ci-lint:
-    description: 'CI: golangci-lint with a SARIF report in .ci/hump'
-    script: 'bash $workspaceRoot/scripts/hump-ci.sh lint'
-    inputs: ['@group(sources)', '.golangci.yml', '/scripts/hump-ci.sh']
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-vulncheck:
-    description: 'CI: govulncheck with a SARIF report in .ci/hump'
-    script: 'bash $workspaceRoot/scripts/hump-ci.sh vulncheck'
-    inputs: ['@group(sources)', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', '/scripts/hump-ci.sh']
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-dep-age:
-    description: 'CI: 7-day minimum release age of every Go module, the tool modules included'
-    script: 'bash $workspaceRoot/scripts/hump-ci.sh dep-age'
-    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum', '/scripts/hump-ci.sh']
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
-  ci-test:
-    description: 'CI: tests with -race, coverage and JUnit in .ci/hump'
-    script: 'bash $workspaceRoot/scripts/hump-ci.sh test'
+      runInCI: 'always'
+  vulncheck:
+    description: 'Scan Go packages for known vulnerabilities (accepts govulncheck arguments)'
+    # Keep the full-package default after the forwarded flags (Go flags stop at a pattern).
+    command: ['bash', '-c', 'exec go tool -modfile=tools/govulncheck/go.mod govulncheck "$@" ./...', '--']
     env:
-      CGO_ENABLED: '1'
-    inputs: ['@group(sources)', '/scripts/hump-ci.sh']
+      GOWORK: 'off'
+    inputs: ['@group(sources)', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum']
     options:
       cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
+      shell: false
+      envOverride: true
+  dep-age:
+    description: 'Enforce the 7-day minimum release age of every Go module, including tool modules'
+    script: |
+      set -euo pipefail
+      min_age_days=7
+      cutoff_epoch=$(($(date -u +%s) - min_age_days * 86400))
+      cutoff="$(date -u -d "@${cutoff_epoch}" +%FT%TZ 2>/dev/null || date -u -r "$cutoff_epoch" +%FT%TZ)"
+      format='2006-01-02T15:04:05Z'
+      template="{{if and (not .Main) .Time}}{{.Path}} {{.Version}} {{.Time.UTC.Format \"${format}\"}} {{(.Time.AddDate 0 0 ${min_age_days}).UTC.Format \"${format}\"}}{{end}}"
+      echo "Module versions published after ${cutoff} are younger than ${min_age_days} days."
+      status=0
+      for directory in . tools/actionlint tools/govulncheck; do
+        if ! listing="$(GOWORK=off go -C "$directory" list -m -f "$template" all)"; then
+          echo "Could not list dependencies of ${directory}/go.mod. Fix the Go/proxy error above, then rerun moon run hump:dep-age." >&2
+          status=1
+          continue
+        fi
+        while read -r module version published allowed; do
+          [[ -n "$module" && "$published" > "$cutoff" ]] || continue
+          echo "${directory}/go.mod: ${module} ${version} was published ${published}; allowed from ${allowed}."
+          echo "Pick a version at least ${min_age_days} days old (go list -m -json ${module}@<version>), run GOWORK=off go -C ${directory} get ${module}@<version> and moon run hump:tidy, or wait until ${allowed}." >&2
+          status=1
+        done <<<"$listing"
+      done
+      exit "$status"
+    inputs: ['go.mod', 'go.sum', 'tools/actionlint/go.mod', 'tools/actionlint/go.sum', 'tools/govulncheck/go.mod', 'tools/govulncheck/go.sum']
+    options:
+      cache: false

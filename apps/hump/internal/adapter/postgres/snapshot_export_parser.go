@@ -8,25 +8,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"hump/internal/domain"
+	"hump/internal/port/database"
 )
 
 // errCopyRow indicates a COPY text row that does not match the selected columns.
 var errCopyRow = errors.New("malformed COPY row")
 
-// snapshotExportParser parses the output of the COPY ... TO STDOUT a snapshot
-// read runs. It is the io.Writer that text-format output is streamed into: it
-// splits the stream into rows, decodes each field with the codec of its column
-// and hands every row to onRow.
+// snapshotExportParser separates the leading physical CTID from user columns
+// and combines it with the leaf identity supplied by the snapshot layout.
 type snapshotExportParser struct {
+	leaf    domain.TableIdentifier
 	columns []snapshotColumn
 	typeMap *pgtype.Map
-	onRow   func(domain.DbRecord) error
+	onRow   func(domain.DbRecord, database.SnapshotRowMetadata) error
 	partial []byte // partial is the start of a row whose end has not arrived yet.
 }
 
 // newSnapshotExportParser returns a parser decoding rows of columns with m.
-func newSnapshotExportParser(columns []snapshotColumn, m *pgtype.Map, onRow func(domain.DbRecord) error) *snapshotExportParser {
-	return &snapshotExportParser{columns: columns, typeMap: m, onRow: onRow}
+func newSnapshotExportParser(leaf domain.TableIdentifier, columns []snapshotColumn, m *pgtype.Map, onRow func(domain.DbRecord, database.SnapshotRowMetadata) error) *snapshotExportParser {
+	return &snapshotExportParser{leaf: leaf, columns: columns, typeMap: m, onRow: onRow}
 }
 
 // Write consumes data, which may hold any number of rows and need not end on a
@@ -73,8 +73,10 @@ func (p *snapshotExportParser) finish() error {
 // row decodes one row and hands it to onRow.
 func (p *snapshotExportParser) row(line []byte) error {
 	record := make(domain.DbRecord, len(p.columns))
+	metadata := database.SnapshotRowMetadata{Schema: p.leaf.Schema, Table: p.leaf.Name}
+	fields := len(p.columns) + 1
 
-	for i, column := range p.columns {
+	for i := range fields {
 		field := line
 		if end := bytes.IndexByte(line, '\t'); end >= 0 {
 			field, line = line[:end], line[end+1:]
@@ -82,13 +84,22 @@ func (p *snapshotExportParser) row(line []byte) error {
 			line = nil
 		}
 
-		if i == len(p.columns)-1 && line != nil {
-			return fmt.Errorf("more fields than %d columns: %w", len(p.columns), errCopyRow)
+		if i == fields-1 && line != nil {
+			return fmt.Errorf("more fields than %d columns: %w", fields, errCopyRow)
 		}
-		if i < len(p.columns)-1 && line == nil {
-			return fmt.Errorf("%d fields, expected %d: %w", i+1, len(p.columns), errCopyRow)
+		if i < fields-1 && line == nil {
+			return fmt.Errorf("%d fields, expected %d: %w", i+1, fields, errCopyRow)
 		}
 
+		if i == 0 {
+			if len(field) == 0 || string(field) == `\N` {
+				return fmt.Errorf("missing physical identity field %d: %w", i+1, errCopyRow)
+			}
+			metadata.CTID = string(p.unescapeCopyText(field))
+			continue
+		}
+
+		column := p.columns[i-1]
 		if string(field) == `\N` {
 			record[column.name] = nil
 			continue
@@ -101,7 +112,7 @@ func (p *snapshotExportParser) row(line []byte) error {
 		record[column.name] = value
 	}
 
-	return p.onRow(record)
+	return p.onRow(record, metadata)
 }
 
 // unescapeCopyText undoes the backslash escapes of the COPY text format:

@@ -1,5 +1,5 @@
 # headers:
-#     X-Idempotency-Key: "{{ sha256 (cat .Schema .Table .Operation .Timestamp (.Prev | json) (.Next | json)) }}"
+#     X-Idempotency-Key: "{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}"
 #     X-TraceParent: '{{index .Headers "traceparent"}}'
 sinks:
     - name: kafka1

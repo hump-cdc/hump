@@ -112,7 +112,7 @@ func TestStartFinishesHandlerWhenContextIsCancelled(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var handlerCtxErr error
-	handler := func(ctx context.Context, _ time.Time, _ domain.OperationType, _ domain.DbName, _ domain.TableSchema, _ domain.TableName, _ domain.Headers, _ domain.DbRecord, _ domain.DbRecord) error {
+	handler := func(ctx context.Context, _ time.Time, _ domain.OperationType, _ domain.DbName, _ domain.TableSchema, _ domain.TableName, _ domain.Headers, _ database.MessageMetadata, _ domain.DbRecord, _ domain.DbRecord) error {
 		close(entered)
 		<-release
 		handlerCtxErr = ctx.Err()
@@ -163,7 +163,7 @@ func TestStartReportsHandlerFailureWhenContextIsCancelled(t *testing.T) {
 	wantErr := errors.New("sink unavailable")
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		close(entered)
 		<-release
 
@@ -210,7 +210,7 @@ func TestStartConfirmsInFlightTransactionOnShutdown(t *testing.T) {
 
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		close(entered)
 		<-release
 
@@ -254,7 +254,7 @@ func TestStartDoesNotConfirmTransactionWhenHandlerFailsOnShutdown(t *testing.T) 
 	wantErr := errors.New("sink unavailable")
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		close(entered)
 		<-release
 
@@ -760,11 +760,14 @@ func TestProcessMessageDispatchesRowChanges(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w, _ := newTestWal(t, usersServer(t), configuredTable("public", "users"))
 			registerRelation(t, w, 1, "public", "users", idColumn())
+			timestamp := time.Unix(1700000000, 0).UTC()
+			if _, err := w.processMessage(context.Background(), identityBegin(0x100, timestamp), time.Now(), failingHandler(t)); err != nil {
+				t.Fatalf("Begin error = %v", err)
+			}
 			w.messageContext.append("trace", "abc")
 
 			recorder := newHandlerRecorder(nil)
 
-			timestamp := time.Unix(1700000000, 0).UTC()
 			if _, err := w.processMessage(context.Background(), tt.message, timestamp, recorder.handle); err != nil {
 				t.Fatalf("processMessage() error = %v", err)
 			}
@@ -1026,7 +1029,7 @@ func TestStartKeepsTheStreamAliveWhileTheHandlerBlocks(t *testing.T) {
 
 	entered := make(chan struct{})
 	released := make(chan struct{})
-	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		close(entered)
 		<-released
 
@@ -1114,7 +1117,7 @@ func TestOnShutdownConfirmsPositionOfInFlightChange(t *testing.T) {
 
 	entered := make(chan struct{})
 	released := make(chan struct{})
-	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	handler := func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		close(entered)
 		<-released
 
@@ -1539,6 +1542,7 @@ type handlerCall struct {
 	schema    domain.TableSchema
 	table     domain.TableName
 	headers   domain.Headers
+	metadata  database.MessageMetadata
 	prev      domain.DbRecord
 	next      domain.DbRecord
 }
@@ -1565,6 +1569,7 @@ func (r *handlerRecorder) handle(
 	schema domain.TableSchema,
 	table domain.TableName,
 	headers domain.Headers,
+	metadata database.MessageMetadata,
 	prev domain.DbRecord,
 	next domain.DbRecord,
 ) error {
@@ -1578,6 +1583,7 @@ func (r *handlerRecorder) handle(
 		schema:    schema,
 		table:     table,
 		headers:   headers,
+		metadata:  metadata,
 		prev:      prev,
 		next:      next,
 	})

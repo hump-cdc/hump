@@ -295,7 +295,7 @@ func TestListenStreamsChangesUntilContextIsCancelled(t *testing.T) {
 
 	errs := make(chan error, 1)
 	go func() {
-		errs <- p.Listen(ctx, func(_ context.Context, _ time.Time, operation domain.OperationType, _ domain.DbName, schema domain.TableSchema, table domain.TableName, _ domain.Headers, _ domain.DbRecord, next domain.DbRecord) error {
+		errs <- p.Listen(ctx, func(_ context.Context, _ time.Time, operation domain.OperationType, _ domain.DbName, schema domain.TableSchema, table domain.TableName, _ domain.Headers, _ database.MessageMetadata, _ domain.DbRecord, next domain.DbRecord) error {
 			changes <- change{operation: operation, schema: schema, table: table, next: next}
 			cancel()
 
@@ -1163,7 +1163,7 @@ func (h *fakeHealth) waitForHealthy(t *testing.T) {
 func failingHandler(t *testing.T) database.ProcessMessageHandler {
 	t.Helper()
 
-	return func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+	return func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		t.Error("process handler was called, want the stream to stop before it")
 
 		return nil

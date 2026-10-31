@@ -9,7 +9,9 @@ import (
 // Context is one row change being delivered and the root of every sink
 // template; its fields are what a template sees as .Operation, .Next and so on.
 type Context struct {
-	Version string
+	Version    string
+	MessageId  string
+	SnapshotID string // SnapshotID is empty for WAL changes.
 
 	Timestamp time.Time
 	Operation domain.OperationType

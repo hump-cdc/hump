@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"hump/internal/domain"
 	"hump/internal/port/database"
 	"hump/pkg/app/shutdown"
+	"hump/pkg/messageid"
 )
 
 // wal owns a single logical replication session: the dedicated pgconn used to
@@ -46,6 +48,9 @@ type wal struct {
 	// inTransaction is set between Begin and Commit, where a keepalive's
 	// ServerWALEnd may already lie past rows not yet processed.
 	inTransaction bool
+	commitTime    time.Time
+	finalLSN      pglogrepl.LSN
+	changeOrdinal uint64
 
 	introspector *introspector
 
@@ -120,6 +125,7 @@ func newWal(
 // position is flushed on every standby tick, while a change is processed, and
 // on exit.
 func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler) error {
+	w.resetTransaction()
 	walPosition := pglogrepl.LSN(0)
 	workCtx := context.WithoutCancel(ctx)
 
@@ -416,7 +422,7 @@ func (w *wal) endProcessing() {
 // relation updates the cache, a transactional logical message is buffered as
 // context, a row change is decoded and forwarded to handler, and a commit drops
 // the buffer and returns the transaction's end LSN; any other message returns 0.
-func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time.Time, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
+func (w *wal) processMessage(ctx context.Context, walData []byte, _ time.Time, handler database.ProcessMessageHandler) (pglogrepl.LSN, error) {
 	if len(walData) == 0 {
 		return 0, errEmptyWalRecord
 	}
@@ -431,11 +437,13 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		w.relations[message.RelationID] = message
 
 	case *pglogrepl.BeginMessage:
+		w.resetTransaction()
 		w.inTransaction = true
+		w.commitTime = message.CommitTime
+		w.finalLSN = message.FinalLSN
 
 	case *pglogrepl.CommitMessage:
-		w.messageContext.reset()
-		w.inTransaction = false
+		w.resetTransaction()
 
 		return message.TransactionEndLSN, nil
 
@@ -447,31 +455,35 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 		w.messageContext.append(message.Prefix, string(message.Content))
 
 	case *pglogrepl.InsertMessageV2:
+		w.changeOrdinal++
 		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeInsert,
 			relationID:    message.RelationID,
 			prevTupleType: pglogrepl.UpdateMessageTupleTypeNone,
 			nextTuple:     message.Tuple,
-		}, timestamp, handler)
+		}, w.commitTime, handler)
 
 	case *pglogrepl.UpdateMessageV2:
+		w.changeOrdinal++
 		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeUpdate,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
 			nextTuple:     message.NewTuple,
-		}, timestamp, handler)
+		}, w.commitTime, handler)
 
 	case *pglogrepl.DeleteMessageV2:
+		w.changeOrdinal++
 		return 0, w.processRow(ctx, rowChange{
 			operation:     domain.OperationTypeDelete,
 			relationID:    message.RelationID,
 			prevTuple:     message.OldTuple,
 			prevTupleType: message.OldTupleType,
-		}, timestamp, handler)
+		}, w.commitTime, handler)
 
 	case *pglogrepl.TruncateMessageV2:
+		w.changeOrdinal++
 		resultErrs := make([]error, 0, len(message.RelationIDs))
 		headers := w.messageContext.dump()
 		for _, relationId := range message.RelationIDs {
@@ -490,7 +502,7 @@ func (w *wal) processMessage(ctx context.Context, walData []byte, timestamp time
 				return 0, fmt.Errorf("failed to resolve table configuration for %s.%s: %w", table.Schema, table.Name, err)
 			}
 
-			e := handler(ctx, timestamp, domain.OperationTypeTruncate, w.dbName, ref.Schema, ref.Name, headers, nil, nil)
+			e := handler(ctx, w.commitTime, domain.OperationTypeTruncate, w.dbName, ref.Schema, ref.Name, headers, w.metadata(ref), nil, nil)
 			if e != nil {
 				resultErrs = append(resultErrs, e)
 			} else {
@@ -548,7 +560,7 @@ func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.T
 
 	headers := w.messageContext.dump()
 
-	err = handler(ctx, timestamp, change.operation, w.dbName, ref.Schema, ref.Name, headers, prev, next)
+	err = handler(ctx, timestamp, change.operation, w.dbName, ref.Schema, ref.Name, headers, w.metadata(ref), prev, next)
 	if err != nil {
 		return err
 	}
@@ -556,6 +568,20 @@ func (w *wal) processRow(ctx context.Context, change rowChange, timestamp time.T
 	w.metrics.observeRow(change.operation, ref, time.Since(start))
 
 	return nil
+}
+
+// resetTransaction clears transaction identity and emitted headers between sessions and transactions.
+func (w *wal) resetTransaction() {
+	w.inTransaction = false
+	w.commitTime = time.Time{}
+	w.finalLSN = 0
+	w.changeOrdinal = 0
+	w.messageContext.reset()
+}
+
+// metadata identifies a change by its committed transaction and unfiltered ordinal.
+func (w *wal) metadata(table domain.TableIdentifier) database.MessageMetadata {
+	return database.MessageMetadata{MessageID: messageid.Hash("WAL", string(w.dbName), string(table.Schema), string(table.Name), w.finalLSN.String(), strconv.FormatUint(w.changeOrdinal, 10))}
 }
 
 // decodeRow turns the optional previous and next tuples of a change event into

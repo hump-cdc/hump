@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func TestParseWhereRebasesSnapshotColumnReferences(t *testing.T) {
+	parser := newSnapshotWhereParser()
+	parser.columnQualifier = "snapshot_row"
+	parser.tableQualifiers = map[string]bool{"users": true, `Odd"Table`: true}
+	for _, where := range []string{`id > 1`, `users.id > 1`, `"Odd""Table".id > 1`} {
+		got, err := parser.Parse(where)
+		if err != nil {
+			t.Fatalf("Parse(%q) error = %v", where, err)
+		}
+		if want := `("snapshot_row"."id" > 1)`; got != want {
+			t.Errorf("Parse(%q) = %q, want %q", where, got, want)
+		}
+	}
+	got, err := parser.Parse(`name = 'users.id'`)
+	if want := `("snapshot_row"."name" = 'users.id')`; err != nil || got != want {
+		t.Errorf("Parse() = %q, %v, want %q", got, err, want)
+	}
+	got, err = parser.Parse(`unknown.id > 1`)
+	if want := `("unknown"."id" > 1)`; err != nil || got != want {
+		t.Errorf("Parse() = %q, %v, want unknown qualifier preserved as %q", got, err, want)
+	}
+}
+
 func TestParseWhereRendersAcceptedExpressions(t *testing.T) {
 	tests := []struct {
 		name  string

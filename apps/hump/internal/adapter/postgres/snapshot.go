@@ -149,13 +149,11 @@ func (s *snapshot) Finish(ctx context.Context) error {
 	return nil
 }
 
-// Read reads every row of table matching where as the snapshot with
-// snapshotID sees it, calling onRow for each. Each leaf relation is read in
-// chunks of snapshotChunkPages pages by ctid range, one transaction per chunk,
-// on a session of its own per call, so calls may overlap. Every processed row
-// is observed as an insert of table, like a row arriving from WAL.
-func (s *snapshot) Read(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord) error) error {
-	condition, err := newSnapshotWhereParser().Parse(where)
+// Read streams matching user records and their physical leaf identity separately.
+// Each leaf is read in ctid page chunks, with processed rows observed as inserts of table.
+func (s *snapshot) Read(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord, database.SnapshotRowMetadata) error) error {
+	whereParser := newSnapshotWhereParser()
+	condition, err := whereParser.Parse(where)
 	if err != nil {
 		return fmt.Errorf("parse where: %w", errors.Join(err, database.ErrInvalidWhere))
 	}
@@ -179,24 +177,38 @@ func (s *snapshot) Read(ctx context.Context, snapshotID string, table domain.Tab
 		return fmt.Errorf("table %s has no columns to read: %w", qualifiedTableName(table), database.ErrSnapshot)
 	}
 
+	whereParser.columnQualifier = "snapshot_row"
+	whereParser.tableQualifiers = map[string]bool{string(table.Name): true}
+	for _, leaf := range layout.leaves {
+		whereParser.tableQualifiers[string(leaf.table.Name)] = true
+	}
+	if condition != "true" {
+		condition, err = whereParser.Parse(where)
+		if err != nil {
+			return fmt.Errorf("parse where: %w", errors.Join(err, database.ErrInvalidWhere))
+		}
+	}
+
 	names := make([]string, len(layout.columns))
 	for i, column := range layout.columns {
-		names[i] = quoteIdentifier(column.name)
+		names[i] = "snapshot_row." + quoteIdentifier(column.name)
 	}
 	selectList := strings.Join(names, ", ")
 
-	parser := newSnapshotExportParser(layout.columns, pgtype.NewMap(), func(record domain.DbRecord) error {
+	typeMap := pgtype.NewMap()
+	observeRow := func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
 		start := time.Now()
-		if err := onRow(record); err != nil {
+		if err := onRow(record, metadata); err != nil {
 			return err
 		}
 
 		s.metrics.observeRow(domain.OperationTypeInsert, table, time.Since(start))
 
 		return nil
-	})
+	}
 
 	for _, leaf := range layout.leaves {
+		parser := newSnapshotExportParser(leaf.table, layout.columns, typeMap, observeRow)
 		for _, rng := range s.snapshotRanges(leaf.pages) {
 			// A raw session: a transparent reconnect would replay a chunk whose rows
 			// were already delivered, so a dead session ends the read instead.
@@ -206,7 +218,7 @@ func (s *snapshot) Read(ctx context.Context, snapshotID string, table domain.Tab
 			}
 
 			sql := fmt.Sprintf(snapshotReadSql, quoteLiteral(snapshotID), selectList, qualifiedTableName(leaf.table), rng+"("+condition+")")
-			logger.Info("Reading snapshot chunk", "schema", leaf.table.Schema, "table", leaf.table.Name, "sql", sql)
+			logger.Info("Reading snapshot chunk", "schema", leaf.table.Schema, "table", leaf.table.Name)
 
 			if _, err := session.CopyTo(ctx, parser, sql); err != nil {
 				return fmt.Errorf("read %s: %w", qualifiedTableName(leaf.table), errors.Join(err, database.ErrSnapshot))
@@ -327,10 +339,10 @@ func (s *snapshot) snapshotRanges(pages uint64) []string {
 
 		var rng strings.Builder
 		if from > 0 {
-			rng.WriteString("ctid >= '(" + strconv.FormatUint(from, 10) + ",0)'::tid AND ")
+			rng.WriteString("snapshot_row.ctid >= '(" + strconv.FormatUint(from, 10) + ",0)'::tid AND ")
 		}
 		if to < pages {
-			rng.WriteString("ctid < '(" + strconv.FormatUint(to, 10) + ",0)'::tid AND ")
+			rng.WriteString("snapshot_row.ctid < '(" + strconv.FormatUint(to, 10) + ",0)'::tid AND ")
 		}
 
 		ranges = append(ranges, rng.String())

@@ -83,9 +83,11 @@ type snapshotWhereLexer struct {
 
 // snapshotWhereParser is a recursive descent parser over the tokens of one filter.
 type snapshotWhereParser struct {
-	tokens []snapshotWhereToken
-	next   int
-	depth  int
+	tokens          []snapshotWhereToken
+	next            int
+	depth           int
+	columnQualifier string // columnQualifier rebases column references onto the snapshot source alias when set.
+	tableQualifiers map[string]bool
 }
 
 // newSnapshotWhereLexer returns a lexer at the start of where.
@@ -662,10 +664,14 @@ func (p *snapshotWhereParser) parseList() (string, error) {
 
 // parseColumn parses a column reference, optionally qualified by its table.
 func (p *snapshotWhereParser) parseColumn() (string, error) {
-	column := quoteIdentifier(p.peek().text)
+	qualifier := p.peek().text
+	column := quoteIdentifier(qualifier)
 	p.next++
 
 	if !p.acceptSymbol(".") {
+		if p.columnQualifier != "" {
+			return quoteIdentifier(p.columnQualifier) + "." + column, nil
+		}
 		return column, nil
 	}
 
@@ -675,6 +681,9 @@ func (p *snapshotWhereParser) parseColumn() (string, error) {
 	}
 	p.next++
 
+	if p.columnQualifier != "" && p.tableQualifiers[qualifier] {
+		column = quoteIdentifier(p.columnQualifier)
+	}
 	return column + "." + quoteIdentifier(t.text), nil
 }
 

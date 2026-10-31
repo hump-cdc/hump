@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"hump/internal/domain"
+	"hump/internal/port/database"
 )
 
 // BenchmarkStartReceivesMessages measures the per-message cost of the receive
@@ -67,6 +68,7 @@ func (c *benchCounter) handle(
 	domain.TableSchema,
 	domain.TableName,
 	domain.Headers,
+	database.MessageMetadata,
 	domain.DbRecord,
 	domain.DbRecord,
 ) error {

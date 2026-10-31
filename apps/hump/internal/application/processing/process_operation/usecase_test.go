@@ -16,6 +16,7 @@ import (
 	cfgresilience "hump/config/resilience"
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
+	"hump/internal/port/database"
 	"hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	workerpool "hump/pkg/worker_pool"
@@ -37,13 +38,18 @@ func TestUseCaseProcessDeliversToAcceptingSinks(t *testing.T) {
 	)
 
 	err := NewController(uc).Process(context.Background(), time.Now(), domain.OperationTypeInsert,
-		"app", "public", "users", domain.Headers{"traceparent": "00-abc"}, nil, domain.DbRecord{"id": 1})
+		"app", "public", "users", domain.Headers{"traceparent": "00-abc"}, database.MessageMetadata{MessageID: "event-1", SnapshotID: "snapshot-1"}, nil, domain.DbRecord{"id": 1})
 	if err != nil {
 		t.Fatalf("Process() error = %v", err)
 	}
 
 	if got, want := sinks.delivered(), []string{"all", "inserts"}; !slices.Equal(got, want) {
 		t.Fatalf("delivered to %v, want %v", got, want)
+	}
+	for _, row := range sinks.contexts {
+		if row.MessageId != "event-1" || row.SnapshotID != "snapshot-1" {
+			t.Fatalf("identity not forwarded: %+v", row)
+		}
 	}
 }
 
@@ -226,17 +232,19 @@ func (d namedDefinition) Metadata(sink.Context) (string, string) {
 // recordingSinks records the name of every definition it delivers to and fails
 // each delivery with err.
 type recordingSinks struct {
-	err   error
-	mu    sync.Mutex
-	names []string
+	err      error
+	mu       sync.Mutex
+	names    []string
+	contexts []sink.Context
 }
 
 // Process implements [sink.Sink].
-func (s *recordingSinks) Process(_ context.Context, definition sink.Definition, _ *sink.Context, _ *sink.Capture) error {
+func (s *recordingSinks) Process(_ context.Context, definition sink.Definition, row *sink.Context, _ *sink.Capture) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.names = append(s.names, definition.DisplayName())
+	s.contexts = append(s.contexts, *row)
 
 	return s.err
 }
@@ -276,7 +284,7 @@ func newSinkConfig(name string, ops ...domain.OperationType) sinkcfg.Config {
 
 // process delivers an insert of one row of public.table.
 func process(ctx context.Context, uc *UseCase, table domain.TableName) error {
-	return uc.Process(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", table, nil, nil, domain.DbRecord{"id": 1})
+	return uc.Process(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", table, nil, database.MessageMetadata{}, nil, domain.DbRecord{"id": 1})
 }
 
 // awaitErrorsDrained waits until the use case's logging goroutine has taken
@@ -326,6 +334,7 @@ func processLogProbe(t *testing.T, outcome string) {
 	}
 	err := uc.Process(ctx, time.Now(), domain.OperationTypeUpdate, "source", "public", "users",
 		domain.Headers{"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+		database.MessageMetadata{},
 		domain.DbRecord{"secret": "sentinel-old-row"}, domain.DbRecord{"secret": "sentinel-new-row"})
 	if (err != nil) != (outcome != "success") {
 		t.Fatalf("%s: error = %v", outcome, err)

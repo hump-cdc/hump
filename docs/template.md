@@ -18,7 +18,8 @@ This document covers:
 ## Where templates run
 
 Every string field in the sink config that documents "text/template" support is
-parsed at config-load time and rendered on every WAL event. This includes:
+parsed at config-load time and rendered on every WAL or snapshot event. This
+includes:
 
 - `kafka.connection`, `kafka.topic`, `kafka.partitionKey`, `kafka.payload`
 - `http.url`, `http.method`, `http.body`, each value in `http.headers`
@@ -29,15 +30,18 @@ Otherwise it is parsed once and re-rendered per event with the row data.
 
 ## Render data context
 
-Each render receives a `*sinks.Context` value as the dot (`.`):
+Each render receives a `*sink.Context` value as the dot (`.`):
 
-| Field        | Type             | When populated                                  |
-| ------------ | ---------------- | ----------------------------------------------- |
-| `.Schema`    | `string`         | always                                          |
-| `.Table`     | `string`         | always                                          |
-| `.Operation` | `string`         | one of `insert`, `update`, `delete`, `truncate` |
-| `.Prev`      | `map[string]any` | `update`, `delete`                              |
-| `.Next`      | `map[string]any` | `insert`, `update`                              |
+| Field         | Type             | When populated                                                   |
+| ------------- | ---------------- | ---------------------------------------------------------------- |
+| `.Schema`     | `string`         | always                                                           |
+| `.Table`      | `string`         | always                                                           |
+| `.Operation`  | `string`         | one of `insert`, `update`, `delete`, `truncate`                    |
+| `.Timestamp`  | `time.Time`      | WAL transaction commit time; per-row processing time for snapshots |
+| `.MessageId`  | `string`         | source event identity; see below                                 |
+| `.SnapshotID` | `string`         | exported snapshot ID for snapshot rows; empty for WAL events      |
+| `.Prev`       | `map[string]any` | `update`, `delete`                                               |
+| `.Next`       | `map[string]any` | `insert`, `update`                                               |
 
 Column values live under `.Prev` / `.Next`, keyed by column name:
 
@@ -80,6 +84,33 @@ JSON has no spelling for infinite or not-a-number values, so `json` writes them 
 latter as `null` too). Printed directly, `{{ .Next.col }}` still shows `NaN`,
 `+Inf`, `infinity` and so on. A `numeric` `NaN` or `±Infinity` is written as the
 JSON string `"NaN"`, `"Infinity"` or `"-Infinity"`.
+
+### Message identity and snapshots
+
+For WAL events, `.Timestamp` is the transaction commit time from the replication
+`Begin` message. `.MessageId` is a SHA-256 hash of an unambiguous encoding of a
+WAL marker, database, schema, table, commit LSN and the change-message ordinal
+within the transaction. The ordinal counts change messages before filtering;
+protocol control messages do not count. A truncate message affecting several
+tables uses the same ordinal for each, but the table names distinguish the IDs.
+Replaying the same event preserves its ID within one source and one WAL history;
+the ID is not globally unique across independent sources or WAL histories.
+
+Snapshot rows use `.Operation = "insert"` (`"op": "c"` in the default payload).
+Their `.Timestamp` is the current time when each row is processed, not the
+snapshot creation time. `.SnapshotID` contains the exported PostgreSQL snapshot
+ID. Snapshot `.MessageId` hashes an unambiguous encoding of a snapshot marker,
+database, configured schema and table, snapshot ID, physical leaf schema and
+table, and row `ctid`. The physical row metadata is not added to `.Prev` or
+`.Next`. A new snapshot produces new message IDs even for unchanged rows;
+these IDs do not deduplicate rows across snapshot runs.
+
+The default payload is unchanged. To add a snapshot flag, use a custom payload:
+
+```yaml
+payload: |
+  {{ dict "snapshot" (ne .SnapshotID "") "after" .Next | json false }}
+```
 
 ## Static vs. dynamic strings
 
@@ -462,9 +493,23 @@ partitionKey: '{{ required "id is required" .Next.id }}'
 
 ### Idempotency key
 
+The default key template is:
+
+```text
+{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}
+```
+
+It supplies `X-Idempotency-Key` headers, RabbitMQ `messageId` and JetStream
+`msgId`. Custom templates are unchanged. The key includes the row representation,
+so changes to `.Prev` / `.Next` or their JSON encoding can change the key even
+when `.MessageId` is the same. This replaces the previous timestamp-based
+default and changes existing keys; stored old keys will not match new ones.
+
+To set the same template explicitly:
+
 ```yaml
 headers:
-  Idempotency-Key: '{{ printf "%s/%s/%v/%s" .Schema .Table .Next.id .Operation | sha256 }}'
+  X-Idempotency-Key: '{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}'
 ```
 
 ## Reference

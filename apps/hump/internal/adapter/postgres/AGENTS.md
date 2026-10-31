@@ -131,6 +131,9 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   the query) — their rows live in `compress_hyper_*` and are deliberately not read.
 - **Columns** come from the parent's `pg_attribute` (generated columns excluded, matching pgoutput)
   and are listed explicitly in the `SELECT`, since a leaf's physical attribute order may differ.
+  COPY adds only the tuple's `ctid` as leading positional metadata. The parser receives the physical
+  leaf's schema and table from the snapshot layout (`leaf.table`), without per-row catalog lookups,
+  and returns them with the `ctid` as `database.SnapshotRowMetadata`, outside the user's `DbRecord`.
 - **Reads.** Every chunk is one simple-protocol message — `BEGIN; SET TRANSACTION SNAPSHOT; COPY
   (SELECT … FROM ONLY leaf WHERE ctid range AND (filter)) TO STDOUT; COMMIT` — on a raw session, so
   a reconnect never silently replays a chunk. `COPY` takes no bind parameters, so the snapshot id
@@ -146,6 +149,11 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
 - pgoutput runs with `proto_version '2'`, streaming **off**, so only committed transactions
   arrive, in commit order. A chunk's catalog rows are therefore visible by the time the INSERT
   that created it is decoded — which is what makes the parent lookup safe.
+- WAL timestamps come from `Begin.CommitTime`. Message ids are deterministic SHA-256 hashes of
+  length-prefixed components: WAL source, database, configured schema/table, `Begin.FinalLSN`
+  and change ordinal. Count INSERT, UPDATE, DELETE and TRUNCATE messages before table filtering;
+  reset transaction identity and the ordinal at transaction and session boundaries. WAL metadata
+  has an empty `SnapshotID`.
 - **The confirmed position moves on two events only**: a Commit sets it to the transaction's
   `TransactionEndLSN`, and a keepalive *outside* a transaction sets it to `ServerWALEnd`, which
   releases the WAL pgoutput skipped (unpublished tables, internal records). Row messages never

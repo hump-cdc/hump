@@ -12,13 +12,15 @@ places adding a sink type touches are in `adapter/sink/AGENTS.md`.
 
 ## `Context` is user-facing
 
-Its exported fields are what a template sees as `.Version`, `.Timestamp`, `.Operation`,
-`.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next` — documented in the repo-root
+Its exported fields are what a template sees as `.Version`, `.Timestamp`, `.MessageId`,
+`.SnapshotID`, `.Operation`, `.Database`, `.Schema`, `.Table`, `.Headers`, `.Prev`, `.Next` — documented in the repo-root
 `docs/template.md`. Renaming or removing a field breaks users' config files. `Version` is the
 build version (`version.Version`), set by `process_operation`.
 
-It mirrors the parameters of `port/database.ProcessMessageHandler`; a field added to one
-belongs in the other.
+`process_operation` copies `MessageMetadata.MessageID` to `MessageId` (exact casing) and
+`MessageMetadata.SnapshotID` to `SnapshotID`. `SnapshotID` is empty for WAL changes and holds
+the exported database snapshot id for snapshot rows. `Timestamp` is the transaction's
+`Begin.CommitTime` for WAL, and `time.Now()` per row for snapshots.
 
 ## `Definition.Metadata` is called with a partial context
 

@@ -9,6 +9,7 @@ import (
 
 	"hump/config"
 	"hump/internal/domain"
+	"hump/internal/port/database"
 	metricscollector "hump/internal/port/metrics_collector"
 	operationscollector "hump/internal/port/operations_collector"
 	"hump/internal/port/sink"
@@ -124,6 +125,7 @@ func (uc *UseCase) Process(
 	table domain.TableName,
 
 	headers domain.Headers,
+	metadata database.MessageMetadata,
 	prev domain.DbRecord,
 	next domain.DbRecord,
 ) error {
@@ -135,7 +137,9 @@ func (uc *UseCase) Process(
 	)
 
 	operationContext := &sink.Context{
-		Version: version.Version,
+		Version:    version.Version,
+		MessageId:  metadata.MessageID,
+		SnapshotID: metadata.SnapshotID,
 
 		Timestamp: timestamp,
 		Operation: operation,

@@ -203,6 +203,9 @@ Embedded from `sink/templ/`; a default is applied through `template.New` with th
 | `rabbitmq_exchange.tmpl` | `hump.{{ .Schema }}` |
 | `rabbitmq_stream_name.tmpl` | `hump.{{ .Schema }}.{{ .Table }}` |
 
+`idempotency_header.tmpl` uses `.MessageId` instead of `.Timestamp`. The default payload is
+unchanged; message identity and snapshot metadata are available to custom templates.
+
 The files are embedded byte for byte: a trailing newline in a `.tmpl` becomes part of every
 topic name or header value.
 

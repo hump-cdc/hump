@@ -42,6 +42,37 @@ func TestDefaultTemplatesWriteNonFiniteFloatsAsNull(t *testing.T) {
 	}
 }
 
+func TestEventIdentityTemplates(t *testing.T) {
+	ctx := &sinkport.Context{Schema: "public", Table: "users", Operation: domain.OperationTypeInsert, MessageId: "event-1", SnapshotID: "snapshot-1", Next: domain.DbRecord{"id": 1}}
+	fields := mustTemplate(t, "{{ .MessageId }}:{{ .SnapshotID }}")
+	if got, err := fields.Render(ctx); err != nil || got != "event-1:snapshot-1" {
+		t.Fatalf("identity fields = %q, %v", got, err)
+	}
+	if DefaultIdempotencyKey != "{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}" {
+		t.Fatalf("default identity template = %q", DefaultIdempotencyKey)
+	}
+	tmpl := mustTemplate(t, DefaultIdempotencyKey)
+	first, err := tmpl.Render(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.Timestamp = time.Now()
+	if got, err := tmpl.Render(ctx); err != nil || got != first {
+		t.Fatalf("changed timestamp changed key: %q, %v", got, err)
+	}
+	ctx.MessageId = "event-2"
+	if got, err := tmpl.Render(ctx); err != nil || got == first {
+		t.Fatalf("changed event did not change key: %q, %v", got, err)
+	}
+	payload, err := mustTemplate(t, DefaultPayload).Render(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, "event-2") || strings.Contains(payload, "snapshot-1") {
+		t.Fatalf("identity metadata leaked into payload: %s", payload)
+	}
+}
+
 func FuzzDefaultPayload(f *testing.F) {
 	f.Add("public", "users", "name", "alice", int64(7), 1.5, true, uint8(0), int64(1700000000000000000))
 	f.Add("", "", "", "", int64(0), 0.0, false, uint8(1), int64(0))

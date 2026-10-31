@@ -16,6 +16,11 @@ what lets the caller advance its position on a nil.
 - **Snapshot** — `adapter/snapshot` receives it as a func value and calls it once per row with
   `insert`, `prev` nil and empty headers, on the run's own cancellable context.
 
+Both callers pass `database.MessageMetadata` after headers and before `prev`/`next`.
+`Process` copies `MessageID` into `sink.Context.MessageId` and `SnapshotID` into
+`sink.Context.SnapshotID`; it does not generate either value. All sinks and retries for a row
+share that identity. `SnapshotID` is empty for WAL, or the exported snapshot id for snapshot rows.
+
 `pkg/worker_pool`'s batch API is single-goroutine only. `Process` returns the error of
 `BeginBatch` wrapped as `begin batch: …`, so a second concurrent caller fails with
 `ErrAlreadyInFlight` and delivers nothing; it is not queued behind the first. Keeping callers from

@@ -1,1 +1,1 @@
-{{ sha256 (cat .Schema .Table .Operation .Timestamp (.Prev | json) (.Next | json)) }}
+{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}

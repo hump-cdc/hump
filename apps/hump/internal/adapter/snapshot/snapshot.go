@@ -20,6 +20,7 @@ import (
 	"hump/internal/port/sink"
 	port "hump/internal/port/snapshot"
 	"hump/pkg/app/shutdown"
+	"hump/pkg/messageid"
 )
 
 const (
@@ -286,9 +287,13 @@ func (r *Runner) readTableSnapshot(ctx context.Context, snapshotID string, i int
 
 	dbName := domain.DbName(r.db.GetDbName())
 
-	err := r.db.ReadSnapshot(ctx, snapshotID, request.Table, request.Where, func(record domain.DbRecord) error {
+	err := r.db.ReadSnapshot(ctx, snapshotID, request.Table, request.Where, func(record domain.DbRecord, row database.SnapshotRowMetadata) error {
+		metadata := database.MessageMetadata{
+			MessageID:  messageid.Hash("snapshot", string(dbName), string(request.Table.Schema), string(request.Table.Name), snapshotID, string(row.Schema), string(row.Table), row.CTID),
+			SnapshotID: snapshotID,
+		}
 		r.processMu.Lock()
-		err := r.process(ctx, time.Now(), domain.OperationTypeInsert, dbName, request.Table.Schema, request.Table.Name, domain.Headers{}, nil, record)
+		err := r.process(ctx, time.Now(), domain.OperationTypeInsert, dbName, request.Table.Schema, request.Table.Name, domain.Headers{}, metadata, nil, record)
 		r.processMu.Unlock()
 		if err != nil {
 			return err

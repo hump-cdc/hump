@@ -1,7 +1,8 @@
 # pkg/observability — how this package hangs together
 
-Three independent packages and no code at this level: logging (`log`), health probes (`health`) and
-the Prometheus registry (`metric`). `cmd/hump/main.go` builds the health and metric objects once and
+Four independent packages and no code at this level: logging (`log`), safe diagnostic values
+(`diagnostic`), health probes (`health`) and the Prometheus registry (`metric`).
+`cmd/hump/main.go` builds the health and metric objects once and
 hands them to the adapters. `domain`, the ports, `config` and the `hump_tower` use cases do not
 import `log`.
 
@@ -12,6 +13,18 @@ that `/metrics` serves the result. `log` covers `Scope`, `WithScope` and `WithTr
 `init` reads the environment only once per process, so `TestInitHonoursEnvironment` starts the
 test binary again as a child with `LOG_FORMAT=json LOG_VERBOSE=true` and checks for a JSON Debug
 line. It passes `-test.gocoverdir` through to the child, so the child's coverage is counted.
+`diagnostic` tests endpoint filtering, NATS server lists and error cause preservation.
+
+## diagnostic
+
+`Endpoint` returns only an allowed scheme, host and optional port, without userinfo, path,
+query or fragment. Invalid, unsupported or unresolved template inputs fail closed to
+`[redacted endpoint]`. `Endpoints` applies it to each comma-separated NATS server.
+
+`Error(message, cause)` exposes only the caller-supplied message and preserves the cause through
+`Unwrap`, `errors.Is` and `errors.As`; a nil cause returns nil. Supply safe text: this is not an
+arbitrary-text scrubber. Use these helpers only for diagnostics, never for connection values,
+cache keys or capture data.
 
 ## log
 

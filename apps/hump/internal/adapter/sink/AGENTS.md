@@ -58,6 +58,18 @@ a case in `sink.go`, and the subpackage above.
 `Definition.Metadata` renders the `(host, target)` pair that becomes the Prometheus labels;
 its contract is in `port/sink/AGENTS.md`.
 
+## Diagnostics
+
+HTTP request build, render and transport errors use controlled messages; status errors include
+only the status code and a `diagnostic.Endpoint` label. NATS, RabbitMQ and RabbitMQ Streams
+wrap delivery and lifecycle errors with `diagnostic.Error`, retaining causes for classification
+without formatting their text. Their lifecycle logs and shutdown hook names use safe endpoint
+labels (`Endpoints` for NATS server lists), not raw URLs.
+
+`rabbitmq_stream/logger.go` installs a dependency logger that emits controlled events at the
+original Info, Error, Debug or Warn level; it never formats the client's free-form text or
+arguments. These rules do not change connection values, cache keys, captures, payloads or headers.
+
 ## `ErrSinkPermanent` is a marker nobody reads yet
 
 Every `wrapError` joins `sink.ErrSinkPermanent` onto errors it judges non-retriable, and the
@@ -132,7 +144,8 @@ being cached as a permanent failure. The differences:
 None of these tests needs a real broker, and none adds a test dependency (no kfake, nats-server
 or testcontainers):
 
-- **HTTP** runs against `httptest.NewServer`.
+- **HTTP** runs against `httptest.NewServer`; `http/http_test.go` also checks safe error
+  serialization at Info and Debug levels and preserved error causes.
 - **NATS, RabbitMQ, RabbitMQ Streams** each have a `fake_server_test.go`: a small loopback
   server that speaks just enough of the wire protocol for the real client library. It is
   stdlib-only, except that the RabbitMQ fake takes reply codes from `amqp091-go`. In the two
@@ -142,8 +155,12 @@ or testcontainers):
 - **Kafka** uses a cached client that is already closed (produce fails with
   `kgo.ErrClientClosed`) and a seed on a closed local port (produce runs into the deadline). A
   successful produce is not tested, because that needs a broker.
-- `shutdown.Shutdown` runs only once per process (`sync.Once` in the global registry), so each
-  package calls it in one dedicated test.
+- `shutdown.Shutdown` runs only once per process (`sync.Once` in the global registry). The NATS,
+  RabbitMQ and RabbitMQ Streams shutdown tests run in Info/Debug child processes to isolate
+  logger initialization and the registry, forwarding `-test.gocoverdir` when set. They check
+  lifecycle/shutdown output for secret sentinels in `nats/nats_test.go`,
+  `rabbitmq/rabbitmq_test.go` and `rabbitmq_stream/rabbitmq_stream_test.go`; Streams also checks
+  dependency logger levels. Kafka keeps one dedicated shutdown test.
 - `sink_test.go` covers the dispatch over definition types.
 
 `rabbitmq/returns_test.go` builds a `rabbitConn` with hand-made confirm/return channels to test

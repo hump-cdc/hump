@@ -56,15 +56,16 @@ type fakeServer struct {
 	t  *testing.T
 	ln net.Listener
 
-	mu        sync.Mutex
-	conns     []net.Conn
-	metadata  func(stream string) uint16 // metadata returns the response code for stream.
-	create    func(stream string) uint16 // create returns the response code of a create.
-	publish   func() publishOutcome      // publish decides the answer to each publish.
-	delay     time.Duration              // delay holds every create back.
-	creates   []string                   // creates lists the created streams in order.
-	published []string                   // published lists the message bodies received.
-	declared  int                        // declared counts publisher declarations.
+	mu         sync.Mutex
+	conns      []net.Conn
+	metadata   func(stream string) uint16 // metadata returns the response code for stream.
+	create     func(stream string) uint16 // create returns the response code of a create.
+	publish    func() publishOutcome      // publish decides the answer to each publish.
+	delay      time.Duration              // delay holds every create back.
+	creates    []string                   // creates lists the created streams in order.
+	published  []string                   // published lists the message bodies received.
+	declared   int                        // declared counts publisher declarations.
+	handshakes []string
 }
 
 // newFakeServer starts a fakeServer on a loopback port where every stream
@@ -167,9 +168,11 @@ func (s *fakeServer) serve(conn net.Conn) {
 		case keySaslHandshake:
 			w.respond(key, body, codeOK, u32(1), str("PLAIN"))
 		case keySaslAuthenticate:
+			s.set(func(s *fakeServer) { s.handshakes = append(s.handshakes, string(body)) })
 			w.respond(key, body, codeOK)
 			w.frame(u16(keyTune), u16(1), u32(1048576), u32(0))
 		case keyOpen:
+			s.set(func(s *fakeServer) { s.handshakes = append(s.handshakes, string(body)) })
 			w.respond(key, body, codeOK, u32(2), str("advertised_host"), str(host), str("advertised_port"), str(port))
 		case keyMetadata:
 			s.handleMetadata(w, body, host, portNum)

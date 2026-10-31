@@ -3,14 +3,19 @@ package rabbitmq_stream
 import (
 	"context"
 	"errors"
+	"flag"
 	"net"
+	"os"
+	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
+	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/logs"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
 	sinkcfg "hump/config/sink"
@@ -286,11 +291,41 @@ func TestEnsureSkipsDeclareOnCancelledContext(t *testing.T) {
 }
 
 func TestShutdownClosesProducersAndEnvironments(t *testing.T) {
+	if !runBrokerDiagnostics(t, "RabbitMQ stream client event", "RabbitMQ stream client error", "RabbitMQ stream client warning", "RabbitMQ stream environment established", "RabbitMQ stream producer created", "RabbitMQ stream producer closed", "rabbitmq_stream_sink_env(rabbitmq-stream://127.0.0.1:", "rabbitmq_stream_sink_producer(rabbitmq-stream://127.0.0.1:", "Service stopped") {
+		return
+	}
 	srv := newFakeServer(t)
-	cfg := streamSink(t, srv.url(), sinkcfg.RabbitMQStreamModePassive)
-	forgetURL(t, srv.url())
-
+	url := diagnosticURL(srv.ln.Addr().String())
+	logs.LogInfo(url+" %s", url)
+	logs.LogError(url+" %s", url)
+	logs.LogDebug(url+" %s", url)
+	logs.LogWarn(url+" %s", url)
+	cfg := streamSink(t, url, sinkcfg.RabbitMQStreamModePassive)
+	forgetURL(t, url)
+	capture := &sink.Capture{}
+	if err := Process(context.Background(), cfg, testContext(), capture); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	_, published, _ := srv.snapshot()
+	if capture.Target != "cdc-users" || string(capture.Payload) != "payload" || len(published) != 1 || !strings.Contains(published[0], "payload") {
+		t.Fatal("diagnostic redaction changed publish or capture")
+	}
+	srv.mu.Lock()
+	handshake := strings.Join(srv.handshakes, " ")
+	srv.mu.Unlock()
+	for _, value := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel"} {
+		if !strings.Contains(handshake, value) {
+			t.Fatalf("connection handshake did not preserve %s", value)
+		}
+	}
 	rp, err := getProducer(context.Background(), cfg, testContext(), "cdc-users")
+	if err != nil {
+		t.Fatalf("getProducer() error = %v", err)
+	}
+	_ = rp.prod.Close()
+	waitEvicted(t, producerKey{url: url, stream: "cdc-users"})
+
+	rp, err = getProducer(context.Background(), cfg, testContext(), "cdc-users")
 	if err != nil {
 		t.Fatalf("getProducer() error = %v", err)
 	}
@@ -301,7 +336,7 @@ func TestShutdownClosesProducersAndEnvironments(t *testing.T) {
 		t.Error("Send() after shutdown error = nil, want a closed producer")
 	}
 	envsMu.Lock()
-	_, cached := envs[envKey{url: srv.url()}]
+	_, cached := envs[envKey{url: url}]
 	envsMu.Unlock()
 	if cached {
 		t.Error("environment still cached after shutdown")
@@ -373,6 +408,53 @@ func TestJitter(t *testing.T) {
 	if got := jitter(time.Millisecond, 2*time.Millisecond); got < time.Millisecond || got > 2*time.Millisecond {
 		t.Errorf("jitter(1ms, 2ms) = %v, want within [1ms, 2ms]", got)
 	}
+}
+
+// runBrokerDiagnostics isolates logger initialization and the singleton shutdown registry.
+func runBrokerDiagnostics(t *testing.T, messages ...string) bool {
+	t.Helper()
+	if os.Getenv("HUMP_BROKER_DIAGNOSTIC_CHILD") == "1" {
+		return true
+	}
+	for _, level := range []string{"info", "debug"} {
+		t.Run(level, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			t.Cleanup(cancel)
+			args := []string{"-test.run=^TestShutdownClosesProducersAndEnvironments$"}
+			if dir := flag.Lookup("test.gocoverdir"); dir != nil && dir.Value.String() != "" {
+				args = append(args, "-test.gocoverdir="+dir.Value.String())
+			}
+			cmd := exec.CommandContext(ctx, os.Args[0], args...)
+			cmd.Env = append(os.Environ(), "HUMP_BROKER_DIAGNOSTIC_CHILD=1", "LOG_FORMAT=json", "LOG_VERBOSE="+strconv.FormatBool(level == "debug"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("diagnostic child: %v\n%s", err, out)
+			}
+			text := string(out)
+			for _, secret := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel", "diagnostic-query-sentinel"} {
+				if strings.Contains(text, secret) {
+					t.Errorf("log exposed %q:\n%s", secret, text)
+				}
+			}
+			for _, message := range messages {
+				if !strings.Contains(text, message) {
+					t.Errorf("log missing %q:\n%s", message, text)
+				}
+			}
+			if got := strings.Contains(text, `"level":"DEBUG"`); got != (level == "debug") {
+				t.Errorf("debug output = %v at %s level:\n%s", got, level, text)
+			}
+			if got := strings.Contains(text, "RabbitMQ stream client debug event"); got != (level == "debug") {
+				t.Errorf("dependency debug output = %v at %s level:\n%s", got, level, text)
+			}
+		})
+	}
+	return false
+}
+
+// diagnosticURL includes distinct sentinels for every private URL component.
+func diagnosticURL(addr string) string {
+	return "rabbitmq-stream://diagnostic-user-sentinel:diagnostic-password-sentinel@" + addr + "/diagnostic-vhost-sentinel?token=diagnostic-query-sentinel"
 }
 
 // testContext returns a row change on public.users.

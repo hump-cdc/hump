@@ -9,6 +9,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"hump/internal/port/sink"
+	"hump/pkg/observability/diagnostic"
 	"hump/pkg/template"
 )
 
@@ -26,6 +27,7 @@ var (
 // for non-retriable errors: template render failures (shared across sinks) and
 // the NATS-specific failures classified by isPermanentNatsError.
 func wrapError(err error) error {
+	err = diagnostic.Error("NATS delivery failed", err)
 	if errors.Is(err, template.ErrRender) || isPermanentNatsError(err) {
 		return fmt.Errorf("nats: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}

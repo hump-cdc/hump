@@ -131,7 +131,7 @@ func (uc *UseCase) Process(
 	logger := logger.WithTraceparent(traceparent)
 
 	logger.Debug("Processing",
-		"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
+		"operation", operation, "database", dbName, "schema", schema, "table", table,
 	)
 
 	operationContext := &sink.Context{
@@ -163,7 +163,7 @@ func (uc *UseCase) Process(
 
 		if err := uc.wp.Submit(ctx, binding.fn, operationContext); err != nil {
 			logger.Error("Failed to submit task to worker pool",
-				"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next, "errror", err,
+				"operation", operation, "database", dbName, "schema", schema, "table", table, "error", err,
 			)
 			submitErr = err
 		}
@@ -176,12 +176,12 @@ func (uc *UseCase) Process(
 
 	if err == nil {
 		logger.Debug("Processed",
-			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
+			"operation", operation, "database", dbName, "schema", schema, "table", table,
 		)
 	} else {
 		logger.Error("Failed to process",
-			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
-			"errror", err,
+			"operation", operation, "database", dbName, "schema", schema, "table", table,
+			"error", err,
 		)
 	}
 

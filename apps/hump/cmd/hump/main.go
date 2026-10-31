@@ -5,13 +5,10 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	cfg "hump/config"
-	sinkcfg "hump/config/sink"
 	liveStreamerAdapter "hump/internal/adapter/live_streamer"
 	metricsCollectorAdapter "hump/internal/adapter/metrics_collector"
 	operationsCollectorAdapter "hump/internal/adapter/operations_collector"
@@ -42,8 +39,6 @@ import (
 	"hump/pkg/observability/health"
 	"hump/pkg/observability/log"
 	"hump/pkg/observability/metric"
-
-	"github.com/goccy/go-yaml"
 )
 
 // logger is the process-level logger, with no area attribute.
@@ -123,16 +118,7 @@ func run() int {
 
 	// Application
 	if !opts.Cleanup {
-		cfgResult, _ := yaml.Marshal(&configuration)
-		logger.Debug(fmt.Sprintf("Configuration:\n%s\n", string(cfgResult)))
-
-		for _, t := range configuration.Tables {
-			logger.Debug("Configuration",
-				"schema", t.Schema,
-				"table", t.Name,
-				"sinks", formatSinks(t.Sinks),
-			)
-		}
+		logConfiguration(configuration)
 
 		// Run
 		if opts.TelemetryPort != nil {
@@ -195,13 +181,18 @@ func run() int {
 	return 0
 }
 
-// formatSinks joins the display names of sinks for the configuration log.
-func formatSinks(sinks []sinkcfg.Config) string {
-	parts := make([]string, 0, len(sinks))
-	for _, s := range sinks {
-		parts = append(parts, s.Sink.DisplayName())
+// logConfiguration logs only table identities and sink type counts.
+func logConfiguration(configuration cfg.Configuration) {
+	for _, table := range configuration.Tables {
+		counts := make(map[string]int)
+		for _, sc := range table.Sinks {
+			if sc.Sink != nil {
+				counts[string(sc.Sink.Type())]++
+			}
+		}
+		logger.Debug("Configuration", "schema", table.Schema, "table", table.Name,
+			"sink_count", len(table.Sinks), "sink_types", counts)
 	}
-	return strings.Join(parts, ", ")
 }
 
 // topology resolves every table-to-sink-target edge of configuration, rendering

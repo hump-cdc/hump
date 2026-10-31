@@ -55,6 +55,7 @@ type fakeServer struct {
 	rejected      int
 	declares      []string
 	published     []string
+	handshakes    []string
 }
 
 // newFakeServer starts a fakeServer on a loopback port that accepts every
@@ -180,8 +181,10 @@ func (s *fakeServer) serve(conn net.Conn) {
 
 		switch [2]uint16{class, method} {
 		case [2]uint16{classConnection, 11}: // start-ok
+			s.set(func(s *fakeServer) { s.handshakes = append(s.handshakes, string(args)) })
 			w.method(0, classConnection, 30, short(0), long(131072), short(0))
 		case [2]uint16{classConnection, 40}: // open
+			s.set(func(s *fakeServer) { s.handshakes = append(s.handshakes, string(args)) })
 			w.method(0, classConnection, 41, shortstr(""))
 		case [2]uint16{classConnection, 50}: // close
 			w.method(0, classConnection, 51)

@@ -12,6 +12,7 @@ import (
 	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
+	"hump/pkg/observability/diagnostic"
 )
 
 const (
@@ -40,12 +41,8 @@ type producerKey struct {
 	stream string
 }
 
-// rabbitProducer wraps a [stream.Producer] with the publish mutex used to
-// serialize sends and per-publish confirmation channel setup.
-//
-// The stream-go-client's NotifyPublishConfirmation replaces the producer's
-// single confirmation channel on every call, so calling it per publish is
-// only safe when callers hold publishMu — which awaitConfirm enforces.
+// rabbitProducer serializes sends and confirmation setup with publishMu.
+// NotifyPublishConfirmation replaces the channel on each call; awaitConfirm holds the mutex.
 type rabbitProducer struct {
 	prod      *stream.Producer
 	publishMu sync.Mutex
@@ -72,7 +69,7 @@ func getEnvironment(url string) (*envEntry, error) {
 
 	env, err := stream.NewEnvironment(stream.NewEnvironmentOptions().SetUri(url))
 	if err != nil {
-		return nil, fmt.Errorf("create stream environment: %w", err)
+		return nil, diagnostic.Error("create stream environment for "+diagnostic.Endpoint(url), err)
 	}
 
 	entry := &envEntry{
@@ -81,22 +78,20 @@ func getEnvironment(url string) (*envEntry, error) {
 	}
 	envs[envKey{url: url}] = entry
 
-	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_env(%s)", url), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_env(%s)", diagnostic.Endpoint(url)), func(_ context.Context) error {
 		envsMu.Lock()
 		delete(envs, envKey{url: url})
 		envsMu.Unlock()
-		return env.Close()
+		return diagnostic.Error("RabbitMQ stream environment close failed", env.Close())
 	})
 
-	logger.Info("RabbitMQ stream environment established", "url", url)
+	logger.Info("RabbitMQ stream environment established", "url", diagnostic.Endpoint(url))
 
 	return entry, nil
 }
 
-// getProducer returns a cached producer for (url, streamName). On first use
-// it runs the stream reconciler, creates the producer, and registers a
-// shutdown hook plus a close-watcher goroutine that evicts the cache entry
-// when the producer closes unexpectedly.
+// getProducer caches producers by (url, streamName), reconciling the stream on first use.
+// Shutdown and unexpected closure evict the producer from the cache.
 func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationContext *sink.Context, streamName string) (*rabbitProducer, error) {
 	url, err := cfg.URL.Render(operationContext)
 	if err != nil {
@@ -133,7 +128,7 @@ func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationC
 
 	streamProd, err := entry.env.NewProducer(streamName, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create producer for %s: %w", streamName, err)
+		return nil, diagnostic.Error("create stream producer for "+diagnostic.Endpoint(url), err)
 	}
 
 	rp := &rabbitProducer{prod: streamProd}
@@ -141,14 +136,14 @@ func getProducer(ctx context.Context, cfg sinkcfg.RabbitMQStreamSink, operationC
 
 	go watchProducerClose(key, streamProd)
 
-	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_producer(%s,%s)", url, streamName), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_stream_sink_producer(%s)", diagnostic.Endpoint(url)), func(_ context.Context) error {
 		producersMu.Lock()
 		delete(producers, key)
 		producersMu.Unlock()
-		return streamProd.Close()
+		return diagnostic.Error("RabbitMQ stream producer close failed", streamProd.Close())
 	})
 
-	logger.Info("RabbitMQ stream producer created", "url", url, "stream", streamName)
+	logger.Info("RabbitMQ stream producer created", "url", diagnostic.Endpoint(url), "stream", streamName)
 
 	return rp, nil
 }
@@ -162,7 +157,7 @@ func watchProducerClose(key producerKey, prod *stream.Producer) {
 	if !ok {
 		return
 	}
-	logger.Warn("RabbitMQ stream producer closed", "url", key.url, "stream", key.stream, "reason", ev.Reason, "err", ev.Err)
+	logger.Warn("RabbitMQ stream producer closed", "url", diagnostic.Endpoint(key.url), "stream", key.stream, "err", diagnostic.Error("RabbitMQ stream producer closed", ev.Err))
 
 	producersMu.Lock()
 	current, present := producers[key]

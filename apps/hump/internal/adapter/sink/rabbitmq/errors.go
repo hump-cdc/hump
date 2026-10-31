@@ -8,6 +8,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"hump/internal/port/sink"
+	"hump/pkg/observability/diagnostic"
 	"hump/pkg/template"
 )
 
@@ -47,6 +48,7 @@ func wrapError(err error) error {
 		return nil
 	}
 
+	err = diagnostic.Error("RabbitMQ delivery failed", err)
 	if errors.Is(err, template.ErrRender) || isPermanentRabbitError(err) {
 		return fmt.Errorf("rabbitmq: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}

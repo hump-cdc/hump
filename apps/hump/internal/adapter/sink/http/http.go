@@ -4,9 +4,10 @@ package http
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
+	"hump/pkg/observability/diagnostic"
 	"io"
 	nethttp "net/http"
 	"strconv"
@@ -14,10 +15,8 @@ import (
 
 var defaultClient = &nethttp.Client{}
 
-// Process delivers a single WAL operation to an HTTP sink by rendering the
-// configured URL, method, body, and headers from operationContext and issuing
-// the request with ctx. When capture is non-nil the request and the response
-// status are recorded on it for the operations log.
+// Process renders and delivers a WAL operation as an HTTP request bounded by ctx.
+// A non-nil capture records the request and response status for the operations log.
 func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sink.Context, capture *sink.Capture) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -25,16 +24,16 @@ func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sin
 
 	message, err := buildMessage(config, operationContext)
 	if err != nil {
-		return wrapError(err)
+		return wrapError(diagnostic.Error("render HTTP request failed", err))
 	}
 
 	req, err := nethttp.NewRequestWithContext(ctx, message.method, message.url, bytes.NewReader([]byte(message.body)))
 	if err != nil {
-		return wrapError(fmt.Errorf("build request for %s: %w: %w", message.url, errBuildRequest, err))
+		return wrapError(diagnostic.Error("build request for "+diagnostic.Endpoint(message.url), errors.Join(errBuildRequest, err)))
 	}
 
 	if err := fillHeaders(req, config, operationContext); err != nil {
-		return wrapError(err)
+		return wrapError(diagnostic.Error("render HTTP headers failed", err))
 	}
 
 	resp, err := defaultClient.Do(req)
@@ -53,7 +52,7 @@ func Process(ctx context.Context, config sinkcfg.HTTPSink, operationContext *sin
 	}
 
 	if err != nil {
-		return wrapError(fmt.Errorf("http request to %s: %w", message.url, err))
+		return wrapError(diagnostic.Error("http request to "+diagnostic.Endpoint(message.url), err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 

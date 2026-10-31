@@ -98,12 +98,35 @@ in an unchanged TOAST column (`'u'`) — the server's `ExtractReplicaIdentity` f
 arrives as `'t'` with the real value. Without FULL the old tuple is either absent or key-only
 (`'K'`), and a key-only tuple nulls out every column outside the replica identity. Those nulls
 are absences, not values, so `decodeRow` reports them — and any `'u'` it cannot resolve — as
-`domain.Unavailable` rather than `nil`. The distinction is invisible in a payload (the sentinel
-renders as `""`); only the `unavailable` template func exposes it.
+`domain.Unavailable` rather than `nil`. Direct rendering and JSON/YAML serialization emit
+`__hump_unavailable_value`. The `unavailable` template func detects the sentinel without
+confusing it with real text containing that marker. Legacy empty-value template semantics
+are unchanged; replica identity FULL behavior is unchanged too.
 
 `relation.Columns[i].Flags == 1` means "part of the effective replica identity", **not** "primary
 key": under FULL pgoutput sets it on every column. It only discriminates while
 `OldTupleType == 'K'`, which is the one place `decodeRow` reads it.
+
+## Column value decoding
+
+WAL and snapshot COPY fields share `decodeText`; keep their representations identical.
+Normalize supported SQL array elements through the same rules without changing the existing
+array shape. This is not a guarantee that arbitrary PostgreSQL custom types are normalized.
+
+- Decode `json`/`jsonb` with `json.Decoder.UseNumber`, retaining maps and slices and storing
+  numeric leaves as `json.Number`. Require a complete JSON value. JSON serialization preserves
+  numeric literals, but not object key order or duplicate keys.
+- Convert intervals to a JSON number with exact integer arithmetic:
+  `months * 2629800000000 + days * 86400000000 + microseconds`. The month convention is
+  Debezium's `365.25 / 12` days. Results may exceed `int64`; never round through `float64`.
+- Render finite `timestamp without time zone` as a calendar ISO string with no `Z` or offset,
+  up to six fractional digits and trailing zeros trimmed. Do not change `timestamptz` or
+  `date`. Temporal infinities keep their direct spelling and serialize as JSON/YAML `null`.
+
+These are hump value semantics, not a full Debezium value contract: JSON stays embedded,
+timezone-free timestamps stay strings, the unavailable marker is custom, and interval
+arithmetic does not reproduce Debezium's fixed-width limits or floating-point truncation.
+`docs/template.md` records the wire changes and migration limits.
 
 ## Snapshots
 
@@ -131,6 +154,9 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
   the query) — their rows live in `compress_hyper_*` and are deliberately not read.
 - **Columns** come from the parent's `pg_attribute` (generated columns excluded, matching pgoutput)
   and are listed explicitly in the `SELECT`, since a leaf's physical attribute order may differ.
+  COPY adds only the tuple's `ctid` as leading positional metadata. The parser receives the physical
+  leaf's schema and table from the snapshot layout (`leaf.table`), without per-row catalog lookups,
+  and returns them with the `ctid` as `database.SnapshotRowMetadata`, outside the user's `DbRecord`.
 - **Reads.** Every chunk is one simple-protocol message — `BEGIN; SET TRANSACTION SNAPSHOT; COPY
   (SELECT … FROM ONLY leaf WHERE ctid range AND (filter)) TO STDOUT; COMMIT` — on a raw session, so
   a reconnect never silently replays a chunk. `COPY` takes no bind parameters, so the snapshot id
@@ -146,6 +172,11 @@ key": under FULL pgoutput sets it on every column. It only discriminates while
 - pgoutput runs with `proto_version '2'`, streaming **off**, so only committed transactions
   arrive, in commit order. A chunk's catalog rows are therefore visible by the time the INSERT
   that created it is decoded — which is what makes the parent lookup safe.
+- WAL timestamps come from `Begin.CommitTime`. Message ids are deterministic SHA-256 hashes of
+  length-prefixed components: WAL source, database, configured schema/table, `Begin.FinalLSN`
+  and change ordinal. Count INSERT, UPDATE, DELETE and TRUNCATE messages before table filtering;
+  reset transaction identity and the ordinal at transaction and session boundaries. WAL metadata
+  has an empty `SnapshotID`.
 - **The confirmed position moves on two events only**: a Commit sets it to the transaction's
   `TransactionEndLSN`, and a keepalive *outside* a transaction sets it to `ServerWALEnd`, which
   releases the WAL pgoutput skipped (unpublished tables, internal records). Row messages never

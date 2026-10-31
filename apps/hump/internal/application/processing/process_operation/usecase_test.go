@@ -2,8 +2,12 @@ package process_operation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +16,7 @@ import (
 	cfgresilience "hump/config/resilience"
 	sinkcfg "hump/config/sink"
 	"hump/internal/domain"
+	"hump/internal/port/database"
 	"hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
 	workerpool "hump/pkg/worker_pool"
@@ -33,13 +38,18 @@ func TestUseCaseProcessDeliversToAcceptingSinks(t *testing.T) {
 	)
 
 	err := NewController(uc).Process(context.Background(), time.Now(), domain.OperationTypeInsert,
-		"app", "public", "users", domain.Headers{"traceparent": "00-abc"}, nil, domain.DbRecord{"id": 1})
+		"app", "public", "users", domain.Headers{"traceparent": "00-abc"}, database.MessageMetadata{MessageID: "event-1", SnapshotID: "snapshot-1"}, nil, domain.DbRecord{"id": 1})
 	if err != nil {
 		t.Fatalf("Process() error = %v", err)
 	}
 
 	if got, want := sinks.delivered(), []string{"all", "inserts"}; !slices.Equal(got, want) {
 		t.Fatalf("delivered to %v, want %v", got, want)
+	}
+	for _, row := range sinks.contexts {
+		if row.MessageId != "event-1" || row.SnapshotID != "snapshot-1" {
+			t.Fatalf("identity not forwarded: %+v", row)
+		}
 	}
 }
 
@@ -141,6 +151,69 @@ func TestNewUseCaseWithoutSinks(t *testing.T) {
 	}
 }
 
+func TestProcessLogsExcludeRowContents(t *testing.T) {
+	if os.Getenv("HUMP_PROCESS_LOG_CHILD") == "1" {
+		for _, outcome := range []string{"success", "failure", "cancelled"} {
+			processLogProbe(t, outcome)
+		}
+		return
+	}
+
+	for _, verbose := range []string{"false", "true"} {
+		t.Run("verbose="+verbose, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestProcessLogsExcludeRowContents$")
+			cmd.Env = append(os.Environ(), "HUMP_PROCESS_LOG_CHILD=1", "LOG_FORMAT=json", "LOG_VERBOSE="+verbose)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("child: %v\n%s", err, out)
+			}
+			for _, forbidden := range []string{"sentinel-old-row", "sentinel-new-row", `"prev":`, `"next":`, "errror"} {
+				if strings.Contains(string(out), forbidden) {
+					t.Errorf("logs contain %q: %s", forbidden, out)
+				}
+			}
+
+			messages := map[string]int{}
+			for _, line := range strings.Split(string(out), "\n") {
+				if !strings.HasPrefix(line, "{") {
+					continue
+				}
+				var record map[string]any
+				if err := json.Unmarshal([]byte(line), &record); err != nil {
+					t.Fatal(err)
+				}
+				messages[record["msg"].(string)]++
+				for key, want := range map[string]string{
+					"operation": "update", "database": "source", "schema": "public", "table": "users",
+					"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "span_id": "00f067aa0ba902b7",
+				} {
+					if record[key] != want {
+						t.Errorf("%s = %v, want %q", key, record[key], want)
+					}
+				}
+				if strings.Count(line, `"operation":`) != 1 {
+					t.Errorf("duplicate operation key: %s", line)
+				}
+				if record["level"] == "ERROR" && record["error"] == nil {
+					t.Errorf("error missing: %s", line)
+				}
+			}
+			for _, message := range []string{"Failed to process", "Failed to submit task to worker pool"} {
+				if messages[message] != 1 {
+					t.Errorf("%q count = %d, want 1", message, messages[message])
+				}
+			}
+			wantProcessing, wantProcessed := 0, 0
+			if verbose == "true" {
+				wantProcessing, wantProcessed = 3, 1
+			}
+			if messages["Processing"] != wantProcessing || messages["Processed"] != wantProcessed {
+				t.Errorf("debug messages = %v", messages)
+			}
+		})
+	}
+}
+
 // tables is a [Configuration] over a fixed list of tables.
 type tables []config.Table
 
@@ -159,17 +232,19 @@ func (d namedDefinition) Metadata(sink.Context) (string, string) {
 // recordingSinks records the name of every definition it delivers to and fails
 // each delivery with err.
 type recordingSinks struct {
-	err   error
-	mu    sync.Mutex
-	names []string
+	err      error
+	mu       sync.Mutex
+	names    []string
+	contexts []sink.Context
 }
 
 // Process implements [sink.Sink].
-func (s *recordingSinks) Process(_ context.Context, definition sink.Definition, _ *sink.Context, _ *sink.Capture) error {
+func (s *recordingSinks) Process(_ context.Context, definition sink.Definition, row *sink.Context, _ *sink.Capture) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.names = append(s.names, definition.DisplayName())
+	s.contexts = append(s.contexts, *row)
 
 	return s.err
 }
@@ -209,7 +284,7 @@ func newSinkConfig(name string, ops ...domain.OperationType) sinkcfg.Config {
 
 // process delivers an insert of one row of public.table.
 func process(ctx context.Context, uc *UseCase, table domain.TableName) error {
-	return uc.Process(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", table, nil, nil, domain.DbRecord{"id": 1})
+	return uc.Process(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", table, nil, database.MessageMetadata{}, nil, domain.DbRecord{"id": 1})
 }
 
 // awaitErrorsDrained waits until the use case's logging goroutine has taken
@@ -223,5 +298,45 @@ func awaitErrorsDrained(t *testing.T, uc *UseCase) {
 			t.Fatal("worker errors were not drained")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// processLogProbe exercises the real batch and logging paths without sink adapters.
+func processLogProbe(t *testing.T, outcome string) {
+	t.Helper()
+	wp := workerpool.New[*sink.Context](workerpool.WithWorkers(1), workerpool.WithQueueSize(1))
+	defer func() {
+		if err := wp.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	}()
+	uc := &UseCase{
+		wp: wp,
+		bindings: map[domain.TableIdentifier][]*binding{
+			{Schema: "public", Name: "users"}: {{
+				operations: map[domain.OperationType]struct{}{domain.OperationTypeUpdate: {}},
+				fn: func(_ context.Context, row *sink.Context) error {
+					if row.Prev["secret"] != "sentinel-old-row" || row.Next["secret"] != "sentinel-new-row" {
+						return errors.New("row contents changed")
+					}
+					if outcome == "failure" {
+						return errors.New("delivery failed")
+					}
+					return nil
+				},
+			}},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if outcome == "cancelled" {
+		cancel()
+	}
+	err := uc.Process(ctx, time.Now(), domain.OperationTypeUpdate, "source", "public", "users",
+		domain.Headers{"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+		database.MessageMetadata{},
+		domain.DbRecord{"secret": "sentinel-old-row"}, domain.DbRecord{"secret": "sentinel-new-row"})
+	if (err != nil) != (outcome != "success") {
+		t.Fatalf("%s: error = %v", outcome, err)
 	}
 }

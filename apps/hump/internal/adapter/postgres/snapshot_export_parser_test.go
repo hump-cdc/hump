@@ -10,12 +10,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"hump/internal/domain"
+	"hump/internal/port/database"
 )
 
 func TestSnapshotExportParserDecodesRows(t *testing.T) {
 	parser, rows := newTestSnapshotExportParser(nil)
 
-	if _, err := parser.Write([]byte("1\talice\n2\t\\N\n")); err != nil {
+	if _, err := parser.Write([]byte("(0,1)\t1\talice\n(0,2)\t2\t\\N\n")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -28,10 +29,49 @@ func TestSnapshotExportParserDecodesRows(t *testing.T) {
 	}
 }
 
+func TestSnapshotExportParserSeparatesPhysicalIdentityFromUserColumns(t *testing.T) {
+	columns := []snapshotColumn{
+		{name: "ctid", oid: pgtype.TextOID},
+		{name: "schema", oid: pgtype.TextOID},
+		{name: "table", oid: pgtype.TextOID},
+		{name: "CTID", oid: pgtype.TextOID},
+		{name: "snapshot_row", oid: pgtype.TextOID},
+		{name: "tableoid", oid: pgtype.TextOID},
+	}
+	var rows []domain.DbRecord
+	var identities []database.SnapshotRowMetadata
+	leaf := domain.TableIdentifier{Schema: "physical\tschema", Name: "leaf\nname"}
+	parser := newSnapshotExportParser(leaf, columns, newValueTypeMap(), func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
+		rows = append(rows, record)
+		identities = append(identities, metadata)
+		return nil
+	})
+	data := []byte("(12,34)\tuser-ctid\tuser-schema\tuser-table\tuser-CTID\tuser-alias\tuser-tableoid\n")
+	for _, chunk := range chunkBytes(data, 7) {
+		if _, err := parser.Write(chunk); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+		for i := range chunk {
+			chunk[i] = 0xff
+		}
+	}
+	if err := parser.finish(); err != nil {
+		t.Fatalf("finish() error = %v", err)
+	}
+	wantRows := []domain.DbRecord{{"ctid": "user-ctid", "schema": "user-schema", "table": "user-table", "CTID": "user-CTID", "snapshot_row": "user-alias", "tableoid": "user-tableoid"}}
+	if !reflect.DeepEqual(rows, wantRows) {
+		t.Fatalf("rows = %#v, want %#v", rows, wantRows)
+	}
+	wantIdentities := []database.SnapshotRowMetadata{{Schema: "physical\tschema", Table: "leaf\nname", CTID: "(12,34)"}}
+	if !reflect.DeepEqual(identities, wantIdentities) {
+		t.Fatalf("identities = %#v, want %#v", identities, wantIdentities)
+	}
+}
+
 func TestSnapshotExportParserJoinsRowsSplitAcrossWrites(t *testing.T) {
 	parser, rows := newTestSnapshotExportParser(nil)
 
-	for _, chunk := range []string{"1\tal", "ice\n2", "\tbob\n"} {
+	for _, chunk := range []string{"(0,", "1)\t1\tal", "ice\n(0,2)\t2", "\tbob\n"} {
 		if _, err := parser.Write([]byte(chunk)); err != nil {
 			t.Fatalf("Write(%q) error = %v", chunk, err)
 		}
@@ -53,7 +93,7 @@ func TestSnapshotExportParserJoinsRowsSplitAcrossWrites(t *testing.T) {
 func TestSnapshotExportParserUnescapesFields(t *testing.T) {
 	parser, rows := newTestSnapshotExportParser(nil)
 
-	if _, err := parser.Write([]byte("1\ta\\tb\\nc\\\\d\n")); err != nil {
+	if _, err := parser.Write([]byte("(0,1)\t1\ta\\tb\\nc\\\\d\n")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -63,7 +103,7 @@ func TestSnapshotExportParserUnescapesFields(t *testing.T) {
 }
 
 func TestSnapshotExportParserRejectsMalformedRows(t *testing.T) {
-	for _, line := range []string{"1\n", "1\ta\tb\n"} {
+	for _, line := range []string{"1\n", "(0,1)\t1\n", "(0,1)\t1\ta\tb\n", "\\N\t1\ta\n", "\t1\ta\n"} {
 		parser, _ := newTestSnapshotExportParser(nil)
 
 		if _, err := parser.Write([]byte(line)); !errors.Is(err, errCopyRow) {
@@ -75,7 +115,7 @@ func TestSnapshotExportParserRejectsMalformedRows(t *testing.T) {
 func TestSnapshotExportParserRejectsUndecodableField(t *testing.T) {
 	parser, _ := newTestSnapshotExportParser(nil)
 
-	if _, err := parser.Write([]byte("one\talice\n")); err == nil {
+	if _, err := parser.Write([]byte("(0,1)\tone\talice\n")); err == nil {
 		t.Fatal("Write() error = nil, want a decode error")
 	}
 }
@@ -84,7 +124,7 @@ func TestSnapshotExportParserStopsOnRowError(t *testing.T) {
 	stop := errors.New("stop")
 	parser, rows := newTestSnapshotExportParser(stop)
 
-	if _, err := parser.Write([]byte("1\talice\n2\tbob\n")); !errors.Is(err, stop) {
+	if _, err := parser.Write([]byte("(0,1)\t1\talice\n(0,2)\t2\tbob\n")); !errors.Is(err, stop) {
 		t.Fatalf("Write() error = %v, want the onRow error", err)
 	}
 
@@ -96,7 +136,7 @@ func TestSnapshotExportParserStopsOnRowError(t *testing.T) {
 func TestSnapshotExportParserFinishReportsUnterminatedRow(t *testing.T) {
 	parser, _ := newTestSnapshotExportParser(nil)
 
-	if _, err := parser.Write([]byte("1\talice")); err != nil {
+	if _, err := parser.Write([]byte("(0,1)\t1\talice")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -133,13 +173,13 @@ func TestUnescapeCopyText(t *testing.T) {
 }
 
 func FuzzSnapshotExportParserChunking(f *testing.F) {
-	f.Add([]byte("1\talice\n2\t\\N\n"), uint8(1))
-	f.Add([]byte("1\ta\\tb\\nc\\\\d\n"), uint8(3))
+	f.Add([]byte("(0,1)\t1\talice\n(0,2)\t2\t\\N\n"), uint8(1))
+	f.Add([]byte("(0,1)\t1\ta\\tb\\nc\\\\d\n"), uint8(3))
 	f.Add([]byte("1\n1\ta\tb\n"), uint8(2))
 	f.Add([]byte("1\talice"), uint8(4))
 	f.Add([]byte("\\101\t\\x4\n\n\t\n"), uint8(0))
 
-	typeMap := pgtype.NewMap()
+	typeMap := newValueTypeMap()
 
 	f.Fuzz(func(t *testing.T, data []byte, chunk uint8) {
 		whole := collectSnapshotExport(t, typeMap, [][]byte{data})
@@ -157,10 +197,10 @@ func FuzzSnapshotExportParserRoundTrip(f *testing.F) {
 	f.Add("a\tb", "c\nd\re\\f")
 	f.Add("\b\f\v", "\x00\xff")
 
-	typeMap := pgtype.NewMap()
+	typeMap := newValueTypeMap()
 
 	f.Fuzz(func(t *testing.T, id, name string) {
-		line := escapeCopyText(id) + "\t" + escapeCopyText(name) + "\n"
+		line := "(0,1)\t" + escapeCopyText(id) + "\t" + escapeCopyText(name) + "\n"
 
 		got := collectSnapshotExport(t, typeMap, [][]byte{[]byte(line)})
 
@@ -202,7 +242,7 @@ func newTestSnapshotExportParser(err error) (*snapshotExportParser, *[]domain.Db
 	rows := &[]domain.DbRecord{}
 	columns := []snapshotColumn{{name: "id", oid: pgtype.Int4OID}, {name: "name", oid: pgtype.TextOID}}
 
-	return newSnapshotExportParser(columns, pgtype.NewMap(), func(record domain.DbRecord) error {
+	return newSnapshotExportParser(usersTable(), columns, newValueTypeMap(), func(record domain.DbRecord, _ database.SnapshotRowMetadata) error {
 		*rows = append(*rows, record)
 		return err
 	}), rows
@@ -226,7 +266,7 @@ func collectSnapshotExport(t *testing.T, m *pgtype.Map, chunks [][]byte) snapsho
 	t.Helper()
 
 	var result snapshotExportResult
-	parser := newSnapshotExportParser(snapshotExportTextColumns, m, func(record domain.DbRecord) error {
+	parser := newSnapshotExportParser(usersTable(), snapshotExportTextColumns, m, func(record domain.DbRecord, _ database.SnapshotRowMetadata) error {
 		result.rows = append(result.rows, record)
 		return nil
 	})

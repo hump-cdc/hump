@@ -248,8 +248,8 @@ func (b *bootstrapper) getStaleReplicaIdentityTables(ctx context.Context, tables
 	return stale, nil
 }
 
-// quoteLiteral wraps s as a SQL string literal, doubling embedded single quotes.
-// Assumes standard_conforming_strings is on (PostgreSQL default since 9.1).
+// quoteLiteral renders an escape string literal independent of
+// standard_conforming_strings.
 func (b *bootstrapper) quoteLiteral(s string) string {
 	return quoteLiteral(s)
 }

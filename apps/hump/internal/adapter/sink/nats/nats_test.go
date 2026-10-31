@@ -3,8 +3,13 @@ package nats
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
+	"net/url"
+	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -284,6 +289,35 @@ func TestGetClientRejectsInvalidURL(t *testing.T) {
 	}
 }
 
+func TestGetClientConnectionErrorHidesSecretsAndPreservesCause(t *testing.T) {
+	rawURL := diagnosticURL("nats", "127.0.0.1:invalid-port")
+	nc, err := getClient(sinkcfg.NatsCommon{URL: mustTemplate(t, rawURL)}, testContext())
+	if nc != nil || err == nil {
+		t.Fatalf("getClient() = %v, %v, want no client and a URL error", nc, err)
+	}
+	if got, want := err.Error(), "nats client for [redacted endpoint]"; got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	var cause *url.Error
+	if !errors.As(err, &cause) {
+		t.Fatalf("getClient() error type = %T, want wrapped *url.Error", err)
+	}
+	if cause.URL != rawURL {
+		t.Errorf("cause URL = %q, want original connection URL %q", cause.URL, rawURL)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("connection error does not preserve its cause")
+	}
+	for _, format := range []string{"%s", "%v", "%+v"} {
+		text := fmt.Sprintf(format, err)
+		for _, secret := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel", "diagnostic-query-sentinel"} {
+			if strings.Contains(text, secret) {
+				t.Errorf("format %q exposed %q: %s", format, secret, text)
+			}
+		}
+	}
+}
+
 func TestGetClientAuthenticates(t *testing.T) {
 	user, err := nkeys.CreateUser()
 	if err != nil {
@@ -388,9 +422,49 @@ func TestClientLogsReconnect(t *testing.T) {
 }
 
 func TestShutdownDrainsClients(t *testing.T) {
+	if !runBrokerDiagnostics(t, "NATS asynchronous error", "NATS disconnected", "NATS reconnected", "NATS connection closed", "nats_sink(nats://127.0.0.1:", "Service stopped") {
+		return
+	}
 	srv := newFakeServer(t, nil)
-	forgetClients(t, srv.url())
-	nc := mustClient(t, sinkcfg.NatsCommon{URL: mustTemplate(t, srv.url())})
+	url := diagnosticURL("nats", srv.ln.Addr().String())
+	forgetClients(t, url)
+	cfg := sinkcfg.NatsCoreSink{NatsCommon: sinkcfg.NatsCommon{
+		URL: mustTemplate(t, url), Subject: mustTemplate(t, "cdc.users"), Payload: mustTemplate(t, "payload"),
+	}}
+	capture := &sink.Capture{}
+	if err := ProcessCore(context.Background(), cfg, testContext(), capture); err != nil {
+		t.Fatalf("ProcessCore() error = %v", err)
+	}
+	if capture.Target != "cdc.users" || string(capture.Payload) != "payload" || len(srv.messages()) != 1 {
+		t.Fatal("diagnostic redaction changed publish or capture")
+	}
+	connect := srv.connectOptions()[0]
+	if !strings.Contains(connect, `"user":"diagnostic-user-sentinel"`) || !strings.Contains(connect, `"pass":"diagnostic-password-sentinel"`) {
+		t.Fatal("URL credentials did not reach CONNECT unchanged")
+	}
+	nc := mustClient(t, cfg.NatsCommon)
+	nc.conn.Opts.AsyncErrorCB(nc.conn, nil, errors.New(url))
+	nc.conn.Opts.DisconnectedErrCB(nc.conn, errors.New(url))
+	reconnected := make(chan struct{})
+	onReconnect := nc.conn.Opts.ReconnectedCB
+	nc.conn.SetReconnectHandler(func(c *nats.Conn) {
+		onReconnect(c)
+		close(reconnected)
+	})
+	if err := nc.conn.ForceReconnect(); err != nil {
+		t.Fatalf("ForceReconnect() error = %v", err)
+	}
+	select {
+	case <-reconnected:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconnect callback did not run")
+	}
+	closed := make(chan struct{})
+	onClose := nc.conn.Opts.ClosedCB
+	nc.conn.SetClosedHandler(func(c *nats.Conn) {
+		onClose(c)
+		close(closed)
+	})
 
 	_ = shutdown.Shutdown(time.Second)
 
@@ -400,6 +474,11 @@ func TestShutdownDrainsClients(t *testing.T) {
 			t.Fatalf("connection not closed after shutdown, status %v", nc.conn.Status())
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("closed callback did not run")
 	}
 }
 
@@ -504,6 +583,50 @@ func TestIsTransientConnError(t *testing.T) {
 			t.Errorf("isTransientConnError(%v) = true, want false", err)
 		}
 	}
+}
+
+// runBrokerDiagnostics isolates logger initialization and the singleton shutdown registry.
+func runBrokerDiagnostics(t *testing.T, messages ...string) bool {
+	t.Helper()
+	if os.Getenv("HUMP_BROKER_DIAGNOSTIC_CHILD") == "1" {
+		return true
+	}
+	for _, level := range []string{"info", "debug"} {
+		t.Run(level, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			t.Cleanup(cancel)
+			args := []string{"-test.run=^TestShutdownDrainsClients$"}
+			if dir := flag.Lookup("test.gocoverdir"); dir != nil && dir.Value.String() != "" {
+				args = append(args, "-test.gocoverdir="+dir.Value.String())
+			}
+			cmd := exec.CommandContext(ctx, os.Args[0], args...)
+			cmd.Env = append(os.Environ(), "HUMP_BROKER_DIAGNOSTIC_CHILD=1", "LOG_FORMAT=json", "LOG_VERBOSE="+strconv.FormatBool(level == "debug"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("diagnostic child: %v\n%s", err, out)
+			}
+			text := string(out)
+			for _, secret := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel", "diagnostic-query-sentinel"} {
+				if strings.Contains(text, secret) {
+					t.Errorf("log exposed %q:\n%s", secret, text)
+				}
+			}
+			for _, message := range messages {
+				if !strings.Contains(text, message) {
+					t.Errorf("log missing %q:\n%s", message, text)
+				}
+			}
+			if got := strings.Contains(text, `"level":"DEBUG"`); got != (level == "debug") {
+				t.Errorf("debug output = %v at %s level:\n%s", got, level, text)
+			}
+		})
+	}
+	return false
+}
+
+// diagnosticURL includes distinct sentinels for every private URL component.
+func diagnosticURL(scheme, addr string) string {
+	return scheme + "://diagnostic-user-sentinel:diagnostic-password-sentinel@" + addr + "/diagnostic-vhost-sentinel?token=diagnostic-query-sentinel"
 }
 
 // testContext returns a row change on public.users.

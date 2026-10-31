@@ -18,7 +18,8 @@ This document covers:
 ## Where templates run
 
 Every string field in the sink config that documents "text/template" support is
-parsed at config-load time and rendered on every WAL event. This includes:
+parsed at config-load time and rendered on every WAL or snapshot event. This
+includes:
 
 - `kafka.connection`, `kafka.topic`, `kafka.partitionKey`, `kafka.payload`
 - `http.url`, `http.method`, `http.body`, each value in `http.headers`
@@ -29,15 +30,18 @@ Otherwise it is parsed once and re-rendered per event with the row data.
 
 ## Render data context
 
-Each render receives a `*sinks.Context` value as the dot (`.`):
+Each render receives a `*sink.Context` value as the dot (`.`):
 
-| Field        | Type             | When populated                                  |
-| ------------ | ---------------- | ----------------------------------------------- |
-| `.Schema`    | `string`         | always                                          |
-| `.Table`     | `string`         | always                                          |
-| `.Operation` | `string`         | one of `insert`, `update`, `delete`, `truncate` |
-| `.Prev`      | `map[string]any` | `update`, `delete`                              |
-| `.Next`      | `map[string]any` | `insert`, `update`                              |
+| Field         | Type             | When populated                                                   |
+| ------------- | ---------------- | ---------------------------------------------------------------- |
+| `.Schema`     | `string`         | always                                                           |
+| `.Table`      | `string`         | always                                                           |
+| `.Operation`  | `string`         | one of `insert`, `update`, `delete`, `truncate`                    |
+| `.Timestamp`  | `time.Time`      | WAL transaction commit time; per-row processing time for snapshots |
+| `.MessageId`  | `string`         | source event identity; see below                                 |
+| `.SnapshotID` | `string`         | exported snapshot ID for snapshot rows; empty for WAL events      |
+| `.Prev`       | `map[string]any` | `update`, `delete`                                               |
+| `.Next`       | `map[string]any` | `insert`, `update`                                               |
 
 Column values live under `.Prev` / `.Next`, keyed by column name:
 
@@ -65,9 +69,11 @@ payload: |
 A column the source could not deliver is *unavailable*. On a table whose replica
 identity is not `FULL`, that covers an unchanged TOAST value on `update`, and
 every non-key column of the old row on `delete` or on an `update` that changes a
-key column. Such a column renders as an empty string, compares equal to `""`,
-and counts as empty for `empty`, `coalesce` and `required`; `unavailable` is the
-only way to tell it apart from a column that really is `''`:
+key column. Direct rendering, `json` and `yaml` output the string
+`__hump_unavailable_value`. For compatibility, it still compares equal to `""`
+and counts as empty for `empty`, `coalesce` and `required`. `default` only
+replaces nil, so it leaves the marker intact. Use `unavailable` to detect the
+sentinel; the marker text can also occur in a real column value:
 
 ```yaml
 payload: |
@@ -80,6 +86,90 @@ JSON has no spelling for infinite or not-a-number values, so `json` writes them 
 latter as `null` too). Printed directly, `{{ .Next.col }}` still shows `NaN`,
 `+Inf`, `infinity` and so on. A `numeric` `NaN` or `±Infinity` is written as the
 JSON string `"NaN"`, `"Infinity"` or `"-Infinity"`.
+
+### PostgreSQL column values
+
+WAL events and snapshot rows use the same value decoder. These rules also apply
+to elements of supported SQL arrays; the existing array shape is unchanged.
+
+| PostgreSQL type | Template value and JSON output |
+| --- | --- |
+| `json`, `jsonb` | Objects and arrays remain maps and slices. Numeric leaves are `json.Number`, so JSON serialization preserves their numeric literals without float rounding. Object key order and duplicate keys are not preserved. |
+| `interval` | An exact integer microsecond count, emitted as a JSON number, including results outside the `int64` range. |
+| `timestamp without time zone` | A calendar string such as `2026-01-02T03:04:05.123456`, with no `Z` or offset. Up to six fractional digits are retained; trailing zeros are trimmed. |
+
+Interval conversion uses
+`months * 2629800000000 + days * 86400000000 + microseconds` with exact integer
+arithmetic. A month is `365.25 / 12` days, following Debezium's average-month
+convention; it is not a calendar-dependent duration. `timestamptz` and `date`
+representations are unchanged. Temporal infinities retain their direct spelling
+and serialize as JSON/YAML `null`, as described above.
+
+`json.Number` is string-backed. A JSON numeric zero is truthy in `if` and is not
+empty; comparisons between two such values are lexical, and comparisons with
+numeric literals need an explicit conversion. For example:
+
+```text
+{{ if gt (int64 .Next.settings.retries) 0 }}retry{{ end }}
+```
+
+`int`/`int64`, `float64` and the numeric helpers accept `json.Number`, but they
+still use fixed-width integers or floating point. They do not provide
+arbitrary-precision arithmetic. Serializing the original value with `json`
+avoids these conversions; downstream numeric parsers can still lose precision.
+
+### Wire changes and migration
+
+Compared with the previous value encoding, JSON numbers no longer pass through
+`float64`, intervals now emit numeric microseconds,
+timezone-free timestamps no longer carry a misleading UTC suffix, and
+unavailable columns emit `__hump_unavailable_value` rather than `""`. Update
+consumer schemas and templates that depend on those representations. To keep
+empty output for an unavailable column, test the sentinel explicitly:
+
+```text
+{{ if unavailable .Next.col }}{{ else }}{{ .Next.col }}{{ end }}
+```
+
+`coalesce .Next.col ""` is not equivalent: both arguments count as empty, so it
+returns nil rather than an empty string. Use `unavailable` before serialization
+to distinguish the sentinel from real empty or marker text.
+Replica identity `FULL` behavior is unchanged.
+
+The default payload's Debezium-compatible envelope does not imply identical
+column-value semantics. hump embeds JSON objects instead of JSON strings and
+uses calendar strings for timezone-free timestamps instead of Debezium's numeric
+epoch representation. Its unavailable marker is custom. Interval conversion
+uses Debezium's month convention, but exact, arbitrary-length integers do not
+reproduce Debezium's `int64` limits or floating-point truncation.
+
+### Message identity and snapshots
+
+For WAL events, `.Timestamp` is the transaction commit time from the replication
+`Begin` message. `.MessageId` is a SHA-256 hash of an unambiguous encoding of a
+WAL marker, database, schema, table, commit LSN and the change-message ordinal
+within the transaction. The ordinal counts change messages before filtering;
+protocol control messages do not count. A truncate message affecting several
+tables uses the same ordinal for each, but the table names distinguish the IDs.
+Replaying the same event preserves its ID within one source and one WAL history;
+the ID is not globally unique across independent sources or WAL histories.
+
+Snapshot rows use `.Operation = "insert"` (`"op": "c"` in the default payload).
+Their `.Timestamp` is the current time when each row is processed, not the
+snapshot creation time. `.SnapshotID` contains the exported PostgreSQL snapshot
+ID. Snapshot `.MessageId` hashes an unambiguous encoding of a snapshot marker,
+database, configured schema and table, snapshot ID, physical leaf schema and
+table, and row `ctid`. The physical row metadata is not added to `.Prev` or
+`.Next`. A new snapshot produces new message IDs even for unchanged rows;
+these IDs do not deduplicate rows across snapshot runs.
+
+Snapshot rows use the same default envelope as WAL events. To add a snapshot
+flag, use a custom payload:
+
+```yaml
+payload: |
+  {{ dict "snapshot" (ne .SnapshotID "") "after" .Next | json false }}
+```
 
 ## Static vs. dynamic strings
 
@@ -135,12 +225,55 @@ Quick reference for the `text/template` constructs used most often. See the
 newlines. Useful inside `range`/`if` blocks to keep multi-line payloads tidy:
 
 ```
+{{- $first := true -}}
 {
 {{- range $k, $v := .Next }}
-  "{{ $k }}": {{ $v | json false }},
+{{- if $first }}{{ $first = false }}{{ else }},{{ end }}
+  {{ $k | json false }}: {{ $v | json false }}
 {{- end }}
 }
 ```
+
+The flag inserts commas between entries, not after the last entry. Both keys
+and values pass through `json false` to escape them correctly.
+
+### JSON and YAML payloads
+
+Templates do not automatically escape values for the destination format.
+Prefer building a value with `dict` or `list`, then serializing the whole value
+with `json` or `yaml`. The serializer handles escaping, separators and types:
+
+```yaml
+payload: |
+  {{ dict "table" .Table "after" .Next | json false }}
+```
+
+For YAML output, use `yaml false` or `yaml true` instead of `json false`.
+
+When assembling JSON manually, serialize every dynamic key and value with
+`json false`. Do not add surrounding quotes: the serializer already quotes
+strings and escapes embedded quotes, backslashes and control characters.
+
+JSON payload:
+
+```yaml
+payload: |
+  {"name": {{ .Next.name | json false }}}
+```
+
+JSON-encoded strings also work as quoted keys and values in YAML. For a YAML
+block mapping payload:
+
+```yaml
+payload: |
+  name: {{ .Next.name | json false }}
+```
+
+Serialization preserves numbers, booleans, nulls, arrays and objects instead of
+turning them into strings. Use `tostring` before `json false` only when the
+consumer requires a string, for example `{{ .Next.id | tostring | json false }}`.
+Neither `quote` nor `squote` is a JSON or YAML serializer; see their references
+below.
 
 ### Comments
 
@@ -230,8 +363,8 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `replace`    | `replace old new s`                                                       |
 | `repeat`     | `repeat count s`                                                          |
 | `cat`        | Space-join args after stringifying                                        |
-| `quote`      | Wrap each arg in double quotes, space-joined                              |
-| `squote`     | Same, with single quotes                                                  |
+| `quote`      | Go-escape and double-quote each arg, space-joined; not JSON/YAML serialization |
+| `squote`     | Wrap each arg in single quotes without escaping, space-joined; not JSON/YAML serialization |
 | `indent`     | `indent n s` — prepend `n` spaces to every line                           |
 | `nindent`    | `nindent n s` — leading newline + `indent`                                |
 | `plural`     | `plural one many count`                                                   |
@@ -260,9 +393,15 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `todecimal`     | `todecimal v`     | Parses `v` as **octal** and returns the decimal value (matches sprig) |
 | `tostring`      | `tostring v`      | `fmt.Sprint(v)`                                                       |
 | `tostrings`     | `tostrings list`  | Stringify every element of a `[]string`/`[]any`                       |
-| `json`          | `json prettify v` | Marshal to JSON; `prettify=true` uses 2-space indent                  |
+| `json`          | `json prettify v` | Marshal to JSON, including string quotes/escapes; `prettify=true` uses 2-space indent |
 | `fromjson`      | `fromjson s`      | Parse JSON object → `map[string]any`                                  |
 | `fromjsonarray` | `fromjsonarray s` | Parse JSON array → `[]any`                                            |
+
+`fromjson` and `fromjsonarray` preserve numeric leaves as `json.Number`, just
+like PostgreSQL JSON columns. They accept one complete JSON value and reject
+malformed input or trailing non-whitespace data. See
+[PostgreSQL column values](#postgresql-column-values) for comparison and
+conversion limits.
 
 ### YAML
 
@@ -426,10 +565,10 @@ partitionKey: '{{ if eq .Operation "delete" }}{{ .Prev.id }}{{ else }}{{ .Next.i
 ```yaml
 payload: |
   {
-    "schema": "{{ .Schema }}",
-    "table": "{{ .Table }}",
-    "op": "{{ .Operation }}",
-    "ts": "{{ now | htmldate }}",
+    "schema": {{ .Schema | json false }},
+    "table": {{ .Table | json false }},
+    "op": {{ .Operation | json false }},
+    "ts": {{ now | htmldate | json false }},
     "before": {{ .Prev | json false }},
     "after":  {{ .Next | json false }}
   }
@@ -462,9 +601,23 @@ partitionKey: '{{ required "id is required" .Next.id }}'
 
 ### Idempotency key
 
+The default key template is:
+
+```text
+{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}
+```
+
+It supplies `X-Idempotency-Key` headers, RabbitMQ `messageId` and JetStream
+`msgId`. Custom templates are unchanged. The key includes the row representation,
+so changes to `.Prev` / `.Next` or their JSON encoding can change the key even
+when `.MessageId` is the same. This replaces the previous timestamp-based
+default and changes existing keys; stored old keys will not match new ones.
+
+To set the same template explicitly:
+
 ```yaml
 headers:
-  Idempotency-Key: '{{ printf "%s/%s/%v/%s" .Schema .Table .Next.id .Operation | sha256 }}'
+  X-Idempotency-Key: '{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}'
 ```
 
 ## Reference
@@ -626,7 +779,8 @@ Returns the first non-empty argument (per `empty`), or nothing if all are empty.
 #### `default`
 
 `default fallback v` — returns `v` unless it is _typed nil_. Empty strings and
-zero numbers pass through unchanged.
+zero numbers pass through unchanged. An unavailable column also passes through
+and renders as `__hump_unavailable_value`.
 
 ```
 {{ default "fb" .Missing }} → fb
@@ -655,9 +809,9 @@ zero numbers pass through unchanged.
 #### `unavailable`
 
 `unavailable v` — reports whether `v` is a column the source could not deliver.
-Such a column is indistinguishable from `""` everywhere else: it renders empty,
-compares equal to `""`, and counts as empty for `empty`, `coalesce` and
-`required`.
+It renders as `__hump_unavailable_value`, but still compares equal to `""` and
+counts as empty for `empty`, `coalesce` and `required`. A real string containing
+the marker is not unavailable.
 
 ```
 {{ unavailable .Next.blob }} → true
@@ -927,18 +1081,25 @@ Stringify each arg and join with single spaces.
 
 #### `quote`
 
-Wrap each arg in double quotes, space-joined.
+Escape each arg using Go string syntax and wrap it in double quotes,
+space-joined. This is not JSON or YAML serialization: Go escapes such as `\x00`
+are not valid JSON escapes. Use `json false` for JSON strings, or serialize the
+whole value with `json` or `yaml`.
 
 ```
 {{ quote "a" "b" }} → "a" "b"
+{{ quote "\x00" }} → "\x00"
 ```
 
 #### `squote`
 
-Wrap each arg in single quotes, space-joined.
+Wrap each arg in single quotes, space-joined, without escaping its contents.
+Embedded apostrophes remain unchanged, so the result is not safe YAML quoting.
+This is not a JSON or YAML serializer.
 
 ```
 {{ squote "a" "b" }} → 'a' 'b'
+{{ squote "O'Reilly" }} → 'O'Reilly'
 ```
 
 #### `indent`
@@ -1066,6 +1227,12 @@ Stringify every element of a `[]string` or `[]any`.
 `json prettify v` — marshal to JSON; `prettify=true` indents with 2 spaces.
 NaN and infinite values are written as `null`.
 
+For manual JSON assembly, use `json false` for every dynamic key and value,
+without extra surrounding quotes. Strings include their quotes and escapes;
+other values retain their JSON types. Use `tostring` first only if a string is
+required. Prefer serializing a whole `dict` or `list` to managing JSON syntax by
+hand. See [JSON and YAML payloads](#json-and-yaml-payloads).
+
 Input: `.Next = {"a": 1}`
 
 ```
@@ -1075,7 +1242,8 @@ Input: `.Next = {"a": 1}`
 
 #### `fromjson`
 
-Parse a JSON object string.
+Parse a JSON object string with `json.Number` numeric leaves. Reject malformed
+input and trailing non-whitespace data.
 
 ```
 {{ index (fromjson `{"a":1}`) "a" }} → 1
@@ -1083,7 +1251,8 @@ Parse a JSON object string.
 
 #### `fromjsonarray`
 
-Parse a JSON array string.
+Parse a JSON array string with `json.Number` numeric leaves. Reject malformed
+input and trailing non-whitespace data.
 
 ```
 {{ index (fromjsonarray `[1,"x",true]`) 1 }} → x
@@ -1094,6 +1263,10 @@ Parse a JSON array string.
 #### `yaml`
 
 `yaml prettify v` — marshal to YAML; `prettify=true` uses 4-space indent.
+
+Prefer building a `dict` or `list` and serializing the whole value. Do not use
+`quote` or `squote` as YAML serializers. For manual flow mappings, JSON-encoded
+keys and values are also valid YAML; see [JSON and YAML payloads](#json-and-yaml-payloads).
 
 ```
 {{ yaml false (dict "a" 1 "b" "two") }} → a: 1\nb: two

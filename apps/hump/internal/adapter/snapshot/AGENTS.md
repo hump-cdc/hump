@@ -6,6 +6,13 @@ from one exported database snapshot and hands every row to the processing pipeli
 delivers through, so sinks, operation filters and the operations log see snapshot rows like any
 other change. The statuses, errors and sink rows a run reports are in `port/snapshot/AGENTS.md`.
 
+Each row gets `database.MessageMetadata`: `SnapshotID` is the exported database snapshot id;
+`MessageID` is a deterministic SHA-256 hash of length-prefixed components: snapshot source,
+database, configured schema/table, snapshot id, physical leaf schema/table and CTID from
+`database.SnapshotRowMetadata`. Physical row metadata stays outside user fields. The timestamp
+remains `time.Now()` per row. A new exported snapshot has new identities; this adds no resume
+protocol or configurable namespace.
+
 ## The run
 
 1. `Start` validates **every** filter through `database.ValidateWhere` before touching state; one

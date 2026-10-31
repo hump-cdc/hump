@@ -3,8 +3,13 @@ package rabbitmq
 import (
 	"context"
 	"errors"
+	"flag"
 	"net"
+	"os"
+	"os/exec"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -293,10 +298,54 @@ func TestHealthyChannelReopensClosedChannel(t *testing.T) {
 }
 
 func TestShutdownClosesClients(t *testing.T) {
+	if !runBrokerDiagnostics(t, "RabbitMQ connection established", "RabbitMQ channel reopened", "RabbitMQ connection closed", "RabbitMQ reconnect failed", "RabbitMQ reconnected", "rabbitmq_sink(amqp://127.0.0.1:", "Service stopped") {
+		return
+	}
 	srv := newFakeServer(t)
-	forgetClients(t, srv.url())
-	rc := mustClient(t, srv.url())
+	url := diagnosticURL(srv.ln.Addr().String())
+	forgetClients(t, url)
+	capture := &sink.Capture{}
+	if err := Process(context.Background(), rabbitSink(t, url), testContext(), capture); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if capture.Target != "events" || string(capture.Payload) != "payload" || capture.Metadata["routingKey"] != "public.users" || len(srv.publishes()) != 1 {
+		t.Fatal("diagnostic redaction changed publish or capture")
+	}
+	srv.mu.Lock()
+	handshake := strings.Join(srv.handshakes, " ")
+	srv.mu.Unlock()
+	for _, value := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel"} {
+		if !strings.Contains(handshake, value) {
+			t.Fatalf("connection handshake did not preserve %s", value)
+		}
+	}
+	rc := mustClient(t, url)
+	if rc.url != url {
+		t.Fatal("cached connection URL changed")
+	}
+	_ = rc.ch.Close()
+	if _, err := rc.healthyChannel(); err != nil {
+		t.Fatalf("healthyChannel() error = %v", err)
+	}
+	srv.set(func(s *fakeServer) { s.rejectConnect = true })
+	srv.dropClients()
+	deadline := time.Now().Add(10 * time.Second)
+	for srv.flag(func(s *fakeServer) bool { return s.rejected == 0 }) {
+		if time.Now().After(deadline) {
+			t.Fatal("supervisor did not attempt reconnect")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	srv.set(func(s *fakeServer) { s.rejectConnect = false })
+	for !isReconnected(rc) {
+		if time.Now().After(deadline) {
+			t.Fatal("supervisor did not reconnect")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	rc.mu.Lock()
 	conn := rc.conn
+	rc.mu.Unlock()
 
 	idle := newFakeServer(t)
 	forgetClients(t, idle.url())
@@ -641,6 +690,50 @@ func TestJitter(t *testing.T) {
 	if got := jitter(time.Millisecond, 2*time.Millisecond); got < time.Millisecond || got > 2*time.Millisecond {
 		t.Errorf("jitter(1ms, 2ms) = %v, want within [1ms, 2ms]", got)
 	}
+}
+
+// runBrokerDiagnostics isolates logger initialization and the singleton shutdown registry.
+func runBrokerDiagnostics(t *testing.T, messages ...string) bool {
+	t.Helper()
+	if os.Getenv("HUMP_BROKER_DIAGNOSTIC_CHILD") == "1" {
+		return true
+	}
+	for _, level := range []string{"info", "debug"} {
+		t.Run(level, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			t.Cleanup(cancel)
+			args := []string{"-test.run=^TestShutdownClosesClients$"}
+			if dir := flag.Lookup("test.gocoverdir"); dir != nil && dir.Value.String() != "" {
+				args = append(args, "-test.gocoverdir="+dir.Value.String())
+			}
+			cmd := exec.CommandContext(ctx, os.Args[0], args...)
+			cmd.Env = append(os.Environ(), "HUMP_BROKER_DIAGNOSTIC_CHILD=1", "LOG_FORMAT=json", "LOG_VERBOSE="+strconv.FormatBool(level == "debug"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("diagnostic child: %v\n%s", err, out)
+			}
+			text := string(out)
+			for _, secret := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel", "diagnostic-query-sentinel"} {
+				if strings.Contains(text, secret) {
+					t.Errorf("log exposed %q:\n%s", secret, text)
+				}
+			}
+			for _, message := range messages {
+				if !strings.Contains(text, message) {
+					t.Errorf("log missing %q:\n%s", message, text)
+				}
+			}
+			if got := strings.Contains(text, `"level":"DEBUG"`); got != (level == "debug") {
+				t.Errorf("debug output = %v at %s level:\n%s", got, level, text)
+			}
+		})
+	}
+	return false
+}
+
+// diagnosticURL includes distinct sentinels for every private URL component.
+func diagnosticURL(addr string) string {
+	return "amqp://diagnostic-user-sentinel:diagnostic-password-sentinel@" + addr + "/diagnostic-vhost-sentinel?token=diagnostic-query-sentinel"
 }
 
 // testContext returns a row change on public.users.

@@ -49,6 +49,10 @@ by `internal/adapter/sink/AGENTS.md`.
 
 ## Shared rules
 
+- **Startup diagnostics.** `cmd/hump/main.go`'s `logConfiguration` logs a Debug summary per
+  table: `schema`, `table`, `sink_count` and `sink_types` counts. Never log the parsed
+  configuration or call `DisplayName` for this summary. `cmd/hump/main_test.go` checks real
+  JSON output with verbose logging off and on.
 - **Nil web UI dependencies.** The web UI ports (`live_stream`, `metrics_collector`,
   `operations_collector`, `snapshot`) are wired in `cmd/hump` only when `WEB_PORT` is set, and
   `cmd/openapi` builds every `hump_tower` use case with nil dependencies just to register routes.

@@ -248,8 +248,10 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 			p, _, _ := newTestPostgres(t, server)
 
 			var rows []domain.DbRecord
-			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "id > 1", func(record domain.DbRecord) error {
+			var identities []database.SnapshotRowMetadata
+			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "id > 1", func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
 				rows = append(rows, record)
+				identities = append(identities, metadata)
 				return nil
 			})
 			if err != nil {
@@ -259,6 +261,10 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 			var want []domain.DbRecord
 			for i, leaf := range tt.leaves {
 				want = append(want, domain.DbRecord{"id": int32(i + 1), "name": leaf.name})
+				wantIdentity := database.SnapshotRowMetadata{Schema: leaf.table().Schema, Table: leaf.table().Name, CTID: "(0,1)"}
+				if identities[i] != wantIdentity {
+					t.Errorf("identity %d = %#v, want %#v", i, identities[i], wantIdentity)
+				}
 			}
 			if !reflect.DeepEqual(rows, want) {
 				t.Fatalf("rows = %#v, want %#v", rows, want)
@@ -267,7 +273,7 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 			statements := server.recorded()
 
 			layout := findStatement(statements, "snapshot: layout")
-			if !strings.Contains(layout, "SET TRANSACTION SNAPSHOT '"+testSnapshotID+"';") || !strings.Contains(layout, `'"public"."users"'::regclass`) {
+			if !strings.Contains(layout, "SET TRANSACTION SNAPSHOT E'"+testSnapshotID+"';") || !strings.Contains(layout, `E'"public"."users"'::regclass`) {
 				t.Errorf("layout statement = %q, want it to import the snapshot and name the table", layout)
 			}
 			if got := strings.Contains(layout, "compressed_chunk_id"); got != tt.timescale {
@@ -278,14 +284,86 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 				read := findStatement(statements, "FROM ONLY "+qualifiedTableName(leaf.table()))
 				for _, part := range []string{
 					"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;",
-					"SET TRANSACTION SNAPSHOT '" + testSnapshotID + "';",
-					`COPY (SELECT "id", "name" FROM ONLY`,
-					`WHERE (("id" > 1))) TO STDOUT;`,
+					"SET TRANSACTION SNAPSHOT E'" + testSnapshotID + "';",
+					`snapshot_row."id", snapshot_row."name"`,
+					`AS snapshot_row WHERE (("snapshot_row"."id" > 1))`,
+					`snapshot_row.ctid::text`,
 					"COMMIT;",
 				} {
 					if !strings.Contains(read, part) {
 						t.Errorf("read statement = %q, want it to contain %q", read, part)
 					}
+				}
+				if strings.Contains(read, "pg_catalog") || strings.Contains(read, "snapshot_row.tableoid") {
+					t.Errorf("read statement performs per-row catalog lookups: %q", read)
+				}
+			}
+		})
+	}
+}
+
+func TestReadSnapshotKeepsUserMetadataNamesAndQualifiesPhysicalCTID(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(failingOn(
+		snapshotReadResponder(false, []snapshotTestLeaf{{name: "users", pages: snapshotChunkPages + 1}}),
+		"snapshot: layout",
+		scriptedSnapshotLayout(
+			[][][]byte{{[]byte("public"), []byte("users"), []byte("1025")}},
+			[][][]byte{{[]byte("ctid"), []byte("25")}, {[]byte("tableoid"), []byte("25")}},
+		),
+	))
+	p, _, _ := newTestPostgres(t, server)
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), `users.tableoid = 'public'`, func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
+	if err != nil {
+		t.Fatalf("ReadSnapshot() error = %v", err)
+	}
+	read := findStatement(server.recorded(), "snapshot: read")
+	for _, part := range []string{
+		`snapshot_row.ctid::text`,
+		`snapshot_row."ctid", snapshot_row."tableoid"`,
+		`WHERE snapshot_row.ctid < '(1024,0)'::tid AND (("snapshot_row"."tableoid" = E'public'))`,
+	} {
+		if !strings.Contains(read, part) {
+			t.Errorf("read statement = %q, want it to contain %q", read, part)
+		}
+	}
+}
+
+func TestReadSnapshotRebasesParentAndLeafFilters(t *testing.T) {
+	for _, qualifier := range []string{"users", "users_p1", "users_p2"} {
+		t.Run(qualifier, func(t *testing.T) {
+			leaves := []snapshotTestLeaf{{name: "users_p1", pages: 1}, {name: "users_p2", pages: 1}}
+			server := newFakeServer(t)
+			server.setResponder(snapshotReadResponder(false, leaves))
+			p, _, _ := newTestPostgres(t, server)
+
+			var rows []domain.DbRecord
+			var identities []database.SnapshotRowMetadata
+			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), qualifier+".id > 1", func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
+				rows = append(rows, record)
+				identities = append(identities, metadata)
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("ReadSnapshot() error = %v", err)
+			}
+
+			wantRows := []domain.DbRecord{{"id": int32(1), "name": "users_p1"}, {"id": int32(2), "name": "users_p2"}}
+			if !reflect.DeepEqual(rows, wantRows) {
+				t.Fatalf("rows = %#v, want %#v", rows, wantRows)
+			}
+			wantIdentities := []database.SnapshotRowMetadata{
+				{Schema: "public", Table: "users_p1", CTID: "(0,1)"},
+				{Schema: "public", Table: "users_p2", CTID: "(0,1)"},
+			}
+			if !reflect.DeepEqual(identities, wantIdentities) {
+				t.Errorf("identities = %#v, want %#v", identities, wantIdentities)
+			}
+
+			for _, leaf := range leaves {
+				read := findStatement(server.recorded(), "FROM ONLY "+qualifiedTableName(leaf.table()))
+				if !strings.Contains(read, `AS snapshot_row WHERE (("snapshot_row"."id" > 1))`) {
+					t.Errorf("read statement = %q, want the filter rebased onto the source alias", read)
 				}
 			}
 		})
@@ -297,7 +375,7 @@ func TestReadSnapshotSplitsLargeLeavesIntoChunks(t *testing.T) {
 	server.setResponder(snapshotReadResponder(false, []snapshotTestLeaf{{name: "users", pages: 2*snapshotChunkPages + 1}}))
 	p, _, _ := newTestPostgres(t, server)
 
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 	if err != nil {
 		t.Fatalf("ReadSnapshot() error = %v", err)
 	}
@@ -310,9 +388,9 @@ func TestReadSnapshotSplitsLargeLeavesIntoChunks(t *testing.T) {
 	}
 
 	wants := []string{
-		`WHERE ctid < '(1024,0)'::tid AND (true)`,
-		`WHERE ctid >= '(1024,0)'::tid AND ctid < '(2048,0)'::tid AND (true)`,
-		`WHERE ctid >= '(2048,0)'::tid AND (true)`,
+		`WHERE snapshot_row.ctid < '(1024,0)'::tid AND (true)`,
+		`WHERE snapshot_row.ctid >= '(1024,0)'::tid AND snapshot_row.ctid < '(2048,0)'::tid AND (true)`,
+		`WHERE snapshot_row.ctid >= '(2048,0)'::tid AND (true)`,
 	}
 	if len(reads) != len(wants) {
 		t.Fatalf("reads = %d, want %d", len(reads), len(wants))
@@ -330,7 +408,7 @@ func TestReadSnapshotObservesProcessedRowsAsInserts(t *testing.T) {
 	p, _, _ := newTestPostgres(t, server)
 
 	calls := 0
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error {
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error {
 		calls++
 		if calls == 2 {
 			return errors.New("stop")
@@ -353,7 +431,7 @@ func TestReadSnapshotStopsOnRowError(t *testing.T) {
 
 	stop := errors.New("stop")
 	calls := 0
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error {
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error {
 		calls++
 		return stop
 	})
@@ -370,7 +448,7 @@ func TestReadSnapshotRejectsInvalidWhereWithoutQuerying(t *testing.T) {
 	server := newFakeServer(t)
 	p, _, _ := newTestPostgres(t, server)
 
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "1; DROP TABLE users", func(domain.DbRecord) error { return nil })
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "1; DROP TABLE users", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 	if !errors.Is(err, database.ErrInvalidWhere) {
 		t.Fatalf("ReadSnapshot() error = %v, want ErrInvalidWhere", err)
 	}
@@ -388,7 +466,7 @@ func TestReadSnapshotFailsWhenSnapshotIsGone(t *testing.T) {
 	}))
 	p, _, _ := newTestPostgres(t, server)
 
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 	if !errors.Is(err, database.ErrSnapshot) {
 		t.Fatalf("ReadSnapshot() error = %v, want ErrSnapshot", err)
 	}
@@ -397,7 +475,7 @@ func TestReadSnapshotFailsWhenSnapshotIsGone(t *testing.T) {
 func TestReadSnapshotRejectsUnusableConnectionString(t *testing.T) {
 	p := New("mysql://u@127.0.0.1/db", config.Configuration{}, "hump_pub", "hump_slot", newFakeHealth(), newFakeHealth(), promauto.With(nil))
 
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "unable to connect to database") {
 		t.Fatalf("ReadSnapshot() error = %v, want it to mention an unusable connection string", err)
 	}
@@ -408,7 +486,7 @@ func TestReadSnapshotFailsWhenExtensionProbeFails(t *testing.T) {
 	server.setResponder(snapshotResponder(map[string]queryResult{"pg_extension": serverError("42501", "permission denied")}))
 	p, _, _ := newTestPostgres(t, server)
 
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "permission denied") {
 		t.Fatalf("ReadSnapshot() error = %v, want the probe failure", err)
 	}
@@ -437,7 +515,7 @@ func TestReadSnapshotRejectsUnusableLayout(t *testing.T) {
 			}))
 			p, _, _ := newTestPostgres(t, server)
 
-			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error { return nil })
+			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error { return nil })
 			if !errors.Is(err, database.ErrSnapshot) || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ReadSnapshot() error = %v, want ErrSnapshot mentioning %q", err, tt.wantErr)
 			}
@@ -459,7 +537,7 @@ func TestReadSnapshotReportsUnterminatedRow(t *testing.T) {
 	p, _, _ := newTestPostgres(t, server)
 
 	calls := 0
-	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord) error {
+	err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), "", func(domain.DbRecord, database.SnapshotRowMetadata) error {
 		calls++
 		return nil
 	})
@@ -506,8 +584,8 @@ func TestSnapshotRanges(t *testing.T) {
 		{0, []string{""}},
 		{snapshotChunkPages, []string{""}},
 		{snapshotChunkPages + 1, []string{
-			"ctid < '(1024,0)'::tid AND ",
-			"ctid >= '(1024,0)'::tid AND ",
+			"snapshot_row.ctid < '(1024,0)'::tid AND ",
+			"snapshot_row.ctid >= '(1024,0)'::tid AND ",
 		}},
 	}
 
@@ -586,7 +664,7 @@ func snapshotReadResponder(timescale bool, leaves []snapshotTestLeaf) func(strin
 		case strings.Contains(sql, "snapshot: read"):
 			for i, leaf := range leaves {
 				if strings.Contains(sql, "FROM ONLY "+qualifiedTableName(leaf.table())+" ") {
-					return queryResult{copyOut: [][]byte{fmt.Appendf(nil, "%d\t%s\n", i+1, leaf.name)}}
+					return queryResult{copyOut: [][]byte{fmt.Appendf(nil, "(0,1)\t%d\t%s\n", i+1, escapeCopyText(leaf.name))}}
 				}
 			}
 			return queryResult{err: &pgproto3.ErrorResponse{Severity: "ERROR", Code: "42P01", Message: "unknown leaf"}}

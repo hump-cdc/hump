@@ -109,6 +109,15 @@ versions everywhere.
   together.
   `.prototools` sets `auto-install`; proto applies it only after `proto trust .prototools`.
 
+## Safe logging
+
+- System logs at every level, including Debug, must not contain secrets, database row contents,
+  payloads or sensitive headers. Log only allowlisted diagnostic metadata. This rule applies to
+  system logs, not intentional web operations capture.
+- Format diagnostic URLs with `apps/hump/pkg/observability/diagnostic`. Check wrapped and nested
+  errors and shutdown-hook names for leaks too.
+- Cover new system logging paths with secret-sentinel regression tests.
+
 ## Before finishing a task
 
 Every time you finish a task, run the checks and fix everything they report before you call

@@ -16,6 +16,11 @@ what lets the caller advance its position on a nil.
 - **Snapshot** — `adapter/snapshot` receives it as a func value and calls it once per row with
   `insert`, `prev` nil and empty headers, on the run's own cancellable context.
 
+Both callers pass `database.MessageMetadata` after headers and before `prev`/`next`.
+`Process` copies `MessageID` into `sink.Context.MessageId` and `SnapshotID` into
+`sink.Context.SnapshotID`; it does not generate either value. All sinks and retries for a row
+share that identity. `SnapshotID` is empty for WAL, or the exported snapshot id for snapshot rows.
+
 `pkg/worker_pool`'s batch API is single-goroutine only. `Process` returns the error of
 `BeginBatch` wrapped as `begin batch: …`, so a second concurrent caller fails with
 `ErrAlreadyInFlight` and delivers nothing; it is not queued behind the first. Keeping callers from
@@ -51,6 +56,10 @@ Errors take two routes, and they do not carry the same information:
 
 A `Submit` error wins over the batch result, but the batch is still flushed first, so tasks
 already queued are awaited either way.
+
+`Process` logs operation, database, schema and table metadata with trace context, never `prev`
+or `next`. Failure lines use the `error` key. The `sink.Context` still carries the original row
+contents and headers for delivery.
 
 ## The delivery chain
 
@@ -163,8 +172,12 @@ and normally no batch is open. `Shutdown` takes the pool mutex that `BeginBatch`
 ## Tests
 
 `binding_test.go` covers the binding in isolation; `operation_log_test.go` drives a whole chain
-through `newBinding` with a scripted sink. Nothing tests `UseCase.Process` — the fan-out, the pool
-sizing and the error precedence are unpinned.
+through `newBinding` with a scripted sink. `usecase_test.go` covers operation filtering across
+duplicate table entries, unknown tables, empty bindings, worker failure, cancelled submission,
+calls after shutdown and the shutdown hook. It does not pin concurrent fan-out, pool sizing or
+error precedence. `TestProcessLogsExcludeRowContents` in that file checks real Info/Debug child
+process output for success, worker failure and cancelled submission, including metadata, trace
+fields, the `error` key and absence of row contents.
 
 The benchmarks are a contract with `adapter/operations_collector`, which cites them by name:
 `BenchmarkBindingProcessWithoutLog` (nil log) is the control for `BenchmarkBindingProcessIdle`

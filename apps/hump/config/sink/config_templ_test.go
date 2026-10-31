@@ -42,6 +42,68 @@ func TestDefaultTemplatesWriteNonFiniteFloatsAsNull(t *testing.T) {
 	}
 }
 
+func TestDefaultPayloadPreservesDecodedValueLeaves(t *testing.T) {
+	ctx := &sinkport.Context{
+		Timestamp: time.Unix(1700000000, 0),
+		Operation: domain.OperationTypeUpdate,
+		Schema:    "public", Table: "readings",
+		Prev: domain.DbRecord{"missing": domain.Unavailable, "empty": "", "null": nil},
+		Next: domain.DbRecord{
+			"json":      map[string]any{"big": json.Number("9007199254740993"), "fraction": json.Number("1.234567890123456789"), "nested": []any{json.Number("1e1000"), nil}},
+			"interval":  json.Number("5647511924107623375807"),
+			"timestamp": "2026-10-31T12:34:56.123456",
+			"array":     []any{json.Number("9007199254740993"), "2026-10-31T12:34:56", nil},
+			"nonfinite": math.NaN(),
+		},
+	}
+	rendered, err := mustTemplate(t, DefaultPayload).Render(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got defaultPayloadEnvelope
+	if err := json.Unmarshal([]byte(rendered), &got); err != nil {
+		t.Fatalf("payload is not JSON: %v", err)
+	}
+	if want := `{"empty":"","missing":"__hump_unavailable_value","null":null}`; string(got.Before) != want {
+		t.Errorf("before = %s, want %s", got.Before, want)
+	}
+	want := `{"array":[9007199254740993,"2026-10-31T12:34:56",null],"interval":5647511924107623375807,"json":{"big":9007199254740993,"fraction":1.234567890123456789,"nested":[1e1000,null]},"nonfinite":null,"timestamp":"2026-10-31T12:34:56.123456"}`
+	if string(got.After) != want {
+		t.Errorf("after = %s, want %s", got.After, want)
+	}
+}
+
+func TestEventIdentityTemplates(t *testing.T) {
+	ctx := &sinkport.Context{Schema: "public", Table: "users", Operation: domain.OperationTypeInsert, MessageId: "event-1", SnapshotID: "snapshot-1", Next: domain.DbRecord{"id": 1}}
+	fields := mustTemplate(t, "{{ .MessageId }}:{{ .SnapshotID }}")
+	if got, err := fields.Render(ctx); err != nil || got != "event-1:snapshot-1" {
+		t.Fatalf("identity fields = %q, %v", got, err)
+	}
+	if DefaultIdempotencyKey != "{{ sha256 (cat .Schema .Table .Operation .MessageId (.Prev | json) (.Next | json)) }}" {
+		t.Fatalf("default identity template = %q", DefaultIdempotencyKey)
+	}
+	tmpl := mustTemplate(t, DefaultIdempotencyKey)
+	first, err := tmpl.Render(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.Timestamp = time.Now()
+	if got, err := tmpl.Render(ctx); err != nil || got != first {
+		t.Fatalf("changed timestamp changed key: %q, %v", got, err)
+	}
+	ctx.MessageId = "event-2"
+	if got, err := tmpl.Render(ctx); err != nil || got == first {
+		t.Fatalf("changed event did not change key: %q, %v", got, err)
+	}
+	payload, err := mustTemplate(t, DefaultPayload).Render(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, "event-2") || strings.Contains(payload, "snapshot-1") {
+		t.Fatalf("identity metadata leaked into payload: %s", payload)
+	}
+}
+
 func FuzzDefaultPayload(f *testing.F) {
 	f.Add("public", "users", "name", "alice", int64(7), 1.5, true, uint8(0), int64(1700000000000000000))
 	f.Add("", "", "", "", int64(0), 0.0, false, uint8(1), int64(0))
@@ -170,6 +232,8 @@ func assertDefaultPayloadRecord(t *testing.T, name string, raw json.RawMessage, 
 	finite := make(domain.DbRecord, len(record))
 	for column, value := range record {
 		switch v := value.(type) {
+		case domain.UnavailableValue:
+			value = "__hump_unavailable_value"
 		case float64:
 			if math.IsNaN(v) || math.IsInf(v, 0) {
 				value = nil

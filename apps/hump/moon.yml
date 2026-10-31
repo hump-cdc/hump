@@ -62,6 +62,27 @@ tasks:
     description: 'Run all unit tests'
     script: 'go tool gotestsum --format testdox ./...'
     inputs: ['@group(sources)']
+  test-integration:
+    description: 'Run opt-in string literal integration tests against an isolated PostgreSQL 17 with default strings off'
+    script: |
+      set -euo pipefail
+      : "${HUMP_TEST_POSTGRES_DSN:?Set HUMP_TEST_POSTGRES_DSN to an isolated PostgreSQL 17 instance with standard_conforming_strings=off}"
+      go test -tags=integration -count=1 -v -run '^TestPostgresStringLiteralsIntegration' ./internal/adapter/postgres
+    preset: 'utility'
+    options:
+      cache: false
+      runInCI: false
+  test-where-fuzz:
+    description: 'Fuzz the WHERE parser, literal quoting and suggestions for 10 seconds each'
+    script: |
+      set -euo pipefail
+      for target in FuzzSnapshotWhereParser FuzzSnapshotWhereQuoting FuzzSnapshotWhereSuggester; do
+        go test -run '^$' -fuzz "^${target}$" -fuzztime=10s ./internal/adapter/postgres
+      done
+    preset: 'utility'
+    options:
+      cache: false
+      runInCI: false
   test-file:
     description: 'Run the tests of the package in the directory moon was started from'
     script: 'cd "$MOON_WORKING_DIR" && exec go tool gotestsum --format testdox'

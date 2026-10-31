@@ -21,6 +21,46 @@ import (
 	port "hump/internal/port/snapshot"
 )
 
+func TestSnapshotEventIdentity(t *testing.T) {
+	row := domain.DbRecord{"ctid": "user-value", "MessageId": "user-id", "id": 1}
+	db := newFakeDatabase()
+	db.rows["users"] = []domain.DbRecord{row, row, row, row}
+	db.rowMetadata = []database.SnapshotRowMetadata{
+		{Schema: "physical", Table: "leaf1", CTID: "(1,1)"},
+		{Schema: "physical", Table: "leaf1", CTID: "(1,1)"},
+		{Schema: "physical", Table: "leaf1", CTID: "(1,2)"},
+		{Schema: "physical", Table: "leaf2", CTID: "(1,1)"},
+	}
+	process := &fakeProcess{}
+	r := newTestRunner(t, db, configWith(identifier("users")), process)
+	r.state.Tables = []port.Table{{Table: identifier("users")}}
+	started := time.Now()
+	for _, snapshotID := range []string{"snap-1", "snap-2"} {
+		r.readTableSnapshot(context.Background(), snapshotID, 0, request("users", ""))
+	}
+	calls := process.calls
+	if len(calls) != 8 {
+		t.Fatalf("calls = %d", len(calls))
+	}
+	if calls[0].metadata.MessageID != calls[1].metadata.MessageID {
+		t.Fatal("repeated physical row changed identity")
+	}
+	for _, i := range []int{2, 3, 4} {
+		if calls[0].metadata.MessageID == calls[i].metadata.MessageID {
+			t.Fatalf("row %d identity collided", i)
+		}
+	}
+	for i, call := range calls {
+		wantSnapshot := "snap-1"
+		if i >= 4 {
+			wantSnapshot = "snap-2"
+		}
+		if call.metadata.SnapshotID != wantSnapshot || len(call.metadata.MessageID) != 64 || !reflect.DeepEqual(call.next, row) || call.prev != nil || call.operation != domain.OperationTypeInsert || call.timestamp.Before(started) || call.timestamp.After(time.Now()) {
+			t.Fatalf("unexpected delivery: %+v", call)
+		}
+	}
+}
+
 func TestStartValidatesEveryFilterBeforeStarting(t *testing.T) {
 	db := newFakeDatabase()
 	db.invalid["1; DROP TABLE users"] = true
@@ -462,15 +502,16 @@ func TestGetSinksKeepsSinksReceivingInserts(t *testing.T) {
 type fakeDatabase struct {
 	database.Database
 
-	invalid   map[string]bool                // invalid holds the filters ValidateWhere rejects.
-	counts    map[string][]database.RowCount // counts are streamed by GetRowCount, keyed by table name.
-	countErrs map[string]error               // countErrs fail GetRowCount of a table.
-	rows      map[string][]domain.DbRecord   // rows are read by ReadSnapshot, keyed by table name.
-	readErrs  map[string]error               // readErrs end ReadSnapshot of a table after its rows.
-	startErr  error                          // startErr fails StartSnapshot.
-	finishErr error                          // finishErr fails FinishSnapshot.
-	block     chan struct{}                  // block, when set, holds every read until closed or ctx is done.
-	readWait  time.Duration                  // readWait is how long each read takes before its rows.
+	invalid     map[string]bool                // invalid holds the filters ValidateWhere rejects.
+	counts      map[string][]database.RowCount // counts are streamed by GetRowCount, keyed by table name.
+	countErrs   map[string]error               // countErrs fail GetRowCount of a table.
+	rows        map[string][]domain.DbRecord   // rows are read by ReadSnapshot, keyed by table name.
+	rowMetadata []database.SnapshotRowMetadata
+	readErrs    map[string]error // readErrs end ReadSnapshot of a table after its rows.
+	startErr    error            // startErr fails StartSnapshot.
+	finishErr   error            // finishErr fails FinishSnapshot.
+	block       chan struct{}    // block, when set, holds every read until closed or ctx is done.
+	readWait    time.Duration    // readWait is how long each read takes before its rows.
 
 	mu      sync.Mutex
 	events  []string // events records "start" and "finish" in call order.
@@ -550,8 +591,8 @@ func (d *fakeDatabase) FinishSnapshot(context.Context) error {
 
 // ReadSnapshot hands the rows scripted for the table to onRow, after block and
 // readWait, then answers the table's scripted error.
-func (d *fakeDatabase) ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, _ string, onRow func(domain.DbRecord) error) error {
-	if snapshotID != "snap-1" {
+func (d *fakeDatabase) ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, _ string, onRow func(domain.DbRecord, database.SnapshotRowMetadata) error) error {
+	if snapshotID != "snap-1" && snapshotID != "snap-2" {
 		return fmt.Errorf("unknown snapshot %q", snapshotID)
 	}
 
@@ -568,8 +609,12 @@ func (d *fakeDatabase) ReadSnapshot(ctx context.Context, snapshotID string, tabl
 
 	time.Sleep(d.readWait)
 
-	for _, record := range d.rows[string(table.Name)] {
-		if err := onRow(record); err != nil {
+	for i, record := range d.rows[string(table.Name)] {
+		row := database.SnapshotRowMetadata{Schema: table.Schema, Table: table.Name, CTID: fmt.Sprintf("(0,%d)", i+1)}
+		if i < len(d.rowMetadata) {
+			row = d.rowMetadata[i]
+		}
+		if err := onRow(record, row); err != nil {
 			return err
 		}
 	}
@@ -616,6 +661,8 @@ func (d *fakeDatabase) peakReads() int {
 
 // processCall is one recorded call of the process handler.
 type processCall struct {
+	timestamp time.Time
+	metadata  database.MessageMetadata
 	operation domain.OperationType
 	dbName    domain.DbName
 	table     domain.TableIdentifier
@@ -634,11 +681,11 @@ type fakeProcess struct {
 }
 
 // handle is the process handler the runner is given.
-func (p *fakeProcess) handle(_ context.Context, _ time.Time, operation domain.OperationType, dbName domain.DbName, schema domain.TableSchema, table domain.TableName, _ domain.Headers, prev domain.DbRecord, next domain.DbRecord) error {
+func (p *fakeProcess) handle(_ context.Context, timestamp time.Time, operation domain.OperationType, dbName domain.DbName, schema domain.TableSchema, table domain.TableName, _ domain.Headers, metadata database.MessageMetadata, prev domain.DbRecord, next domain.DbRecord) error {
 	p.mu.Lock()
 	p.active++
 	p.peak = max(p.peak, p.active)
-	p.calls = append(p.calls, processCall{operation: operation, dbName: dbName, table: domain.TableIdentifier{Schema: schema, Name: table}, prev: prev, next: next})
+	p.calls = append(p.calls, processCall{timestamp: timestamp, metadata: metadata, operation: operation, dbName: dbName, table: domain.TableIdentifier{Schema: schema, Name: table}, prev: prev, next: next})
 	p.mu.Unlock()
 
 	// Long enough for an unserialized second caller to overlap.

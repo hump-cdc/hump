@@ -14,6 +14,7 @@ import (
 	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
+	"hump/pkg/observability/diagnostic"
 )
 
 // clientKey identifies a NATS client by the rendered connection parameters
@@ -91,14 +92,17 @@ func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.Context) (*natsCon
 		nats.ReconnectWait(2 * time.Second),
 		nats.ReconnectJitter(100*time.Millisecond, time.Second),
 		nats.ReconnectBufSize(-1),
+		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
+			logger.Error("NATS asynchronous error", "url", diagnostic.Endpoints(url), "err", diagnostic.Error("NATS asynchronous error", err))
+		}),
 		nats.DisconnectErrHandler(func(c *nats.Conn, err error) {
-			logger.Warn("NATS disconnected", "url", url, "err", err, "last_err", c.LastError())
+			logger.Warn("NATS disconnected", "url", diagnostic.Endpoints(url), "err", diagnostic.Error("NATS disconnect error", err), "last_err", diagnostic.Error("NATS connection error", c.LastError()))
 		}),
 		nats.ReconnectHandler(func(c *nats.Conn) {
-			logger.Info("NATS reconnected", "url", c.ConnectedUrl())
+			logger.Info("NATS reconnected", "url", diagnostic.Endpoint(c.ConnectedUrl()))
 		}),
 		nats.ClosedHandler(func(c *nats.Conn) {
-			logger.Error("NATS connection closed", "url", url, "last_err", c.LastError())
+			logger.Error("NATS connection closed", "url", diagnostic.Endpoints(url), "last_err", diagnostic.Error("NATS connection error", c.LastError()))
 		}),
 	}
 	if name != "" {
@@ -110,13 +114,13 @@ func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.Context) (*natsCon
 
 	connection, err := nats.Connect(url, options...)
 	if err != nil {
-		return nil, fmt.Errorf("nats client for %s: %w", cfg.URL.Source(), err)
+		return nil, diagnostic.Error("nats client for "+diagnostic.Endpoints(url), err)
 	}
 
 	js, err := jetstream.New(connection)
 	if err != nil {
 		connection.Close()
-		return nil, fmt.Errorf("nats jetstream for %s: %w", cfg.URL.Source(), err)
+		return nil, diagnostic.Error("nats jetstream for "+diagnostic.Endpoints(url), err)
 	}
 
 	c := &natsConn{
@@ -126,8 +130,8 @@ func getClient(cfg sinkcfg.NatsCommon, operationContext *sink.Context) (*natsCon
 	}
 	clients[key] = c
 
-	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("nats_sink(%s)", url), func(_ context.Context) error {
-		return connection.Drain()
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("nats_sink(%s)", diagnostic.Endpoints(url)), func(_ context.Context) error {
+		return diagnostic.Error("NATS drain failed", connection.Drain())
 	})
 
 	return c, nil

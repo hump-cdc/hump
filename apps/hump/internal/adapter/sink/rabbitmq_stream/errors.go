@@ -8,6 +8,7 @@ import (
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 
 	"hump/internal/port/sink"
+	"hump/pkg/observability/diagnostic"
 	"hump/pkg/template"
 )
 
@@ -36,6 +37,7 @@ func wrapError(err error) error {
 		return nil
 	}
 
+	err = diagnostic.Error("RabbitMQ stream delivery failed", err)
 	if errors.Is(err, template.ErrRender) || isPermanentStreamError(err) {
 		return fmt.Errorf("rabbitmq-stream: %w", errors.Join(err, sink.ErrSinkPermanent))
 	}

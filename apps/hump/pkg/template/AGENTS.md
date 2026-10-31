@@ -62,14 +62,16 @@ family) are how a template raises one deliberately.
 stdlib functions themselves. A `FuncMap` entry overrides the builtin of the same name, and the
 override is needed for one reason: **unavailable values**.
 
-A column the WAL stream did not carry is `domain.UnavailableValue`. It renders as `""`, but it is a
-struct, and the stock `eq` refuses to compare a struct with a string. So here:
+A column the WAL stream did not carry is `domain.UnavailableValue`. It renders as
+`__hump_unavailable_value`, but keeps the legacy empty-value comparison rules. It is a struct,
+and the stock `eq` refuses to compare a struct with a string. So here:
 
 - `eq` and `ne` substitute `""` for it before comparing (`normalizeUnavailable`).
 - `empty`, `coalesce` and `required` treat it as empty.
-- `unavailable` is the only function that tells it apart from a real empty string.
+- `unavailable` detects the sentinel, not real text that happens to match the wire marker.
 - `default` is **not** part of that: it replaces an untyped nil only, so neither an unavailable
-  value nor `""` triggers the fallback. Use `coalesce` for those.
+  value nor `""` triggers the fallback. The unavailable value still prints its marker. Use
+  `coalesce` for an empty-value fallback.
 
 `funcs` reaches the value through the one-method `unavailableValue` interface rather than importing
 `internal/domain`, which is what keeps `pkg/` free of project imports. The test doubles `undelivered`
@@ -77,6 +79,20 @@ and `delivered` exist to prove the check calls the method instead of only lookin
 
 The copy went through a mechanical rename, so a few engine error strings read oddly (`tmplIndex out
 of range`, `should be 1 tmplOr 2`). They are user-visible in render errors.
+
+## Number-preserving JSON
+
+`fromjson` and `fromjsonarray` use `json.Decoder.UseNumber` and require one complete JSON value;
+reject malformed input and trailing non-whitespace data. Keep nested objects and arrays as
+`map[string]any` / `[]any`, with numeric leaves as `json.Number`, matching PostgreSQL decoding.
+JSON serialization preserves numeric literals, not object key order or duplicate keys.
+
+Numeric conversions and math helpers accept `json.Number` through the `int64`/`float64`
+coercion paths. They remain fixed-width or floating-point operations, not arbitrary-precision
+math. Do not normalize all numeric leaves to floats: that would lose precision before output.
+Builtin comparisons and truthiness still see a string-backed number: numeric zero is truthy
+and non-empty, comparisons between two such values are lexical, and comparisons against
+numeric literals need explicit conversion.
 
 ## Conventions in `funcs`
 

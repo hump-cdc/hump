@@ -30,8 +30,9 @@ type connection struct {
 	dbPort           uint16
 	dbName           domain.DbName
 
-	connection *pgconn.PgConn
-	mu         sync.Mutex
+	connection     *pgconn.PgConn
+	mu             sync.Mutex
+	settingsWarned bool
 
 	maxAttempts int
 	baseDelay   time.Duration
@@ -199,6 +200,7 @@ func (c *connection) acquire(ctx context.Context) (*pgconn.PgConn, error) {
 	defer c.mu.Unlock()
 
 	if c.connection != nil && !c.connection.IsClosed() {
+		c.checkSessionSettings(c.connection)
 		return c.connection, nil
 	}
 
@@ -217,8 +219,20 @@ func (c *connection) acquire(ctx context.Context) (*pgconn.PgConn, error) {
 	}
 
 	c.connection = connection
+	c.settingsWarned = false
+	c.checkSessionSettings(connection)
 
 	return connection, nil
+}
+
+// checkSessionSettings warns once per session without rejecting a usable connection.
+// The caller holds c.mu; unexpected server values never reach the log.
+func (c *connection) checkSessionSettings(conn *pgconn.PgConn) {
+	state := stringSettingState(conn.ParameterStatus("standard_conforming_strings"))
+	if state != "on" && !c.settingsWarned {
+		logger.Warn("PostgreSQL session standard_conforming_strings is not on", slog.String("state", state))
+		c.settingsWarned = true
+	}
 }
 
 // connect opens a pgconn session with retries and exponential backoff. It is

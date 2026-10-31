@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"hump/internal/domain"
+	"hump/internal/port/database"
 )
 
 // ValidateWhere reports whether where is a row filter a snapshot accepts.
@@ -24,6 +25,6 @@ func (p *Postgres) FinishSnapshot(ctx context.Context) error {
 
 // ReadSnapshot calls onRow for every row of table matching where, as the
 // snapshot with snapshotID sees it.
-func (p *Postgres) ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord) error) error {
+func (p *Postgres) ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord, database.SnapshotRowMetadata) error) error {
 	return p.snapshot.Read(ctx, snapshotID, table, where, onRow)
 }

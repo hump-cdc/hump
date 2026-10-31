@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 // tmplAtoi parses s as a base-10 integer, returning 0 on failure (matches
@@ -63,6 +65,8 @@ func tmplInt64(v any) int64 {
 		return int64(x)
 	case float64:
 		return int64(x)
+	case json.Number:
+		return tmplInt64(string(x))
 	case string:
 		n, err := strconv.ParseInt(x, 10, 64)
 		if err == nil {
@@ -115,6 +119,8 @@ func tmplFloat64(v any) float64 {
 	case string:
 		f, _ := strconv.ParseFloat(x, 64)
 		return f
+	case json.Number:
+		return tmplFloat64(string(x))
 	}
 	return 0
 }
@@ -149,15 +155,8 @@ func tmplToStrings(list any) []string {
 	return nil
 }
 
-// tmplJSON marshals a value to a JSON string. Usage:
-//
-//	{{.X | json}}        // compact
-//	{{.X | json true}}   // indented (two spaces per level)
-//
-// The piped value is always the final argument; an optional leading bool
-// selects pretty-printing. NaN and ±Inf floats, which JSON cannot represent,
-// are written as null. Other marshalling errors are propagated to the template
-// engine.
+// tmplJSON marshals the final argument to JSON, optionally indented by a leading bool.
+// NaN and ±Inf floats become null; other marshalling errors reach the template engine.
 func tmplJSON(args ...any) (string, error) {
 	var (
 		prettify bool
@@ -248,23 +247,39 @@ var jsonMarshalerType = reflect.TypeFor[json.Marshaler]()
 // encoding/json, which reports the cycle, instead of overflowing the stack.
 const finiteJSONMaxDepth = 1000
 
-// tmplFromJSON decodes a JSON object string into map[string]any. Errors are
-// surfaced to the template engine.
+// tmplFromJSON decodes one JSON value, preserving numeric literals as json.Number.
 func tmplFromJSON(s string) (any, error) {
 	var v any
-	if err := json.Unmarshal([]byte(s), &v); err != nil {
+	if err := decodeJSON(s, &v); err != nil {
 		return nil, err
 	}
 	return v, nil
 }
 
-// tmplFromJSONArray decodes a JSON array string into []any.
+// tmplFromJSONArray decodes one JSON array or null, preserving numeric literals.
 func tmplFromJSONArray(s string) ([]any, error) {
 	var v []any
-	if err := json.Unmarshal([]byte(s), &v); err != nil {
+	if err := decodeJSON(s, &v); err != nil {
 		return nil, err
 	}
 	return v, nil
+}
+
+// decodeJSON decodes exactly one JSON value into target without rounding numbers.
+func decodeJSON(s string, target any) error {
+	decoder := json.NewDecoder(strings.NewReader(s))
+	decoder.UseNumber()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return errors.New("expected a single JSON value")
+	}
+	return nil
 }
 
 // clampUint64 converts u to int64, clamping values above math.MaxInt64.

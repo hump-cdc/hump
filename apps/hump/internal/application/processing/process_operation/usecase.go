@@ -9,6 +9,7 @@ import (
 
 	"hump/config"
 	"hump/internal/domain"
+	"hump/internal/port/database"
 	metricscollector "hump/internal/port/metrics_collector"
 	operationscollector "hump/internal/port/operations_collector"
 	"hump/internal/port/sink"
@@ -124,6 +125,7 @@ func (uc *UseCase) Process(
 	table domain.TableName,
 
 	headers domain.Headers,
+	metadata database.MessageMetadata,
 	prev domain.DbRecord,
 	next domain.DbRecord,
 ) error {
@@ -131,11 +133,13 @@ func (uc *UseCase) Process(
 	logger := logger.WithTraceparent(traceparent)
 
 	logger.Debug("Processing",
-		"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
+		"operation", operation, "database", dbName, "schema", schema, "table", table,
 	)
 
 	operationContext := &sink.Context{
-		Version: version.Version,
+		Version:    version.Version,
+		MessageId:  metadata.MessageID,
+		SnapshotID: metadata.SnapshotID,
 
 		Timestamp: timestamp,
 		Operation: operation,
@@ -163,7 +167,7 @@ func (uc *UseCase) Process(
 
 		if err := uc.wp.Submit(ctx, binding.fn, operationContext); err != nil {
 			logger.Error("Failed to submit task to worker pool",
-				"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next, "errror", err,
+				"operation", operation, "database", dbName, "schema", schema, "table", table, "error", err,
 			)
 			submitErr = err
 		}
@@ -176,12 +180,12 @@ func (uc *UseCase) Process(
 
 	if err == nil {
 		logger.Debug("Processed",
-			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
+			"operation", operation, "database", dbName, "schema", schema, "table", table,
 		)
 	} else {
 		logger.Error("Failed to process",
-			"operation", operation, "database", dbName, "schema", schema, "table", table, "operation", operation, "prev", prev, "next", next,
-			"errror", err,
+			"operation", operation, "database", dbName, "schema", schema, "table", table,
+			"error", err,
 		)
 	}
 

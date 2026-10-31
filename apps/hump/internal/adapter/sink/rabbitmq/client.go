@@ -12,6 +12,7 @@ import (
 	sinkcfg "hump/config/sink"
 	sink "hump/internal/port/sink"
 	"hump/pkg/app/shutdown"
+	"hump/pkg/observability/diagnostic"
 	"hump/pkg/version"
 )
 
@@ -32,10 +33,8 @@ type clientKey struct {
 	url string
 }
 
-// rabbitConn bundles a single AMQP connection, its single confirm-mode
-// channel, and the per-(connection, exchange) reconcile guard. mu serializes
-// concurrent publishes against the single channel and the confirm/return
-// drain that follows each publish — see returns.go for the invariant.
+// rabbitConn holds the connection, confirm-mode channel and exchange reconciler.
+// mu serializes publishing and confirmation drains; see returns.go for the invariant.
 type rabbitConn struct {
 	url string
 
@@ -85,14 +84,14 @@ func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.Context) (*rabbi
 	rc.reconciler = newExchangeReconciler(rc.healthyChannel)
 
 	if err := rc.dialAndOpen(); err != nil {
-		return nil, fmt.Errorf("rabbitmq dial %s: %w", cfg.URL.Source(), err)
+		return nil, diagnostic.Error("rabbitmq dial "+diagnostic.Endpoint(url), err)
 	}
 
 	go rc.supervise()
 
 	clients[key] = rc
 
-	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_sink(%s)", url), func(_ context.Context) error {
+	shutdown.OnShutdown(shutdown.StageSinks, fmt.Sprintf("rabbitmq_sink(%s)", diagnostic.Endpoint(url)), func(_ context.Context) error {
 		// Signal the supervisor to stop, then close the channel and connection.
 		// Idempotency: closing an already-closed channel panics, guard with
 		// a select that races against the supervisor.
@@ -126,11 +125,8 @@ func getClient(cfg sinkcfg.RabbitMQSink, operationContext *sink.Context) (*rabbi
 	return rc, nil
 }
 
-// dialAndOpen establishes a fresh connection, opens a single channel in
-// confirm mode, wires the notify channels, and closes rc.ready to unblock
-// any callers waiting on the previous outage. Safe to call from the
-// constructor (rc.ready already created) or the supervisor (it replaces
-// rc.ready before redialing).
+// dialAndOpen establishes a connection and confirm-mode channel, then signals readiness.
+// The constructor creates rc.ready; the supervisor replaces it before redialing.
 func (rc *rabbitConn) dialAndOpen() error {
 	conn, err := amqp.DialConfig(rc.url, amqp.Config{
 		Heartbeat: heartbeatInterval,
@@ -142,7 +138,7 @@ func (rc *rabbitConn) dialAndOpen() error {
 		},
 	})
 	if err != nil {
-		return err
+		return diagnostic.Error("RabbitMQ connection failed", err)
 	}
 
 	ch, err := conn.Channel()
@@ -171,7 +167,7 @@ func (rc *rabbitConn) dialAndOpen() error {
 
 	rc.signalReady()
 
-	logger.Info("RabbitMQ connection established", "url", rc.url)
+	logger.Info("RabbitMQ connection established", "url", diagnostic.Endpoint(rc.url))
 
 	return nil
 }
@@ -228,12 +224,8 @@ func (rc *rabbitConn) healthyChannelLocked() (*amqp.Channel, error) {
 	return rc.reopenChannelLocked()
 }
 
-// reopenChannelLocked replaces the dead channel with a fresh one in confirm
-// mode and rewires the notify channels. Caller must hold rc.mu.
-//
-// Exchange declarations persist on the broker across channels, so the
-// reconciler is NOT invalidated here — only a connection reconnect throws
-// out reconcile state.
+// reopenChannelLocked replaces the dead channel in confirm mode; callers must hold rc.mu.
+// Exchange declarations survive channel replacement, so the reconciler stays valid.
 func (rc *rabbitConn) reopenChannelLocked() (*amqp.Channel, error) {
 	ch, err := rc.conn.Channel()
 	if err != nil {
@@ -248,7 +240,7 @@ func (rc *rabbitConn) reopenChannelLocked() (*amqp.Channel, error) {
 	rc.confirms = ch.NotifyPublish(make(chan amqp.Confirmation, confirmChannelDepth))
 	rc.returns = ch.NotifyReturn(make(chan amqp.Return, confirmChannelDepth))
 
-	logger.Info("RabbitMQ channel reopened", "url", rc.url)
+	logger.Info("RabbitMQ channel reopened", "url", diagnostic.Endpoint(rc.url))
 	return ch, nil
 }
 
@@ -275,7 +267,7 @@ func (rc *rabbitConn) supervise() {
 
 		// Connection died. Surface the cause and replace ready so subsequent
 		// Process calls block (until ctx) instead of operating on a dead channel.
-		logger.Warn("RabbitMQ connection closed", "url", rc.url, "err", amqpErr)
+		logger.Warn("RabbitMQ connection closed", "url", diagnostic.Endpoint(rc.url), "err", diagnostic.Error("RabbitMQ connection closed", amqpErr))
 
 		rc.mu.Lock()
 		rc.ch = nil
@@ -293,11 +285,11 @@ func (rc *rabbitConn) supervise() {
 			}
 
 			if err := rc.dialAndOpen(); err != nil {
-				logger.Warn("RabbitMQ reconnect failed", "url", rc.url, "err", err)
+				logger.Warn("RabbitMQ reconnect failed", "url", diagnostic.Endpoint(rc.url), "err", diagnostic.Error("RabbitMQ reconnect failed", err))
 				continue
 			}
 
-			logger.Info("RabbitMQ reconnected", "url", rc.url)
+			logger.Info("RabbitMQ reconnected", "url", diagnostic.Endpoint(rc.url))
 			rc.reconciler.invalidate()
 			break
 		}

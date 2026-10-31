@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"hump/internal/domain"
+	"hump/internal/port/database"
 )
 
 func TestWalGatePassesCallsWhileOpen(t *testing.T) {
@@ -14,12 +15,26 @@ func TestWalGatePassesCallsWhileOpen(t *testing.T) {
 	calls := 0
 
 	handler := gate.wrap(context.Background(), countingHandler(&calls))
-	if err := handler(context.Background(), time.Now(), domain.OperationTypeInsert, "db", "public", "users", nil, nil, nil); err != nil {
+	if err := handler(context.Background(), time.Now(), domain.OperationTypeInsert, "db", "public", "users", nil, database.MessageMetadata{}, nil, nil); err != nil {
 		t.Fatalf("handler() error = %v", err)
 	}
 
 	if calls != 1 {
 		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestWalGatePreservesMessageMetadata(t *testing.T) {
+	gate := newWalGate()
+	recorder := newHandlerRecorder(nil)
+	handler := gate.wrap(context.Background(), recorder.handle)
+	metadata := database.MessageMetadata{MessageID: "message-id", SnapshotID: "snapshot-id"}
+	if err := handler(context.Background(), time.Now(), domain.OperationTypeInsert, "db", "public", "users", nil, metadata, nil, nil); err != nil {
+		t.Fatalf("handler() error = %v", err)
+	}
+	calls := recorder.recorded()
+	if len(calls) != 1 || calls[0].metadata != metadata {
+		t.Errorf("handler calls = %+v, want metadata %+v", calls, metadata)
 	}
 }
 
@@ -122,7 +137,7 @@ func TestWalGateWrapEndsWaitOnStop(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- handler(context.WithoutCancel(stop), time.Now(), domain.OperationTypeInsert, "db", "public", "users", nil, nil, nil)
+		done <- handler(context.WithoutCancel(stop), time.Now(), domain.OperationTypeInsert, "db", "public", "users", nil, database.MessageMetadata{}, nil, nil)
 	}()
 
 	cancel()
@@ -142,8 +157,8 @@ func TestWalGateWrapEndsWaitOnStop(t *testing.T) {
 }
 
 // countingHandler is a handler that counts its calls in calls.
-func countingHandler(calls *int) func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
-	return func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, domain.DbRecord, domain.DbRecord) error {
+func countingHandler(calls *int) func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
+	return func(context.Context, time.Time, domain.OperationType, domain.DbName, domain.TableSchema, domain.TableName, domain.Headers, database.MessageMetadata, domain.DbRecord, domain.DbRecord) error {
 		*calls++
 		return nil
 	}

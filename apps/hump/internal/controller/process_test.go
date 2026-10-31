@@ -57,7 +57,7 @@ func (l *fakeListener) Listen(ctx context.Context, handler database.ProcessMessa
 		return l.err
 	}
 
-	return handler(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", "users", nil, nil, domain.DbRecord{"id": 1})
+	return handler(ctx, time.Now(), domain.OperationTypeInsert, "app", "public", "users", nil, database.MessageMetadata{}, nil, domain.DbRecord{"id": 1})
 }
 
 // processConfig configures public.users with one single-attempt sink.

@@ -20,8 +20,9 @@ when the API is only described, never served, and answers a closed channel.
 ## `ProcessMessageHandler` is the single entry into the pipeline
 
 WAL rows (`Listen`) and snapshot rows (`adapter/snapshot`) reach the processing use case through
-this one signature, which is why sinks, operation filters and the operations log cannot tell them
-apart. A snapshot row is an `insert` with nil `prev` and no headers.
+this one signature. `MessageMetadata` follows `headers`, before `prev` and `next`, and carries
+`MessageID` and `SnapshotID`. `SnapshotID` is empty for WAL and is the exported database snapshot
+id for snapshot rows. A snapshot row is an `insert` with nil `prev` and no headers.
 
 The handler is not safe for concurrent calls — `StartSnapshot` pauses WAL delivery precisely so
 the snapshot runner is its only caller.
@@ -35,6 +36,11 @@ the snapshot runner is its only caller.
   snapshot's id — `adapter/snapshot` does exactly that through `runDone`.
 - `FinishSnapshot` is a no-op without an active snapshot, so it is safe in a `defer`.
 - Until `FinishSnapshot` runs, WAL delivery stays paused and the slot keeps retaining WAL.
+
+`ReadSnapshot` calls `func(domain.DbRecord, database.SnapshotRowMetadata) error` per row.
+`SnapshotRowMetadata.Schema` and `.Table` identify the physical leaf; `.CTID` identifies the
+tuple within it. These are separate from user fields in `DbRecord`, including columns named
+`ctid`, and from the configured table reported to sinks.
 
 ## `GetRowCount` streams, and errors travel inside it
 

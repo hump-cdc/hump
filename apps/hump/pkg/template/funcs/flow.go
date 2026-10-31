@@ -7,8 +7,7 @@ import (
 
 // tmplEmpty reports whether v is the zero value for its type. Mirrors
 // Helm/sprig `empty`: nil, "", 0, false, empty slice/map/array, nil pointer.
-// A value the source did not deliver counts as empty, matching the "" it
-// renders as.
+// A value the source did not deliver also counts as empty.
 func tmplEmpty(v any) bool {
 	if v == nil || isUnavailable(v) {
 		return true

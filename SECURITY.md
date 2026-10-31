@@ -71,8 +71,10 @@ To encrypt the connection, add `sslmode=verify-full` to the connection URL (plus
 
 - Pass the connection URL in `DATABASE_URL` rather than `--database-url`. Other users on the host can see command-line arguments in the process list.
 - Hump doesn't substitute environment variables in the YAML file. Credential fields are templates, though, so read them with `env`: `password: '{{ env "KAFKA_PASSWORD" }}'`. This works for Kafka `username` and `password`, NATS `username`, `password`, `token`, `credentials` and `nkeySeed`, RabbitMQ and RabbitMQ Streams `url`, and HTTP `headers`. See [Process environment](docs/template.md#process-environment).
-- `GET /api/config` returns the configuration source, so it shows `{{ env "..." }}` as written and an inline password in plain text. The operations log shows rendered header values either way.
-- `LOG_VERBOSE=true` logs the parsed configuration at startup, inline credentials included.
+- `GET /api/config` returns the configuration source, so it shows `{{ env "..." }}` as written and an inline password in plain text. The operations log still contains rendered payloads and header values, which can include row data and secrets.
+- System logs omit the full parsed configuration and previous/next row contents, even with `LOG_VERBOSE=true`. This setting adds diagnostic detail; it does not enable an unsafe data mode.
+- Sink URLs in diagnostics, including sink connection and HTTP errors, show only the scheme, host and port. Credentials, paths, queries and fragments are omitted; invalid endpoints are replaced with a placeholder. This does not guarantee that arbitrary error text is free of secrets or personal data.
+- Restrict access to operations logs and retained system logs, and limit retention. Previously collected system logs may still contain credentials or row data.
 - Keep a configuration file that holds secrets out of version control, and make it readable only by the user Hump runs as (`chmod 600`).
 
 ### Sink connections

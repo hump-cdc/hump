@@ -68,13 +68,13 @@ func (g *walGate) resume() {
 // wrap returns handler gated by g. A call waits on stop rather than on its own
 // context, which WAL hands down detached, so a shutdown still ends the wait.
 func (g *walGate) wrap(stop context.Context, handler database.ProcessMessageHandler) database.ProcessMessageHandler {
-	return func(ctx context.Context, timestamp time.Time, operation domain.OperationType, dbName domain.DbName, schema domain.TableSchema, table domain.TableName, headers domain.Headers, prev domain.DbRecord, next domain.DbRecord) error {
+	return func(ctx context.Context, timestamp time.Time, operation domain.OperationType, dbName domain.DbName, schema domain.TableSchema, table domain.TableName, headers domain.Headers, metadata database.MessageMetadata, prev domain.DbRecord, next domain.DbRecord) error {
 		if err := g.enter(stop); err != nil {
 			return err
 		}
 		defer g.leave()
 
-		return handler(ctx, timestamp, operation, dbName, schema, table, headers, prev, next)
+		return handler(ctx, timestamp, operation, dbName, schema, table, headers, metadata, prev, next)
 	}
 }
 

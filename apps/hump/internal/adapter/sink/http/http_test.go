@@ -1,14 +1,19 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	nethttp "net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	sinkcfg "hump/config/sink"
@@ -119,6 +124,51 @@ func TestProcessClassifiesStatus(t *testing.T) {
 	}
 }
 
+func TestProcessDoesNotFollowRedirects(t *testing.T) {
+	for _, code := range []int{
+		nethttp.StatusMovedPermanently,
+		nethttp.StatusFound,
+		nethttp.StatusSeeOther,
+		nethttp.StatusTemporaryRedirect,
+		nethttp.StatusPermanentRedirect,
+	} {
+		t.Run(strconv.Itoa(code), func(t *testing.T) {
+			var targetHits atomic.Int64
+			target := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+				targetHits.Add(1)
+				w.WriteHeader(nethttp.StatusOK)
+			}))
+			t.Cleanup(target.Close)
+			srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+				nethttp.Redirect(w, r, target.URL, code)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := sinkcfg.HTTPSink{
+				URL:    mustTemplate(t, srv.URL),
+				Method: mustTemplate(t, "POST"),
+				Body:   mustTemplate(t, "public.users"),
+			}
+			capture := &sink.Capture{}
+			err := Process(context.Background(), cfg, testContext(), capture)
+
+			var statusErr *statusError
+			if !errors.As(err, &statusErr) || statusErr.code != code {
+				t.Errorf("Process() error = %v, want statusError %d", err, code)
+			}
+			if got := targetHits.Load(); got != 0 {
+				t.Errorf("redirect target requests = %d, want 0", got)
+			}
+			if got, want := capture.Metadata["status"], strconv.Itoa(code); got != want {
+				t.Errorf("capture status = %q, want %q", got, want)
+			}
+			if capture.Target != srv.URL {
+				t.Errorf("capture.Target = %q, want %q", capture.Target, srv.URL)
+			}
+		})
+	}
+}
+
 func TestProcessReturnsCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -178,6 +228,112 @@ func TestProcessTransportFailureIsTransient(t *testing.T) {
 	}
 }
 
+func TestProcessErrorsHideSecretURLs(t *testing.T) {
+	for _, level := range []slog.Level{slog.LevelInfo, slog.LevelDebug} {
+		t.Run(level.String(), func(t *testing.T) {
+			secret := "sentinel-secret"
+			raw := "http://user:" + secret + "@example.com/" + secret + "?token=" + secret + "#" + secret
+			dns := &net.DNSError{Err: secret, Name: secret, IsNotFound: true}
+			original := defaultClient
+			t.Cleanup(func() { defaultClient = original })
+			tests := []struct {
+				name, target string
+				cause        error
+				status       int
+				permanent    bool
+			}{
+				{name: "build", target: raw + "%zz", permanent: true},
+				{name: "transport", target: raw, cause: fmt.Errorf("%s: %w", secret, dns), permanent: true},
+				{name: "context", target: raw, cause: fmt.Errorf("%s: %w", secret, context.Canceled)},
+				{name: "status", target: raw, status: 401, permanent: true},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					defaultClient = &nethttp.Client{Transport: diagnosticTransport(func(req *nethttp.Request) (*nethttp.Response, error) {
+						if tt.cause != nil {
+							return nil, tt.cause
+						}
+						return &nethttp.Response{StatusCode: tt.status, Body: io.NopCloser(strings.NewReader("")), Header: make(nethttp.Header), Request: req}, nil
+					})}
+					capture := &sink.Capture{}
+					err := Process(context.Background(), sinkcfg.HTTPSink{URL: mustTemplate(t, tt.target)}, testContext(), capture)
+					if err == nil {
+						t.Fatal("Process() succeeded")
+					}
+					assertSafeHTTPLog(t, level, err, secret)
+					if got := errors.Is(err, sink.ErrSinkPermanent); got != tt.permanent {
+						t.Fatalf("permanent = %v, want %v", got, tt.permanent)
+					}
+					if tt.cause != nil {
+						if !errors.Is(err, tt.cause) {
+							t.Fatal("original transport cause lost")
+						}
+						var urlErr *url.Error
+						if !errors.As(err, &urlErr) || urlErr.URL == "" {
+							t.Fatal("original URL error lost")
+						}
+						if capture.Target != tt.target {
+							t.Fatal("capture target was changed")
+						}
+					}
+					if tt.name == "transport" {
+						var got *net.DNSError
+						if !errors.As(err, &got) || got != dns {
+							t.Fatal("DNS cause lost")
+						}
+					}
+					if tt.name == "context" && !errors.Is(err, context.Canceled) {
+						t.Fatal("context cause lost")
+					}
+					if tt.name == "build" && !errors.Is(err, errBuildRequest) {
+						t.Fatal("build classification lost")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestProcessRedirectErrorsHideBothURLsAndInnerCause(t *testing.T) {
+	secret := "sentinel-secret"
+	srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		nethttp.Redirect(w, r, "http://redirect.example/"+secret+"?token="+secret, nethttp.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	cause := errors.New("redirect denied: " + secret)
+	original := defaultClient
+	defaultClient = &nethttp.Client{CheckRedirect: func(_ *nethttp.Request, _ []*nethttp.Request) error { return cause }}
+	t.Cleanup(func() { defaultClient = original })
+	err := Process(context.Background(), sinkcfg.HTTPSink{URL: mustTemplate(t, srv.URL+"/"+secret)}, testContext(), nil)
+	if !errors.Is(err, cause) {
+		t.Fatal("redirect cause lost")
+	}
+	for _, level := range []slog.Level{slog.LevelInfo, slog.LevelDebug} {
+		assertSafeHTTPLog(t, level, err, secret)
+	}
+}
+
+func TestProcessBuildAndRenderErrorsHideSecretText(t *testing.T) {
+	secret := "sentinel-secret"
+	tests := []struct {
+		name string
+		cfg  sinkcfg.HTTPSink
+	}{
+		{"method", sinkcfg.HTTPSink{URL: mustTemplate(t, "https://example.com"), Method: mustTemplate(t, secret+" invalid")}},
+		{"url template", sinkcfg.HTTPSink{URL: mustTemplate(t, "https://example.com/"+secret+"/{{ .Missing }}")}},
+		{"header template", sinkcfg.HTTPSink{URL: mustTemplate(t, "https://example.com"), Headers: map[string]*template.Template{secret: mustTemplate(t, "{{ .Missing }}")}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Process(context.Background(), tt.cfg, testContext(), nil)
+			if !errors.Is(err, sink.ErrSinkPermanent) {
+				t.Fatal("permanent classification lost")
+			}
+			assertSafeHTTPLog(t, slog.LevelDebug, err, secret)
+		})
+	}
+}
+
 func TestIsPermanentHttpError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -218,6 +374,26 @@ func TestStatusErrorMessage(t *testing.T) {
 
 	if got, want := err.Error(), "http 503 from http://x"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+// diagnosticTransport substitutes a transport failure without a network connection.
+type diagnosticTransport func(*nethttp.Request) (*nethttp.Response, error)
+
+// RoundTrip invokes the configured test transport.
+func (f diagnosticTransport) RoundTrip(req *nethttp.Request) (*nethttp.Response, error) {
+	return f(req)
+}
+
+// assertSafeHTTPLog checks the actual JSON serialization at the selected logging level.
+func assertSafeHTTPLog(t *testing.T, level slog.Level, err error, secret string) {
+	t.Helper()
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: level}))
+	logger.Error("delivery failed", "err", err)
+	logger.Debug("delivery failed", "err", err)
+	if output.Len() == 0 || strings.Contains(output.String(), secret) || strings.Contains(err.Error(), secret) {
+		t.Fatalf("unsafe diagnostic: %s", output.String())
 	}
 }
 

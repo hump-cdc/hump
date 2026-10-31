@@ -43,7 +43,20 @@ type Database interface {
 	FinishSnapshot(ctx context.Context) error
 	// ReadSnapshot reads every row of table matching where as the snapshot with
 	// snapshotID sees it, calling onRow for each; an onRow error stops the read.
-	ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord) error) error
+	ReadSnapshot(ctx context.Context, snapshotID string, table domain.TableIdentifier, where string, onRow func(domain.DbRecord, SnapshotRowMetadata) error) error
+}
+
+// MessageMetadata identifies a source event independently of its delivery attempt.
+type MessageMetadata struct {
+	MessageID  string
+	SnapshotID string // SnapshotID is empty for WAL changes.
+}
+
+// SnapshotRowMetadata locates a physical row without adding fields to its user data.
+type SnapshotRowMetadata struct {
+	Schema domain.TableSchema
+	Table  domain.TableName
+	CTID   string
 }
 
 // ProcessMessageHandler receives one decoded row change from Listen; a returned
@@ -59,6 +72,7 @@ type ProcessMessageHandler func(
 	table domain.TableName,
 
 	headers domain.Headers,
+	metadata MessageMetadata,
 	prev domain.DbRecord,
 	next domain.DbRecord,
 ) error

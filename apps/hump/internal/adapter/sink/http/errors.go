@@ -7,6 +7,7 @@ import (
 	nethttp "net/http"
 
 	"hump/internal/port/sink"
+	"hump/pkg/observability/diagnostic"
 	"hump/pkg/template"
 )
 
@@ -23,7 +24,7 @@ type statusError struct {
 }
 
 func (e *statusError) Error() string {
-	return fmt.Sprintf("http %d from %s", e.code, e.url)
+	return fmt.Sprintf("http %d from %s", e.code, diagnostic.Endpoint(e.url))
 }
 
 // wrapError returns an "http" wrapped error, joining [sink.ErrSinkPermanent]

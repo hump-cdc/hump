@@ -9,9 +9,7 @@ type unavailableValue interface {
 	IsUnavailable() bool
 }
 
-// isUnavailable reports whether v stands in for undelivered data. Such values
-// render as an empty string and compare equal to one, so this is the only way
-// to tell them apart from a genuine "".
+// isUnavailable reports whether v stands in for undelivered data.
 func isUnavailable(v any) bool {
 	u, ok := v.(unavailableValue)
 	return ok && u.IsUnavailable()
@@ -24,9 +22,7 @@ func tmplUnavailable(v any) bool { return isUnavailable(v) }
 // emptyString is what an unavailable argument stands in as during comparison.
 var emptyString = reflect.ValueOf("")
 
-// normalizeUnavailable substitutes "" for a value the source did not deliver,
-// so eq and ne see the empty string it renders as rather than its own type,
-// which has no basic kind and would fail the comparison.
+// normalizeUnavailable substitutes "" for undelivered data to preserve eq/ne semantics.
 func normalizeUnavailable(v reflect.Value) reflect.Value {
 	if v.IsValid() && v.CanInterface() && isUnavailable(v.Interface()) {
 		return emptyString

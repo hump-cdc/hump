@@ -9,25 +9,28 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-func TestUnavailableRendersAsEmptyString(t *testing.T) {
-	if got := Unavailable.String(); got != "" {
-		t.Errorf("String() = %q, want an empty string", got)
+func TestUnavailableRendersAsMarker(t *testing.T) {
+	if got := Unavailable.String(); got != "__hump_unavailable_value" {
+		t.Errorf("String() = %q, want unavailable marker", got)
+	}
+	if Unavailable != (UnavailableValue{}) || !Unavailable.IsUnavailable() {
+		t.Fatal("unavailable must remain comparable and identifiable")
 	}
 
-	got, err := json.Marshal(DbRecord{"blob": Unavailable})
+	got, err := json.Marshal(DbRecord{"blob": Unavailable, "empty": "", "null": nil})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
-	if string(got) != `{"blob":""}` {
-		t.Errorf(`json.Marshal() = %s, want {"blob":""}`, got)
+	if string(got) != `{"blob":"__hump_unavailable_value","empty":"","null":null}` {
+		t.Errorf("json.Marshal() = %s, want distinct marker, empty string and null", got)
 	}
 
 	got, err = yaml.Marshal(DbRecord{"blob": Unavailable})
 	if err != nil {
 		t.Fatalf("yaml.Marshal() error = %v", err)
 	}
-	if string(got) != "blob: \"\"\n" {
-		t.Errorf(`yaml.Marshal() = %q, want "blob: \"\"\n"`, got)
+	if string(got) != "blob: __hump_unavailable_value\n" {
+		t.Errorf("yaml.Marshal() = %q, want unavailable marker", got)
 	}
 }
 
@@ -39,11 +42,11 @@ func TestUnavailableRendersThroughTemplates(t *testing.T) {
 		source string
 		want   string
 	}{
-		{"field", "{{ .Next.blob }}", ""},
-		{"json", "{{ .Next | json false }}", `{"blob":""}`},
-		{"yaml", "{{ .Next | yaml false }}", `blob: ""`},
-		{"tostring", "{{ .Next.blob | tostring }}", ""},
-		{"default", `{{ .Next.blob | default "n/a" }}`, ""},
+		{"field", "{{ .Next.blob }}", "__hump_unavailable_value"},
+		{"json", "{{ .Next | json false }}", `{"blob":"__hump_unavailable_value"}`},
+		{"yaml", "{{ .Next | yaml false }}", `blob: __hump_unavailable_value`},
+		{"tostring", "{{ .Next.blob | tostring }}", "__hump_unavailable_value"},
+		{"default", `{{ .Next.blob | default "n/a" }}`, "__hump_unavailable_value"},
 		{"empty", "{{ empty .Next.blob }}", "true"},
 		{"eq", `{{ eq .Next.blob "" }}`, "true"},
 		{"ne", `{{ ne .Next.blob "set" }}`, "true"},
@@ -67,5 +70,15 @@ func TestUnavailableRendersThroughTemplates(t *testing.T) {
 				t.Errorf("Render() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestUnavailableRequiredFails(t *testing.T) {
+	tmpl, err := template.New(`{{ required "missing blob" .Next.blob }}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmpl.Render(map[string]any{"Next": DbRecord{"blob": Unavailable}}); err == nil {
+		t.Fatal("required must reject unavailable values")
 	}
 }

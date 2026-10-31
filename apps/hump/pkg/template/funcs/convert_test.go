@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"encoding/json"
 	"math"
 	"reflect"
 	"strconv"
@@ -207,5 +208,99 @@ func TestInt64ClampsHugeUint(t *testing.T) {
 	got := mustRender(t, `{{ int64 .Value }}`, V(uint64(math.MaxUint64)))
 	if want := strconv.FormatInt(math.MaxInt64, 10); got != want {
 		t.Fatalf("int64 MaxUint64 = %q, want %q", got, want)
+	}
+}
+
+func TestJSONNumbersRoundTrip(t *testing.T) {
+	for _, input := range []string{
+		`{"big":9007199254740993,"decimal":1234567890.1234567890123456789,"nested":[-0,1e1000]}`,
+		`[9007199254740993,0.000000000000000000001,1E+999]`,
+		`9007199254740993`, `1.234567890123456789`, `true`, `"text"`, `null`,
+	} {
+		t.Run(input, func(t *testing.T) {
+			if got := mustRender(t, `{{ fromjson .Value | json }}`, V(input)); got != input {
+				t.Fatalf("round-trip = %s, want %s", got, input)
+			}
+		})
+	}
+	input := `[9007199254740993,{"n":1.234567890123456789}]`
+	if got := mustRender(t, `{{ fromjsonarray .Value | json }}`, V(input)); got != input {
+		t.Fatalf("array round-trip = %s, want %s", got, input)
+	}
+	if got := mustRender(t, `{{ fromjsonarray .Value | json }}`, V("null \n\t")); got != "null" {
+		t.Fatalf("null array = %s", got)
+	}
+	if got := mustRender(t, `{{ fromjson .Value | json }}`, V(" 42 \n\t")); got != "42" {
+		t.Fatalf("whitespace-wrapped number = %s", got)
+	}
+}
+
+func TestJSONDecodeRejectsMalformedInput(t *testing.T) {
+	for _, helper := range []string{"fromjson", "fromjsonarray"} {
+		for _, input := range []string{"", " ", "{bad}", "[1,]", "[1", "[1] [2]", "null true", "[] garbage", "[] /", "01", "NaN"} {
+			t.Run(helper+"/"+input, func(t *testing.T) {
+				if _, err := render(t, `{{ `+helper+` .Value }}`, V(input)); err == nil {
+					t.Fatalf("%s accepted %q", helper, input)
+				}
+			})
+		}
+	}
+	for _, input := range []string{`{}`, `1`, `"text"`, `false`} {
+		if _, err := render(t, `{{ fromjsonarray .Value }}`, V(input)); err == nil {
+			t.Fatalf("fromjsonarray accepted non-array %s", input)
+		}
+	}
+}
+
+func TestJSONNumberConversions(t *testing.T) {
+	for _, helper := range []string{"int", "int64", "float64"} {
+		for _, literal := range []string{"0", "-0", "9007199254740993", "42.75", "1e3", "1e1000", "bad"} {
+			t.Run(helper+"/"+literal, func(t *testing.T) {
+				source := `{{ ` + helper + ` .Value }}`
+				want := mustRender(t, source, V(literal))
+				if got := mustRender(t, source, V(json.Number(literal))); got != want {
+					t.Fatalf("number conversion = %q, string conversion = %q", got, want)
+				}
+			})
+		}
+	}
+	for _, tc := range []struct{ source, want string }{
+		{`{{ fromjson "9007199254740993" | int64 }}`, "9007199254740993"},
+		{`{{ fromjson "2.5" | float64 }}`, "2.5"},
+		{`{{ add (fromjson "2") 3 }}`, "5"},
+		{`{{ mulf (fromjson "2.5") 2 }}`, "5"},
+	} {
+		if got := mustRender(t, tc.source, nil); got != tc.want {
+			t.Fatalf("%s = %q, want %q", tc.source, got, tc.want)
+		}
+	}
+}
+
+func TestJSONNumberComparisonAndTruthiness(t *testing.T) {
+	for _, tc := range []struct{ source, want string }{
+		{`{{ $n := fromjson "0" }}{{ if $n }}truthy{{ else }}false{{ end }}`, "truthy"},
+		{`{{ empty (fromjson "0") }}`, "false"},
+		{`{{ eq (fromjson "0") "0" }}`, "true"},
+		{`{{ eq (fromjson "0") (fromjson "0.0") }}`, "false"},
+		{`{{ lt (fromjson "10") (fromjson "2") }}`, "true"},
+		{`{{ fromjson "0" | int64 | empty }}`, "true"},
+	} {
+		if got := mustRender(t, tc.source, nil); got != tc.want {
+			t.Fatalf("%s = %q, want %q", tc.source, got, tc.want)
+		}
+	}
+	if _, err := render(t, `{{ eq (fromjson "0") 0 }}`, nil); err == nil {
+		t.Fatal("json.Number must require explicit conversion before numeric comparison")
+	}
+}
+
+func TestJSONNonFiniteFallbackPreservesNumbers(t *testing.T) {
+	value := map[string]any{
+		"bad":    math.Inf(1),
+		"nested": []any{json.Number("9007199254740993"), map[string]any{"n": json.Number("1.234567890123456789"), "nan": math.NaN()}},
+	}
+	want := `{"bad":null,"nested":[9007199254740993,{"n":1.234567890123456789,"nan":null}]}`
+	if got := mustRender(t, `{{ .Value | json }}`, V(value)); got != want {
+		t.Fatalf("json = %s, want %s", got, want)
 	}
 }

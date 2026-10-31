@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -165,7 +164,7 @@ func (w *wal) Start(ctx context.Context, handler database.ProcessMessageHandler)
 	}
 
 	w.relations = map[uint32]*pglogrepl.RelationMessageV2{}
-	w.typeMap = pgtype.NewMap()
+	w.typeMap = newValueTypeMap()
 	w.inTransaction = false
 
 	stopKeepAlive := w.keepAlive(workCtx)
@@ -659,62 +658,6 @@ func (w *wal) decodeRow(prevRow *pglogrepl.TupleData, prevTupleType uint8, nextR
 	}
 
 	return prev, next, nil
-}
-
-// decodeText decodes a text-format column value using the pgtype codec
-// registered in m for oid, falling back to the raw string when the OID is
-// unknown to m. A date or timestamp infinity comes back as an infiniteTime.
-func decodeText(m *pgtype.Map, oid uint32, data []byte) (any, error) {
-	dt, ok := m.TypeForOID(oid)
-	if !ok {
-		return string(data), nil
-	}
-
-	val, err := dt.Codec.DecodeValue(m, oid, pgtype.TextFormatCode, data)
-	if err != nil {
-		return nil, err
-	}
-
-	if b, ok := val.([16]byte); ok && oid == pgtype.UUIDOID {
-		return uuidString(b), nil
-	}
-
-	if im, ok := val.(pgtype.InfinityModifier); ok {
-		return infiniteTime(im), nil
-	}
-
-	return val, nil
-}
-
-// infiniteTime is a date, timestamp or timestamptz infinity or -infinity. It
-// prints as PostgreSQL spells it and serializes as null, which JSON and YAML
-// have no better spelling for.
-type infiniteTime pgtype.InfinityModifier
-
-// String renders the value as "infinity" or "-infinity".
-func (t infiniteTime) String() string { return pgtype.InfinityModifier(t).String() }
-
-// MarshalJSON encodes the value as JSON null.
-func (infiniteTime) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
-
-// MarshalYAML encodes the value as YAML null.
-func (infiniteTime) MarshalYAML() (any, error) { return nil, nil }
-
-// uuidString formats a raw 16-byte UUID as its canonical
-// 8-4-4-4-12 lowercase hex string.
-func uuidString(b [16]byte) string {
-	var buf [36]byte
-	hex.Encode(buf[0:8], b[0:4])
-	buf[8] = '-'
-	hex.Encode(buf[9:13], b[4:6])
-	buf[13] = '-'
-	hex.Encode(buf[14:18], b[6:8])
-	buf[18] = '-'
-	hex.Encode(buf[19:23], b[8:10])
-	buf[23] = '-'
-	hex.Encode(buf[24:36], b[10:16])
-
-	return string(buf[:])
 }
 
 // postgresMessageContext is a thread-safe store for messages emitted via

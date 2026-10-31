@@ -1389,7 +1389,7 @@ func TestDecodeText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := decodeText(pgtype.NewMap(), tt.dataType, []byte(tt.data))
+			got, err := decodeText(newValueTypeMap(), tt.dataType, []byte(tt.data))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("decodeText() = %#v, want an error", got)
@@ -1422,7 +1422,7 @@ func TestDecodeTextInfinityRendersAsNull(t *testing.T) {
 
 	next := domain.DbRecord{}
 	for _, column := range columns {
-		val, err := decodeText(pgtype.NewMap(), column.oid, []byte(column.data))
+		val, err := decodeText(newValueTypeMap(), column.oid, []byte(column.data))
 		if err != nil {
 			t.Fatalf("decodeText(%q) error = %v", column.data, err)
 		}
@@ -1635,7 +1635,7 @@ func newTestWal(t *testing.T, s *fakeServer, tables ...config.Table) (*wal, *fak
 	return &wal{
 		dbName:          "db",
 		relations:       map[uint32]*pglogrepl.RelationMessageV2{},
-		typeMap:         pgtype.NewMap(),
+		typeMap:         newValueTypeMap(),
 		messageContext:  &postgresMessageContext{messages: map[string]string{}},
 		introspector:    newTestIntrospector(t, s, tables, nil),
 		standbyInterval: testStandbyInterval,

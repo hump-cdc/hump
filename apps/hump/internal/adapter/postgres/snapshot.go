@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"hump/internal/domain"
 	"hump/internal/port/database"
@@ -195,7 +194,7 @@ func (s *snapshot) Read(ctx context.Context, snapshotID string, table domain.Tab
 	}
 	selectList := strings.Join(names, ", ")
 
-	typeMap := pgtype.NewMap()
+	typeMap := newValueTypeMap()
 	observeRow := func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
 		start := time.Now()
 		if err := onRow(record, metadata); err != nil {

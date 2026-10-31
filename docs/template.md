@@ -69,9 +69,11 @@ payload: |
 A column the source could not deliver is *unavailable*. On a table whose replica
 identity is not `FULL`, that covers an unchanged TOAST value on `update`, and
 every non-key column of the old row on `delete` or on an `update` that changes a
-key column. Such a column renders as an empty string, compares equal to `""`,
-and counts as empty for `empty`, `coalesce` and `required`; `unavailable` is the
-only way to tell it apart from a column that really is `''`:
+key column. Direct rendering, `json` and `yaml` output the string
+`__hump_unavailable_value`. For compatibility, it still compares equal to `""`
+and counts as empty for `empty`, `coalesce` and `required`. `default` only
+replaces nil, so it leaves the marker intact. Use `unavailable` to detect the
+sentinel; the marker text can also occur in a real column value:
 
 ```yaml
 payload: |
@@ -84,6 +86,62 @@ JSON has no spelling for infinite or not-a-number values, so `json` writes them 
 latter as `null` too). Printed directly, `{{ .Next.col }}` still shows `NaN`,
 `+Inf`, `infinity` and so on. A `numeric` `NaN` or `±Infinity` is written as the
 JSON string `"NaN"`, `"Infinity"` or `"-Infinity"`.
+
+### PostgreSQL column values
+
+WAL events and snapshot rows use the same value decoder. These rules also apply
+to elements of supported SQL arrays; the existing array shape is unchanged.
+
+| PostgreSQL type | Template value and JSON output |
+| --- | --- |
+| `json`, `jsonb` | Objects and arrays remain maps and slices. Numeric leaves are `json.Number`, so JSON serialization preserves their numeric literals without float rounding. Object key order and duplicate keys are not preserved. |
+| `interval` | An exact integer microsecond count, emitted as a JSON number, including results outside the `int64` range. |
+| `timestamp without time zone` | A calendar string such as `2026-01-02T03:04:05.123456`, with no `Z` or offset. Up to six fractional digits are retained; trailing zeros are trimmed. |
+
+Interval conversion uses
+`months * 2629800000000 + days * 86400000000 + microseconds` with exact integer
+arithmetic. A month is `365.25 / 12` days, following Debezium's average-month
+convention; it is not a calendar-dependent duration. `timestamptz` and `date`
+representations are unchanged. Temporal infinities retain their direct spelling
+and serialize as JSON/YAML `null`, as described above.
+
+`json.Number` is string-backed. A JSON numeric zero is truthy in `if` and is not
+empty; comparisons between two such values are lexical, and comparisons with
+numeric literals need an explicit conversion. For example:
+
+```text
+{{ if gt (int64 .Next.settings.retries) 0 }}retry{{ end }}
+```
+
+`int`/`int64`, `float64` and the numeric helpers accept `json.Number`, but they
+still use fixed-width integers or floating point. They do not provide
+arbitrary-precision arithmetic. Serializing the original value with `json`
+avoids these conversions; downstream numeric parsers can still lose precision.
+
+### Wire changes and migration
+
+Compared with the previous value encoding, JSON numbers no longer pass through
+`float64`, intervals now emit numeric microseconds,
+timezone-free timestamps no longer carry a misleading UTC suffix, and
+unavailable columns emit `__hump_unavailable_value` rather than `""`. Update
+consumer schemas and templates that depend on those representations. To keep
+empty output for an unavailable column, test the sentinel explicitly:
+
+```text
+{{ if unavailable .Next.col }}{{ else }}{{ .Next.col }}{{ end }}
+```
+
+`coalesce .Next.col ""` is not equivalent: both arguments count as empty, so it
+returns nil rather than an empty string. Use `unavailable` before serialization
+to distinguish the sentinel from real empty or marker text.
+Replica identity `FULL` behavior is unchanged.
+
+The default payload's Debezium-compatible envelope does not imply identical
+column-value semantics. hump embeds JSON objects instead of JSON strings and
+uses calendar strings for timezone-free timestamps instead of Debezium's numeric
+epoch representation. Its unavailable marker is custom. Interval conversion
+uses Debezium's month convention, but exact, arbitrary-length integers do not
+reproduce Debezium's `int64` limits or floating-point truncation.
 
 ### Message identity and snapshots
 
@@ -105,7 +163,8 @@ table, and row `ctid`. The physical row metadata is not added to `.Prev` or
 `.Next`. A new snapshot produces new message IDs even for unchanged rows;
 these IDs do not deduplicate rows across snapshot runs.
 
-The default payload is unchanged. To add a snapshot flag, use a custom payload:
+Snapshot rows use the same default envelope as WAL events. To add a snapshot
+flag, use a custom payload:
 
 ```yaml
 payload: |
@@ -294,6 +353,12 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `json`          | `json prettify v` | Marshal to JSON; `prettify=true` uses 2-space indent                  |
 | `fromjson`      | `fromjson s`      | Parse JSON object → `map[string]any`                                  |
 | `fromjsonarray` | `fromjsonarray s` | Parse JSON array → `[]any`                                            |
+
+`fromjson` and `fromjsonarray` preserve numeric leaves as `json.Number`, just
+like PostgreSQL JSON columns. They accept one complete JSON value and reject
+malformed input or trailing non-whitespace data. See
+[PostgreSQL column values](#postgresql-column-values) for comparison and
+conversion limits.
 
 ### YAML
 
@@ -671,7 +736,8 @@ Returns the first non-empty argument (per `empty`), or nothing if all are empty.
 #### `default`
 
 `default fallback v` — returns `v` unless it is _typed nil_. Empty strings and
-zero numbers pass through unchanged.
+zero numbers pass through unchanged. An unavailable column also passes through
+and renders as `__hump_unavailable_value`.
 
 ```
 {{ default "fb" .Missing }} → fb
@@ -700,9 +766,9 @@ zero numbers pass through unchanged.
 #### `unavailable`
 
 `unavailable v` — reports whether `v` is a column the source could not deliver.
-Such a column is indistinguishable from `""` everywhere else: it renders empty,
-compares equal to `""`, and counts as empty for `empty`, `coalesce` and
-`required`.
+It renders as `__hump_unavailable_value`, but still compares equal to `""` and
+counts as empty for `empty`, `coalesce` and `required`. A real string containing
+the marker is not unavailable.
 
 ```
 {{ unavailable .Next.blob }} → true
@@ -1120,7 +1186,8 @@ Input: `.Next = {"a": 1}`
 
 #### `fromjson`
 
-Parse a JSON object string.
+Parse a JSON object string with `json.Number` numeric leaves. Reject malformed
+input and trailing non-whitespace data.
 
 ```
 {{ index (fromjson `{"a":1}`) "a" }} → 1
@@ -1128,7 +1195,8 @@ Parse a JSON object string.
 
 #### `fromjsonarray`
 
-Parse a JSON array string.
+Parse a JSON array string with `json.Number` numeric leaves. Reject malformed
+input and trailing non-whitespace data.
 
 ```
 {{ index (fromjsonarray `[1,"x",true]`) 1 }} → x

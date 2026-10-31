@@ -50,21 +50,22 @@ or `failure` only.
 
 Never collapse `Unavailable` into `nil`: that would report a fabricated `NULL` to a sink.
 
-## `Unavailable` renders as `""` on purpose
+## `Unavailable` has an explicit wire marker
 
 `UnavailableValue` is an empty struct with value receivers, so `v == domain.Unavailable` works
 and so does a `DbRecord` holding it by value. `String`, `MarshalJSON` and `MarshalYAML` all
-yield an empty string; a new serialization path that reads records has to do the same, or the
-sentinel leaks into a payload as `{}`.
+yield the string `__hump_unavailable_value`; every serialization path that reads records must
+preserve that marker rather than emit `{}`, `nil` or `""`. Real text can match the marker, so
+only the in-memory sentinel is unambiguous.
 
 `pkg/template` must not import this package, so the template funcs recognise the value by
 duck typing: `pkg/template/funcs/unavailable.go` declares its own `IsUnavailable() bool`
 interface. That method is the whole link between the two — do not rename or remove it.
 
 `unavailable_test.go` is the lock on user-visible behaviour, through real templates: the value
-is empty for `empty` and `coalesce`, equal to `""` for `eq`/`ne`, detectable only by
-`unavailable` — and `default` does **not** replace it (`{{ .Next.blob | default "n/a" }}`
-renders `""`). `docs/template.md` describes the same behaviour in prose; change both
+is empty for `empty`, `coalesce` and `required`, equal to `""` for `eq`/`ne`, and detectable by
+`unavailable`. `default` does **not** replace it (`{{ .Next.blob | default "n/a" }}`
+renders `__hump_unavailable_value`). `docs/template.md` describes the same behaviour; change both
 together.
 
 ## Tables

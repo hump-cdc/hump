@@ -41,7 +41,7 @@ func TestSnapshotExportParserSeparatesPhysicalIdentityFromUserColumns(t *testing
 	var rows []domain.DbRecord
 	var identities []database.SnapshotRowMetadata
 	leaf := domain.TableIdentifier{Schema: "physical\tschema", Name: "leaf\nname"}
-	parser := newSnapshotExportParser(leaf, columns, pgtype.NewMap(), func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
+	parser := newSnapshotExportParser(leaf, columns, newValueTypeMap(), func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
 		rows = append(rows, record)
 		identities = append(identities, metadata)
 		return nil
@@ -179,7 +179,7 @@ func FuzzSnapshotExportParserChunking(f *testing.F) {
 	f.Add([]byte("1\talice"), uint8(4))
 	f.Add([]byte("\\101\t\\x4\n\n\t\n"), uint8(0))
 
-	typeMap := pgtype.NewMap()
+	typeMap := newValueTypeMap()
 
 	f.Fuzz(func(t *testing.T, data []byte, chunk uint8) {
 		whole := collectSnapshotExport(t, typeMap, [][]byte{data})
@@ -197,7 +197,7 @@ func FuzzSnapshotExportParserRoundTrip(f *testing.F) {
 	f.Add("a\tb", "c\nd\re\\f")
 	f.Add("\b\f\v", "\x00\xff")
 
-	typeMap := pgtype.NewMap()
+	typeMap := newValueTypeMap()
 
 	f.Fuzz(func(t *testing.T, id, name string) {
 		line := "(0,1)\t" + escapeCopyText(id) + "\t" + escapeCopyText(name) + "\n"
@@ -242,7 +242,7 @@ func newTestSnapshotExportParser(err error) (*snapshotExportParser, *[]domain.Db
 	rows := &[]domain.DbRecord{}
 	columns := []snapshotColumn{{name: "id", oid: pgtype.Int4OID}, {name: "name", oid: pgtype.TextOID}}
 
-	return newSnapshotExportParser(usersTable(), columns, pgtype.NewMap(), func(record domain.DbRecord, _ database.SnapshotRowMetadata) error {
+	return newSnapshotExportParser(usersTable(), columns, newValueTypeMap(), func(record domain.DbRecord, _ database.SnapshotRowMetadata) error {
 		*rows = append(*rows, record)
 		return err
 	}), rows

@@ -21,4 +21,131 @@ runs:
           env:
               SARIF_FILE: ${{ inputs.sarif-file }}
               SUMMARY_TITLE: ${{ inputs.title }}
-          run: bash "${GITHUB_ACTION_PATH}/sarif-summary.sh"
+          run: |
+              set -euo pipefail
+
+              main() {
+                  local sarif_file summary_file count
+                  sarif_file="${SARIF_FILE:?SARIF_FILE is required}"
+                  summary_file="${GITHUB_STEP_SUMMARY:?GITHUB_STEP_SUMMARY is not set}"
+
+                  if [[ ! -f "$sarif_file" ]]; then
+                      warn "SARIF report not found: $sarif_file"
+                      exit 0
+                  fi
+
+                  if ! count="$(jq '[.runs[]?.results[]?] | length' "$sarif_file" 2>/dev/null)"; then
+                      warn "SARIF report is not valid JSON: $sarif_file"
+                      exit 0
+                  fi
+
+                  if [[ "$count" -eq 0 ]]; then
+                      exit 0
+                  fi
+
+                  jq --raw-output \
+                      --arg title "${SUMMARY_TITLE:-}" \
+                      --arg workspace "${GITHUB_WORKSPACE:-}" \
+                      --arg server "${GITHUB_SERVER_URL:-}" \
+                      --arg repository "${GITHUB_REPOSITORY:-}" \
+                      --arg sha "${GITHUB_SHA:-}" \
+                      "$(jq_program)" "$sarif_file" >>"$summary_file"
+              }
+
+              # warn prints a workflow warning; %, CR and LF are escaped as the runner requires.
+              warn() {
+                  local message="$1"
+                  message="${message//'%'/'%25'}"
+                  message="${message//$'\r'/'%0D'}"
+                  message="${message//$'\n'/'%0A'}"
+                  echo "::warning title=SARIF summary::${message}"
+              }
+
+              # jq_program prints the jq filter that renders the SARIF report as markdown.
+              jq_program() {
+                  cat <<'JQ'
+              # Makes text safe for a single markdown table cell: one line, no HTML, no pipes, no code spans
+              # or links that could swallow the cell separators.
+              def cell:
+                  tostring
+                  | gsub("\\s+"; " ")
+                  | sub("^ "; "") | sub(" $"; "")
+                  | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")
+                  | gsub("\\\\"; "&#92;") | gsub("`"; "&#96;")
+                  | gsub("\\["; "&#91;") | gsub("\\]"; "&#93;")
+                  | gsub("\\|"; "\\|");
+
+              # Turns a URI into a repo-relative path where possible.
+              def normalize_path:
+                  sub("^file://(localhost)?"; "")
+                  | ($workspace | sub("/+$"; "")) as $ws
+                  | if $ws != "" and startswith($ws + "/") then .[($ws | length) + 1:] else . end
+                  | sub("^(\\./)+"; "");
+
+              # Resolves an artifactLocation to a URI, following artifacts[index] and originalUriBaseIds.
+              def artifact_uri($run):
+                  . as $loc
+                  | (if $loc.index != null then $run.artifacts[$loc.index].location else null end) as $artifact
+                  | ($loc.uri // $artifact.uri) as $uri
+                  | ($loc.uriBaseId // $artifact.uriBaseId) as $base_id
+                  | ($run.originalUriBaseIds[$base_id // ""].uri // null) as $base
+                  | if $uri == null then null
+                    elif ($uri | test("^[A-Za-z][A-Za-z0-9+.-]*:")) then $uri
+                    elif $base != null then ($base | sub("/*$"; "/")) + ($uri | sub("^/+"; ""))
+                    else $uri
+                    end;
+
+              # Finds the rule a result refers to, by ruleIndex or by ruleId.
+              def rule($run):
+                  . as $result
+                  | ($run.tool.driver.rules // []) as $rules
+                  | if $result.ruleIndex != null then $rules[$result.ruleIndex]
+                    elif $result.ruleId != null then first($rules[] | select(.id == $result.ruleId)) // null
+                    else null
+                    end;
+
+              # SARIF 2.1.0 §3.27.10: explicit level, then the rule's default level, then "none" for
+              # non-"fail" kinds, otherwise "warning".
+              def level($run):
+                  .level
+                  // (rule($run).defaultConfiguration.level)
+                  // (if (.kind // "fail") != "fail" then "none" else "warning" end);
+
+              def blob_url($path; $line):
+                  "\($server)/\($repository)/blob/\($sha)/"
+                  + ($path | split("/") | map(@uri) | join("/"))
+                  + (if $line != null then "#L\($line)" else "" end);
+
+              def location($run):
+                  (.locations[0].physicalLocation // null) as $physical
+                  | ($physical.artifactLocation // null | if . == null then null else artifact_uri($run) end) as $uri
+                  | ($physical.region.startLine // null) as $line
+                  | if $uri == null then "-"
+                    else
+                        ($uri | normalize_path) as $path
+                        | ($path + (if $line != null then ":\($line)" else "" end) | cell) as $text
+                        | if $server != "" and $repository != "" and $sha != "" and ($path | startswith("/") | not)
+                          then "[\($text)](\(blob_url($path; $line)))"
+                          else $text
+                          end
+                    end;
+
+              [.runs[]? as $run | ($run.results // [])[] | {
+                  location: location($run),
+                  level: level($run),
+                  rule: (.ruleId // .rule.id // rule($run).id // "-"),
+                  message: (.message.text // .message.markdown // "")
+              }] as $findings
+              | ([.runs[]?.tool.driver.name // empty] | unique | join(", ")) as $tools
+              | (if $title != "" then $title elif $tools != "" then $tools else "SARIF report" end) as $heading
+              | ($findings | length) as $count
+              | "### \($heading | cell): \($count) finding\(if $count == 1 then "" else "s" end)",
+                "",
+                "| Location | Level | Rule | Message |",
+                "| --- | --- | --- | --- |",
+                ($findings[] | "| \(.location) | \(.level | cell) | \(.rule | cell) | \(.message | cell) |"),
+                ""
+              JQ
+              }
+
+              main "$@"

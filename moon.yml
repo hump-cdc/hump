@@ -15,40 +15,17 @@ tasks:
     # actionlint is a Go tool of apps/hump/tools/actionlint, a module outside go.work (its deps
     # conflict with golangci-lint's); -modfile is rejected in workspace mode, so the module runs in
     # its own directory with GOWORK=off. actionlint finds .github by walking up to the repo root.
-    script: 'GOWORK=off go -C apps/hump/tools/actionlint tool actionlint'
+    command: 'go -C apps/hump/tools/actionlint tool actionlint'
+    env:
+      GOWORK: 'off'
     toolchains: ['go']
     inputs:
       - '.github/**/*'
       - 'apps/hump/tools/actionlint/go.mod'
       - 'apps/hump/tools/actionlint/go.sum'
     options:
-      # CI runs ci-actionlint: root:check depends on this task, and a dependency cannot allow failure.
-      runInCI: false
-  ci-actionlint:
-    description: 'CI: actionlint with a fix hint in .ci/annotations'
-    # Same command as actionlint. A failure also writes a fix hint to .ci/annotations and the
-    # marker .ci/failed/root-actionlint (root AGENTS.md, "moon"), then exits with its status.
-    script: |
-      set -euo pipefail
-      status=0
-      GOWORK=off go -C apps/hump/tools/actionlint tool actionlint || status=$?
-      if [[ "$status" -ne 0 && "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        mkdir -p "$workspaceRoot/.ci/annotations" "$workspaceRoot/.ci/failed"
-        echo "::error file=.github/workflows,title=Workflow lint failed::Fix the actionlint findings listed in the log, then check locally with: moon run root:actionlint" >>"$workspaceRoot/.ci/annotations/root-actionlint.txt"
-        echo actionlint >"$workspaceRoot/.ci/failed/root-actionlint"
-      fi
-      exit "$status"
-    toolchains: ['go']
-    inputs:
-      - '.github/**/*'
-      - 'apps/hump/tools/actionlint/go.mod'
-      - 'apps/hump/tools/actionlint/go.sum'
-    options:
-      cache: false
-      runInCI: 'only'
-      # The workflow fails on .ci/failed markers instead: a failed task would abort the
-      # pipeline and cancel the other checks, e.g. the tests behind a lint finding.
-      allowFailure: true
+      envOverride: true
+      runInCI: 'always'
   dev-up:
     description: 'Start the dev environment (PostgreSQL, Kafka, NATS, RabbitMQ, HTTP sink)'
     command: 'docker compose -f dev/docker-compose.yml up -d'

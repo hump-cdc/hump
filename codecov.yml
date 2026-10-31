@@ -115,7 +115,7 @@ fixes:
     - "src/::apps/hump-tower/src/"
     - "app/::apps/hump-tower/app/"
 
-# Keep in sync with the profile filter in scripts/hump-ci.sh and the
+# Keep in sync with the profile filter in .github/workflows/ci-check.yml and the
 # coveragePathIgnorePatterns in apps/hump-tower/bunfig.toml (and with the 'excluded' inputs of the
 # coverage summary steps in .github/workflows/ci-check.yml).
 ignore:

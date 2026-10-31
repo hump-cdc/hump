@@ -53,56 +53,110 @@ jobs:
                       ingest.codecov.io:443
                       keybase.io:443
 
-            # Full history: moon diffs against the base commit to find the affected projects.
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
                   fetch-depth: 0
 
-            # auto-install installs moon from .prototools (otherwise the latest release); auto-setup
-            # installs Go and Bun from .moon/toolchains.yml, which 'moon ci' doesn't do itself.
+            # Tool versions come from .prototools and .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
+              id: setup
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
                   auto-install: true
                   auto-setup: true
                   cache: false
 
-            # Runs the runInCI tasks of hump affected since the base commit (and the tasks they
-            # depend on); the base-commit logic lives in the composite action. The self-repository
-            # form ($/...) is not supported by actionlint v1.7.12 yet.
-            - name: Run the affected lint, build and test tasks of the Go app
-              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
+            - name: Prepare Go report directory
+              id: reports
+              run: |
+                  set -euo pipefail
+                  if ! mkdir -p .ci/hump; then
+                      echo "::error file=.github/workflows/ci-check.yml,title=Go report directory unavailable::Check runner disk space and permissions, then rerun the job to create .ci/hump."
+                      exit 1
+                  fi
+
+            - name: Tidy Go application and tool modules
+              id: tidy
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump:tidy; then
+                      echo "::error file=apps/hump/go.mod,title=Go module tidy failed::Resolve the module errors above, then run 'moon run hump:tidy' and commit updated module files."
+                      exit 1
+                  fi
+
+            - name: Build Go application and embedded web UI
+              id: build
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump:build; then
+                      echo "::error file=apps/hump/go.mod,title=Go application build failed::Fix the build errors above and reproduce with 'moon run hump:build'."
+                      exit 1
+                  fi
+
+            - name: Lint Go application and write SARIF report
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump:lint -- --path-prefix=apps/hump --output.text.path=stdout --output.sarif.path="$GITHUB_WORKSPACE/.ci/hump/golangci-lint.sarif"; then
+                      echo "::error file=apps/hump/.golangci.yml,title=Go lint failed::Fix the findings above (automatic fixes: 'moon run hump:lint-fix'), then run 'moon run hump:lint'."
+                      exit 1
+                  fi
+                  if ! jq -e '.runs | type == "array"' .ci/hump/golangci-lint.sarif >/dev/null; then
+                      echo "::error file=apps/hump/moon.yml,title=Go lint SARIF report missing or invalid::Fix report generation and reproduce with 'moon run hump:lint -- --output.sarif.path=golangci-lint.sarif'."
+                      exit 1
+                  fi
+
+            - name: Test Go application with race detection, coverage and JUnit
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump:test-race -- --junitfile "$GITHUB_WORKSPACE/.ci/hump/junit.xml" -- -covermode=atomic -coverpkg=./... -coverprofile="$GITHUB_WORKSPACE/.ci/hump/cover.out" ./...; then
+                      echo "::error file=apps/hump/go.mod,title=Go unit tests or race detection failed::Fix the failing tests or races above and reproduce with 'moon run hump:test-race'."
+                      exit 1
+                  fi
+                  if [[ ! -s .ci/hump/cover.out || ! -s .ci/hump/junit.xml ]]; then
+                      echo "::error file=apps/hump/moon.yml,title=Go test reports missing::Run 'moon run hump:test-race' and fix report generation; CI requires coverage and JUnit output."
+                      exit 1
+                  fi
+                  grep -v '^hump/cmd/openapi/' .ci/hump/cover.out > .ci/hump/coverage.out
+
+            - name: Check minimum release age of Go dependencies
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump:dep-age; then
+                      echo "::error file=apps/hump/go.mod,title=Go dependency age check failed::Choose module versions at least 7 days old in the application and both tool modules, or wait until the dates above; reproduce with 'moon run hump:dep-age' and run 'moon run hump:tidy' after changes."
+                      exit 1
+                  fi
+
+            - name: Scan Go application for known vulnerabilities
+              id: vulnerability-scan
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  status=0
+                  moon --cache off --quiet --log off run hump:vulncheck --output-style stream -- -json > .ci/hump/govulncheck.json || status=$?
+                  echo "status=$status" >> "$GITHUB_OUTPUT"
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=apps/hump/go.mod,title=Go vulnerability scan failed::Resolve the scan error above and reproduce with 'moon run hump:vulncheck'."
+                      exit "$status"
+                  fi
+
+            - name: Render and validate Go vulnerability results
+              if: ${{ !cancelled() && steps.vulnerability-scan.outputs.status != '' }}
+              uses: ./.github/actions/govulncheck-summary # zizmor: ignore[self-repository]
               with:
-                  project: hump
+                  file: .ci/hump/govulncheck.json
+                  status: ${{ steps.vulnerability-scan.outputs.status }}
+                  sarif: .ci/hump/govulncheck.sarif
 
-            # Fix hints of the failed hump tasks and their per-finding annotations; only this
-            # project's files (defensive: hump-tower ci-* tasks never run in this job).
-            - name: Report the findings of the Go app moon tasks as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/hump-*.txt', '!.ci/annotations/hump-tower-*.txt') != '' }}
-              run: |
-                  set -euo pipefail
-                  shopt -s nullglob
-                  for file in .ci/annotations/hump-*.txt; do
-                      [[ "$file" == .ci/annotations/hump-tower-*.txt ]] || cat "$file"
-                  done
-
-            # ci-* tasks allow failure so the others keep running; each failed one leaves
-            # .ci/failed/<project>-<check>.
-            - name: Check that every lint, test and scan task of the Go app passed
-              if: ${{ !cancelled() && hashFiles('.ci/failed/hump-*', '!.ci/failed/hump-tower-*') != '' }}
-              run: |
-                  set -euo pipefail
-                  failed="$(find .ci/failed -type f -name 'hump-*' ! -name 'hump-tower-*' -exec basename {} \; | sort | tr '\n' ' ')"
-                  echo "Failed checks: ${failed}"
-                  echo "::error title=Go app checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
-                  exit 1
-
-            # Diffs the result of hump:tidy from 'moon ci'; git status also catches a newly created
-            # go.work.sum.
+            # git status also catches a newly created go.work.sum.
             - name: Check that the Go modules are tidy
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.tidy.outcome == 'success' }}
               run: |
                   set -euo pipefail
                   status=0
@@ -128,11 +182,11 @@ jobs:
             # <name>' (the pattern is built at run time so this step never matches itself). awk
             # instead of 'go mod edit -json' avoids depending on the Go on PATH.
             - name: Check that every apps/hump/go.mod tool directive is used
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
               run: |
                   set -euo pipefail
                   shopt -s nullglob
-                  sources=(moon.yml apps/*/moon.yml packages/*/moon.yml scripts .github)
+                  sources=(moon.yml apps/*/moon.yml packages/*/moon.yml .github)
                   unused=0
                   while IFS= read -r path; do
                       base="$path"
@@ -154,12 +208,11 @@ jobs:
                   ' apps/hump/go.mod)
                   exit "$unused"
 
-            # hump:build rebuilds the UI through its hump-tower:build dependency, also when only the
-            # embedded files changed, which the web UI job doesn't count as affected. rsbuild cleans
+            # hump:build rebuilds the UI through its hump-tower:build dependency. rsbuild cleans
             # its output, so a stale build shows as deleted and untracked files: git status catches
             # both, git diff wouldn't.
             - name: Check that the embedded hump-tower build in apps/hump/internal/controller/hump_tower is up to date
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.build.outcome == 'success' }}
               env:
                   BUILD_DIR: apps/hump/internal/controller/hump_tower
               run: |
@@ -185,6 +238,15 @@ jobs:
               with:
                   sarif-file: .ci/hump/govulncheck.sarif
                   title: Go vulnerability scan
+
+            - name: Upload Go lint, vulnerability and test machine reports
+              if: ${{ !cancelled() && hashFiles('.ci/hump/*') != '' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: check-go-reports
+                  path: .ci/hump/
+                  include-hidden-files: true
+                  if-no-files-found: error
 
             # coverage.out exists only when the Go tests pass. Each profile block counts once, so
             # the total is covered / total statements and may differ by 0.1 from 'go tool cover
@@ -264,50 +326,157 @@ jobs:
                       ingest.codecov.io:443
                       keybase.io:443
 
-            # Full history: moon diffs against the base commit to find the affected projects.
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
                   fetch-depth: 0
 
-            # auto-install installs moon from .prototools (otherwise the latest release); auto-setup
-            # installs Go and Bun from .moon/toolchains.yml, which 'moon ci' doesn't do itself.
+            # Tool versions come from .prototools and .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
+              id: setup
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
                   auto-install: true
                   auto-setup: true
                   cache: false
 
-            # Runs the runInCI tasks of hump-tower affected since the base commit (and the tasks they
-            # depend on); the base-commit logic lives in the composite action. The self-repository
-            # form ($/...) is not supported by actionlint v1.7.12 yet.
-            - name: Run the affected lint, build and test tasks of the web UI
-              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
-              with:
-                  project: hump-tower
-
-            # Fix hints of the failed hump-tower tasks and their per-finding annotations; only this
-            # project's files.
-            - name: Report the findings of the web UI moon tasks as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/hump-tower-*.txt') != '' }}
-              run: cat .ci/annotations/hump-tower-*.txt
-
-            # ci-* tasks allow failure so the others keep running; each failed one leaves
-            # .ci/failed/<project>-<check>.
-            - name: Check that every lint, test and scan task of the web UI passed
-              if: ${{ !cancelled() && hashFiles('.ci/failed/hump-tower-*') != '' }}
+            - name: Prepare web UI report directory
+              id: reports
               run: |
                   set -euo pipefail
-                  failed="$(find .ci/failed -type f -name 'hump-tower-*' -exec basename {} \; | sort | tr '\n' ' ')"
-                  echo "Failed checks: ${failed}"
-                  echo "::error title=Web UI checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
-                  exit 1
+                  if ! mkdir -p .ci/hump-tower; then
+                      echo "::error file=.github/workflows/ci-check.yml,title=Web UI report directory unavailable::Check runner disk space and permissions, then rerun the job to create .ci/hump-tower."
+                      exit 1
+                  fi
 
-            # Diffs the result of hump-tower:openapi from 'moon ci'.
+            - name: Install locked npm workspace dependencies
+              id: install
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! bun install --frozen-lockfile; then
+                      echo "::error file=bun.lock,title=npm dependency installation failed::Resolve the installation errors above; run 'bun install' locally and commit package.json and bun.lock if they are out of sync."
+                      exit 1
+                  fi
+
+            - name: Generate web UI OpenAPI specification
+              id: openapi
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump-tower:openapi; then
+                      echo "::error file=apps/hump-tower/src/shared/api/openapi.json,title=OpenAPI generation failed::Fix the generation errors above and reproduce with 'moon run hump-tower:openapi'."
+                      exit 1
+                  fi
+
+            - name: Build web UI and generate API client and routes
+              id: build
+              if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.openapi.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run --upstream none hump-tower:build; then
+                      echo "::error file=apps/hump-tower/package.json,title=Web UI build failed::Fix the generation or build errors above and reproduce with 'moon run hump-tower:build'."
+                      exit 1
+                  fi
+
+            - name: Lint web UI and write SARIF report
+              if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  status=0
+                  moon --cache off --quiet --log off run hump-tower:check --output-style stream -- --reporter=default --reporter=github --reporter=sarif --reporter-file="$GITHUB_WORKSPACE/.ci/hump-tower/biome.sarif" > .ci/hump-tower/biome.txt 2>&1 || status=$?
+                  sed -E -e "s#file=${GITHUB_WORKSPACE}/#file=#" -e '/file=(apps\/|\/)/!s#file=#file=apps/hump-tower/#' .ci/hump-tower/biome.txt
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=apps/hump-tower/biome.json,title=Web UI lint failed::Fix the findings above; apply safe fixes with 'bun run check --write' in apps/hump-tower, then run 'moon run hump-tower:check'."
+                      exit "$status"
+                  fi
+                  if ! jq -e '.runs | type == "array"' .ci/hump-tower/biome.sarif >/dev/null; then
+                      echo "::error file=apps/hump-tower/moon.yml,title=Web UI lint SARIF report missing or invalid::Fix report generation and reproduce with 'moon run hump-tower:check -- --reporter=sarif --reporter-file=biome.sarif'."
+                      exit 1
+                  fi
+
+            - name: Test web UI with coverage and JUnit reports
+              if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump-tower:test -- --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir="$GITHUB_WORKSPACE/.ci/hump-tower/coverage" --reporter=junit --reporter-outfile="$GITHUB_WORKSPACE/.ci/hump-tower/junit.xml"; then
+                      echo "::error file=apps/hump-tower/package.json,title=Web UI unit tests failed::Fix the failing tests above and reproduce with 'moon run hump-tower:test'."
+                      exit 1
+                  fi
+                  if [[ ! -s .ci/hump-tower/coverage/lcov.info || ! -s .ci/hump-tower/junit.xml ]]; then
+                      echo "::error file=apps/hump-tower/moon.yml,title=Web UI test reports missing::Run 'moon run hump-tower:test -- --coverage' and fix report generation; CI requires lcov and JUnit output."
+                      exit 1
+                  fi
+
+            - name: Check web UI TypeScript types
+              if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump-tower:typecheck; then
+                      echo "::error file=apps/hump-tower/tsconfig.json,title=Web UI type check failed::Fix the TypeScript errors above and reproduce with 'moon run hump-tower:typecheck'."
+                      exit 1
+                  fi
+
+            - name: Check web UI unused files, exports and dependencies
+              if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  status=0
+                  moon --cache off --quiet --log off run hump-tower:knip --output-style stream -- --reporter github-actions > .ci/hump-tower/knip.txt 2>&1 || status=$?
+                  sed -E -e "s#file=${GITHUB_WORKSPACE}/#file=#" -e '/file=(apps\/|\/)/!s#file=#file=apps/hump-tower/#' .ci/hump-tower/knip.txt
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=apps/hump-tower/package.json,title=Web UI has unused code or dependencies::Run 'moon run hump-tower:knip', remove unused entries, or correct confirmed false positives in apps/hump-tower/knip.jsonc."
+                      exit "$status"
+                  fi
+
+            - name: Check npm dependency registry policy
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  if ! moon --cache off run hump-tower:registry-check; then
+                      echo "::error file=bun.lock,title=npm registry policy check failed::Remove npm registry overrides and replace non-registry.npmjs.org dependencies listed above, then run 'bun install' and 'moon run hump-tower:registry-check' and commit the manifests and lockfile."
+                      exit 1
+                  fi
+
+            # Keep the existing temporary exceptions and their original review dates unchanged.
+            - name: Scan npm workspace dependencies for known vulnerabilities
+              id: audit
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.reports.outcome == 'success' }}
+              run: |
+                  set -euo pipefail
+                  ignores=(
+                      # happy-dom (dev, via @happy-dom/global-registrator, test DOM only): fixed in 21.0.4, published
+                      # 2026-10-20; also a major upgrade from 20.14.6. Revisit on 2026-10-28.
+                      --ignore=GHSA-834v-8h66-3h79
+                      # fast-uri (dev, via ajv): fixed in 3.1.9, published 2026-10-19; 3.1.8 (root package.json
+                      # overrides) fixes the rest. Revisit on 2026-10-27.
+                      --ignore=GHSA-w74x-v6f9-j3xg
+                      --ignore=GHSA-xhq7-xmqj-769h
+                      --ignore=GHSA-wjr9-j795-jxcr
+                      --ignore=GHSA-333x-w4r6-6crp
+                  )
+                  status=0
+                  moon --cache off --quiet --log off run hump-tower:audit --output-style stream -- --json "${ignores[@]}" > .ci/hump-tower/audit.json || status=$?
+                  echo "status=$status" >> "$GITHUB_OUTPUT"
+                  if [[ "$status" -ne 0 ]]; then
+                      echo "::error file=bun.lock,title=npm audit failed::Review the detailed audit report in the following step; upgrade affected packages to fixed versions at least 7 days old, run 'bun install' and commit manifests and bun.lock. Reproduce with 'moon run hump-tower:audit'."
+                      exit "$status"
+                  fi
+
+            - name: Render and validate npm vulnerability results
+              if: ${{ !cancelled() && steps.audit.outputs.status != '' }}
+              uses: ./.github/actions/npm-audit-summary # zizmor: ignore[self-repository]
+              with:
+                  file: .ci/hump-tower/audit.json
+                  status: ${{ steps.audit.outputs.status }}
+                  ignores: >-
+                      GHSA-834v-8h66-3h79 GHSA-w74x-v6f9-j3xg GHSA-xhq7-xmqj-769h
+                      GHSA-wjr9-j795-jxcr GHSA-333x-w4r6-6crp
+
+            # Compare generated output only when its producer succeeded.
             - name: Check that the hump-tower OpenAPI spec is up to date
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.openapi.outcome == 'success' }}
               env:
                   OPENAPI_SPEC: apps/hump-tower/src/shared/api/openapi.json
               run: |
@@ -320,7 +489,7 @@ jobs:
             # rsbuild cleans its output, so a stale build shows as deleted and untracked files: git
             # status catches both, git diff wouldn't.
             - name: Check that the embedded hump-tower build in apps/hump/internal/controller/hump_tower is up to date
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.build.outcome == 'success' }}
               env:
                   BUILD_DIR: apps/hump/internal/controller/hump_tower
               run: |
@@ -334,7 +503,7 @@ jobs:
 
             # Diffs what moon's Bun install changed in the manifests and the lockfile.
             - name: Check that package.json files and bun.lock are in sync
-              if: ${{ !cancelled() }}
+              if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: |
                   set -euo pipefail
                   if [[ -n "$(git status --porcelain -- package.json bun.lock 'apps/*/package.json' 'packages/*/package.json')" ]]; then
@@ -350,6 +519,15 @@ jobs:
               with:
                   sarif-file: .ci/hump-tower/biome.sarif
                   title: hump-tower code lint
+
+            - name: Upload web UI lint, vulnerability and test machine reports
+              if: ${{ !cancelled() && hashFiles('.ci/hump-tower/**') != '' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: check-web-ui-reports
+                  path: .ci/hump-tower/
+                  include-hidden-files: true
+                  if-no-files-found: error
 
             # Line-weighted totals cut to one decimal like codecov.yml (Bun's "All files" row is an
             # unweighted average). Group depth 3 is the FSD layer and slice; 'excluded' must match
@@ -427,43 +605,26 @@ jobs:
                       ingest.codecov.io:443
                       keybase.io:443
 
-            # Full history: moon diffs against the base commit to find the affected projects.
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
                   fetch-depth: 0
 
-            # auto-install installs moon from .prototools (otherwise the latest release); auto-setup
-            # installs Go and Bun from .moon/toolchains.yml, which 'moon ci' doesn't do itself.
+            # Tool versions come from .prototools and .moon/toolchains.yml.
             - name: Set up proto, moon, Go and Bun
+              id: setup
               uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
               with:
                   auto-install: true
                   auto-setup: true
                   cache: false
 
-            # Runs the runInCI tasks of root affected since the base commit (and the tasks they
-            # depend on); the base-commit logic lives in the composite action. The self-repository
-            # form ($/...) is not supported by actionlint v1.7.12 yet.
-            - name: Run the affected repository-wide lint tasks
-              uses: ./.github/actions/moon-ci # zizmor: ignore[self-repository]
-              with:
-                  project: root
-
-            # Fix hints of the failed root tasks and their per-finding annotations; only this
-            # project's files.
-            - name: Report the findings of the repository moon tasks as annotations
-              if: ${{ !cancelled() && hashFiles('.ci/annotations/root-*.txt') != '' }}
-              run: cat .ci/annotations/root-*.txt
-
-            # ci-* tasks allow failure so the others keep running; each failed one leaves
-            # .ci/failed/<project>-<check>.
-            - name: Check that every repository-wide lint task passed
-              if: ${{ !cancelled() && hashFiles('.ci/failed/root-*') != '' }}
+            - name: Lint workflow syntax, expressions and shell scripts
+              if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
               run: |
                   set -euo pipefail
-                  failed="$(find .ci/failed -type f -name 'root-*' -exec basename {} \; | sort | tr '\n' ' ')"
-                  echo "Failed checks: ${failed}"
-                  echo "::error title=Repository checks failed::These checks failed: ${failed}- each annotation above names the fix and the moon task to run locally."
-                  exit 1
+                  if ! moon --cache off run root:actionlint; then
+                      echo "::error file=.github/workflows/ci-check.yml,title=Workflow lint failed::Fix the workflow or shell findings above and reproduce with 'moon run root:actionlint'."
+                      exit 1
+                  fi

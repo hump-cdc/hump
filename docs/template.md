@@ -225,12 +225,55 @@ Quick reference for the `text/template` constructs used most often. See the
 newlines. Useful inside `range`/`if` blocks to keep multi-line payloads tidy:
 
 ```
+{{- $first := true -}}
 {
 {{- range $k, $v := .Next }}
-  "{{ $k }}": {{ $v | json false }},
+{{- if $first }}{{ $first = false }}{{ else }},{{ end }}
+  {{ $k | json false }}: {{ $v | json false }}
 {{- end }}
 }
 ```
+
+The flag inserts commas between entries, not after the last entry. Both keys
+and values pass through `json false` to escape them correctly.
+
+### JSON and YAML payloads
+
+Templates do not automatically escape values for the destination format.
+Prefer building a value with `dict` or `list`, then serializing the whole value
+with `json` or `yaml`. The serializer handles escaping, separators and types:
+
+```yaml
+payload: |
+  {{ dict "table" .Table "after" .Next | json false }}
+```
+
+For YAML output, use `yaml false` or `yaml true` instead of `json false`.
+
+When assembling JSON manually, serialize every dynamic key and value with
+`json false`. Do not add surrounding quotes: the serializer already quotes
+strings and escapes embedded quotes, backslashes and control characters.
+
+JSON payload:
+
+```yaml
+payload: |
+  {"name": {{ .Next.name | json false }}}
+```
+
+JSON-encoded strings also work as quoted keys and values in YAML. For a YAML
+block mapping payload:
+
+```yaml
+payload: |
+  name: {{ .Next.name | json false }}
+```
+
+Serialization preserves numbers, booleans, nulls, arrays and objects instead of
+turning them into strings. Use `tostring` before `json false` only when the
+consumer requires a string, for example `{{ .Next.id | tostring | json false }}`.
+Neither `quote` nor `squote` is a JSON or YAML serializer; see their references
+below.
 
 ### Comments
 
@@ -320,8 +363,8 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `replace`    | `replace old new s`                                                       |
 | `repeat`     | `repeat count s`                                                          |
 | `cat`        | Space-join args after stringifying                                        |
-| `quote`      | Wrap each arg in double quotes, space-joined                              |
-| `squote`     | Same, with single quotes                                                  |
+| `quote`      | Go-escape and double-quote each arg, space-joined; not JSON/YAML serialization |
+| `squote`     | Wrap each arg in single quotes without escaping, space-joined; not JSON/YAML serialization |
 | `indent`     | `indent n s` — prepend `n` spaces to every line                           |
 | `nindent`    | `nindent n s` — leading newline + `indent`                                |
 | `plural`     | `plural one many count`                                                   |
@@ -350,7 +393,7 @@ All tokenize the input on word boundaries (case changes, digits, separators).
 | `todecimal`     | `todecimal v`     | Parses `v` as **octal** and returns the decimal value (matches sprig) |
 | `tostring`      | `tostring v`      | `fmt.Sprint(v)`                                                       |
 | `tostrings`     | `tostrings list`  | Stringify every element of a `[]string`/`[]any`                       |
-| `json`          | `json prettify v` | Marshal to JSON; `prettify=true` uses 2-space indent                  |
+| `json`          | `json prettify v` | Marshal to JSON, including string quotes/escapes; `prettify=true` uses 2-space indent |
 | `fromjson`      | `fromjson s`      | Parse JSON object → `map[string]any`                                  |
 | `fromjsonarray` | `fromjsonarray s` | Parse JSON array → `[]any`                                            |
 
@@ -522,10 +565,10 @@ partitionKey: '{{ if eq .Operation "delete" }}{{ .Prev.id }}{{ else }}{{ .Next.i
 ```yaml
 payload: |
   {
-    "schema": "{{ .Schema }}",
-    "table": "{{ .Table }}",
-    "op": "{{ .Operation }}",
-    "ts": "{{ now | htmldate }}",
+    "schema": {{ .Schema | json false }},
+    "table": {{ .Table | json false }},
+    "op": {{ .Operation | json false }},
+    "ts": {{ now | htmldate | json false }},
     "before": {{ .Prev | json false }},
     "after":  {{ .Next | json false }}
   }
@@ -1038,18 +1081,25 @@ Stringify each arg and join with single spaces.
 
 #### `quote`
 
-Wrap each arg in double quotes, space-joined.
+Escape each arg using Go string syntax and wrap it in double quotes,
+space-joined. This is not JSON or YAML serialization: Go escapes such as `\x00`
+are not valid JSON escapes. Use `json false` for JSON strings, or serialize the
+whole value with `json` or `yaml`.
 
 ```
 {{ quote "a" "b" }} → "a" "b"
+{{ quote "\x00" }} → "\x00"
 ```
 
 #### `squote`
 
-Wrap each arg in single quotes, space-joined.
+Wrap each arg in single quotes, space-joined, without escaping its contents.
+Embedded apostrophes remain unchanged, so the result is not safe YAML quoting.
+This is not a JSON or YAML serializer.
 
 ```
 {{ squote "a" "b" }} → 'a' 'b'
+{{ squote "O'Reilly" }} → 'O'Reilly'
 ```
 
 #### `indent`
@@ -1177,6 +1227,12 @@ Stringify every element of a `[]string` or `[]any`.
 `json prettify v` — marshal to JSON; `prettify=true` indents with 2 spaces.
 NaN and infinite values are written as `null`.
 
+For manual JSON assembly, use `json false` for every dynamic key and value,
+without extra surrounding quotes. Strings include their quotes and escapes;
+other values retain their JSON types. Use `tostring` first only if a string is
+required. Prefer serializing a whole `dict` or `list` to managing JSON syntax by
+hand. See [JSON and YAML payloads](#json-and-yaml-payloads).
+
 Input: `.Next = {"a": 1}`
 
 ```
@@ -1207,6 +1263,10 @@ input and trailing non-whitespace data.
 #### `yaml`
 
 `yaml prettify v` — marshal to YAML; `prettify=true` uses 4-space indent.
+
+Prefer building a `dict` or `list` and serializing the whole value. Do not use
+`quote` or `squote` as YAML serializers. For manual flow mappings, JSON-encoded
+keys and values are also valid YAML; see [JSON and YAML payloads](#json-and-yaml-payloads).
 
 ```
 {{ yaml false (dict "a" 1 "b" "two") }} → a: 1\nb: two

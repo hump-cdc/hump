@@ -13,7 +13,12 @@ import (
 	"strconv"
 )
 
-var defaultClient = &nethttp.Client{}
+// defaultClient leaves redirects to the delivery failure path without following them.
+var defaultClient = &nethttp.Client{
+	CheckRedirect: func(_ *nethttp.Request, _ []*nethttp.Request) error {
+		return nethttp.ErrUseLastResponse
+	},
+}
 
 // Process renders and delivers a WAL operation as an HTTP request bounded by ctx.
 // A non-nil capture records the request and response status for the operations log.

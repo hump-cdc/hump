@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	sinkcfg "hump/config/sink"
@@ -118,6 +119,51 @@ func TestProcessClassifiesStatus(t *testing.T) {
 			}
 			if got, want := capture.Metadata["status"], strconv.Itoa(tt.code); got != want {
 				t.Errorf("capture status = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestProcessDoesNotFollowRedirects(t *testing.T) {
+	for _, code := range []int{
+		nethttp.StatusMovedPermanently,
+		nethttp.StatusFound,
+		nethttp.StatusSeeOther,
+		nethttp.StatusTemporaryRedirect,
+		nethttp.StatusPermanentRedirect,
+	} {
+		t.Run(strconv.Itoa(code), func(t *testing.T) {
+			var targetHits atomic.Int64
+			target := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+				targetHits.Add(1)
+				w.WriteHeader(nethttp.StatusOK)
+			}))
+			t.Cleanup(target.Close)
+			srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+				nethttp.Redirect(w, r, target.URL, code)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := sinkcfg.HTTPSink{
+				URL:    mustTemplate(t, srv.URL),
+				Method: mustTemplate(t, "POST"),
+				Body:   mustTemplate(t, "public.users"),
+			}
+			capture := &sink.Capture{}
+			err := Process(context.Background(), cfg, testContext(), capture)
+
+			var statusErr *statusError
+			if !errors.As(err, &statusErr) || statusErr.code != code {
+				t.Errorf("Process() error = %v, want statusError %d", err, code)
+			}
+			if got := targetHits.Load(); got != 0 {
+				t.Errorf("redirect target requests = %d, want 0", got)
+			}
+			if got, want := capture.Metadata["status"], strconv.Itoa(code); got != want {
+				t.Errorf("capture status = %q, want %q", got, want)
+			}
+			if capture.Target != srv.URL {
+				t.Errorf("capture.Target = %q, want %q", capture.Target, srv.URL)
 			}
 		})
 	}

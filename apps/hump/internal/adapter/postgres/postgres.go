@@ -78,6 +78,8 @@ func New(databaseUrl string, cfg config.Configuration, publicationName string, s
 // publication and replication slot exist. conn is borrowed for the lifetime of
 // the returned introspector, so the caller must keep it open until then.
 func (p *Postgres) configure(ctx context.Context, conn *connection) (*introspector, error) {
+	checkStandardConformingStringsDefault(ctx, p.databaseUrl)
+
 	if err := p.validateCompatibility(ctx, conn); err != nil {
 		return nil, fmt.Errorf("validate database compatibility: %w", err)
 	}

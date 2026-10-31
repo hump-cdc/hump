@@ -53,8 +53,28 @@ func TestEnsurePublicationExists(t *testing.T) {
 	if !strings.Contains(publication, `CREATE PUBLICATION "hump_pub" FOR `+want) {
 		t.Errorf("publication statement = %q, want the CREATE to declare %q", publication, want)
 	}
-	if !strings.Contains(publication, `pubname = 'hump_pub'`) {
+	if !strings.Contains(publication, `pubname = E'hump_pub'`) {
 		t.Errorf("publication statement = %q, want the name as a literal in the existence check", publication)
+	}
+}
+
+func TestEnsurePublicationExistsQuotesBackslashesAndApostrophes(t *testing.T) {
+	server := newFakeServer(t)
+	server.setResponder(tableLayoutResponder(false, layoutRow("public", "users", tableTypeRegular, nil, nil)))
+	bootstrapper := newTestBootstrapper(t, server)
+
+	if err := bootstrapper.EnsurePublicationExists(context.Background(), `pub\'"; --`, []domain.TableIdentifier{{Schema: "public", Name: "users"}}); err != nil {
+		t.Fatalf("EnsurePublicationExists() error = %v", err)
+	}
+
+	statements := server.recorded()
+	if len(statements) != 3 {
+		t.Fatalf("statements = %q, want the metadata queries and publication block", statements)
+	}
+	for _, want := range []string{`pubname = E'pub\\''"; --'`, `CREATE PUBLICATION "pub\'""; --"`, `ALTER PUBLICATION "pub\'""; --"`} {
+		if !strings.Contains(statements[2], want) {
+			t.Errorf("publication statement = %q, want %q", statements[2], want)
+		}
 	}
 }
 
@@ -256,7 +276,7 @@ func TestEnsureReplicationSlotExists(t *testing.T) {
 	if !strings.Contains(statements[0], "pg_create_logical_replication_slot") {
 		t.Errorf("statement = %q, want the slot creation block", statements[0])
 	}
-	if !strings.Contains(statements[0], `'hump''s slot'`) {
+	if !strings.Contains(statements[0], `E'hump''s slot'`) {
 		t.Errorf("statement = %q, want the slot name quoted as a literal", statements[0])
 	}
 }
@@ -296,7 +316,7 @@ func TestEnsureReplicationSlotRemoved(t *testing.T) {
 	if !strings.Contains(statements[0], "pg_drop_replication_slot") {
 		t.Errorf("statement = %q, want the slot removal block", statements[0])
 	}
-	if !strings.Contains(statements[0], `'hump_slot'`) {
+	if !strings.Contains(statements[0], `E'hump_slot'`) {
 		t.Errorf("statement = %q, want the slot name quoted as a literal", statements[0])
 	}
 }
@@ -502,10 +522,16 @@ func TestQuoteLiteral(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "plain", in: "hump_slot", want: `'hump_slot'`},
-		{name: "empty", in: "", want: `''`},
-		{name: "embedded quote", in: "o'brien", want: `'o''brien'`},
-		{name: "only quotes", in: `''`, want: `''''''`},
+		{name: "plain", in: "hump_slot", want: `E'hump_slot'`},
+		{name: "empty", in: "", want: `E''`},
+		{name: "embedded quote", in: "o'brien", want: `E'o''brien'`},
+		{name: "only quotes", in: `''`, want: `E''''''`},
+		{name: "backslash", in: `a\b`, want: `E'a\\b'`},
+		{name: "trailing backslash", in: `a\`, want: `E'a\\'`},
+		{name: "backslash before quote", in: `\'`, want: `E'\\'''`},
+		{name: "escape shaped text", in: `\n\t\x41\101`, want: `E'\\n\\t\\x41\\101'`},
+		{name: "injection shaped text", in: `\'; DROP TABLE users; --`, want: `E'\\''; DROP TABLE users; --'`},
+		{name: "newlines", in: "a\n\r\tb", want: "E'a\n\r\tb'"},
 	}
 
 	for _, tt := range cases {
@@ -541,8 +567,6 @@ func TestQuoteIdentifier(t *testing.T) {
 	}
 }
 
-// alteredTables returns the qualified table of every ALTER TABLE ... REPLICA
-// IDENTITY FULL the server was asked to run, in order.
 func TestSummarizeTables(t *testing.T) {
 	tables := []domain.TableIdentifier{
 		{Schema: "public", Name: "a"},
@@ -572,6 +596,7 @@ func TestSummarizeTables(t *testing.T) {
 	}
 }
 
+// alteredTables returns the qualified tables altered to REPLICA IDENTITY FULL in order.
 func alteredTables(s *fakeServer) []string {
 	alterPattern := regexp.MustCompile(`ALTER TABLE (.+) REPLICA IDENTITY FULL`)
 

@@ -82,6 +82,11 @@ func TestSnapshotWhereSuggesterSuggest(t *testing.T) {
 			columns: []tablesColumn{column(`up"dated`, "timestamp with time zone"), timeKey(column(`Odd "Time"`, "timestamp with time zone"))},
 			want:    `"Odd ""Time""" >= now() - interval '7 days'`,
 		},
+		{
+			name:    "backslash and injection shaped identifier",
+			columns: []tablesColumn{timeKey(column(`Odd\"'; DROP TABLE users; --`, "timestamp"))},
+			want:    `"Odd\""'; DROP TABLE users; --" >= now() - interval '7 days'`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -95,8 +100,12 @@ func TestSnapshotWhereSuggesterSuggest(t *testing.T) {
 				return
 			}
 
-			if _, err := newSnapshotWhereParser().Parse(got); err != nil {
+			rendered, err := newSnapshotWhereParser().Parse(got)
+			if err != nil {
 				t.Errorf("Parse(%q) error = %v, want the suggestion to be an accepted filter", got, err)
+			}
+			if !strings.HasSuffix(rendered, "INTERVAL E'7 days'))") {
+				t.Errorf("Parse(%q) = %q, want the interval rendered as an escape literal", got, rendered)
 			}
 		})
 	}
@@ -109,6 +118,7 @@ func FuzzSnapshotWhereSuggester(f *testing.F) {
 	f.Add("User\"Id", "timestamp(3) without time zone", true, false, false)
 	f.Add("a -- b", "timestamp", true, false, false)
 	f.Add("x'; DROP TABLE t; --", "timestamp", false, false, true)
+	f.Add(`Odd\"'; DROP TABLE users; --`, "timestamp", true, false, false)
 
 	f.Fuzz(func(t *testing.T, name, typ string, isTimeKey, isIndexed, isNowDefault bool) {
 		if name == "" || strings.ContainsRune(name, 0) {
@@ -135,6 +145,10 @@ func FuzzSnapshotWhereSuggester(f *testing.F) {
 		if !strings.Contains(rendered, quoteIdentifier(name)) {
 			t.Fatalf("Parse(%q) = %q, want it to filter on %s", got, rendered, quoteIdentifier(name))
 		}
+		if want := quoteIdentifier(name) + " >= now() - interval '7 days'"; got != want {
+			t.Fatalf("Suggest() = %q, want input grammar %q", got, want)
+		}
+		lexSnapshotWhereOutput(t, rendered)
 	})
 }
 

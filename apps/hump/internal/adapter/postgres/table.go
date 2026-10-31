@@ -101,10 +101,11 @@ func qualifiedTableName(table domain.TableIdentifier) string {
 	return quoteIdentifier(string(table.Schema)) + "." + quoteIdentifier(string(table.Name))
 }
 
-// quoteLiteral wraps s as a SQL string literal, doubling embedded single quotes.
-// Assumes standard_conforming_strings is on (PostgreSQL default since 9.1).
+// quoteLiteral renders an escape string literal, doubling backslashes and quotes
+// so its value does not depend on standard_conforming_strings.
 func quoteLiteral(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	return "E'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // quoteIdentifier wraps s as a SQL identifier, doubling embedded double quotes.

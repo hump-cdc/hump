@@ -273,7 +273,7 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 			statements := server.recorded()
 
 			layout := findStatement(statements, "snapshot: layout")
-			if !strings.Contains(layout, "SET TRANSACTION SNAPSHOT '"+testSnapshotID+"';") || !strings.Contains(layout, `'"public"."users"'::regclass`) {
+			if !strings.Contains(layout, "SET TRANSACTION SNAPSHOT E'"+testSnapshotID+"';") || !strings.Contains(layout, `E'"public"."users"'::regclass`) {
 				t.Errorf("layout statement = %q, want it to import the snapshot and name the table", layout)
 			}
 			if got := strings.Contains(layout, "compressed_chunk_id"); got != tt.timescale {
@@ -284,7 +284,7 @@ func TestReadSnapshotReadsEveryLeaf(t *testing.T) {
 				read := findStatement(statements, "FROM ONLY "+qualifiedTableName(leaf.table()))
 				for _, part := range []string{
 					"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;",
-					"SET TRANSACTION SNAPSHOT '" + testSnapshotID + "';",
+					"SET TRANSACTION SNAPSHOT E'" + testSnapshotID + "';",
 					`snapshot_row."id", snapshot_row."name"`,
 					`AS snapshot_row WHERE (("snapshot_row"."id" > 1))`,
 					`snapshot_row.ctid::text`,
@@ -321,7 +321,7 @@ func TestReadSnapshotKeepsUserMetadataNamesAndQualifiesPhysicalCTID(t *testing.T
 	for _, part := range []string{
 		`snapshot_row.ctid::text`,
 		`snapshot_row."ctid", snapshot_row."tableoid"`,
-		`WHERE snapshot_row.ctid < '(1024,0)'::tid AND (("snapshot_row"."tableoid" = 'public'))`,
+		`WHERE snapshot_row.ctid < '(1024,0)'::tid AND (("snapshot_row"."tableoid" = E'public'))`,
 	} {
 		if !strings.Contains(read, part) {
 			t.Errorf("read statement = %q, want it to contain %q", read, part)

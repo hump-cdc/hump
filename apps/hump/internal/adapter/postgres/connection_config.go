@@ -46,6 +46,12 @@ func (c *connectionOptions) GetConnectionConfig() (*pgconn.Config, string, uint1
 	if c.replication {
 		cfg.RuntimeParams["replication"] = "database"
 	}
+	for name := range cfg.RuntimeParams {
+		if isStringSetting(name) {
+			delete(cfg.RuntimeParams, name)
+		}
+	}
+	cfg.RuntimeParams["standard_conforming_strings"] = "on"
 
 	return cfg, cfg.Host, cfg.Port, domain.DbName(cfg.Database), nil
 }

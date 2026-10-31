@@ -92,7 +92,8 @@ func (s *snapshotWhereSuggester) Suggest() string {
 		return ""
 	}
 
-	return quoteIdentifier(best.Name) + " >= now() - interval " + quoteLiteral(snapshotWhereRecentInterval)
+	// Suggestions use the input grammar, which does not accept SQL escape literals.
+	return quoteIdentifier(best.Name) + " >= now() - interval '" + snapshotWhereRecentInterval + "'"
 }
 
 // rank returns how well c tracks row recency, lower being better, and false

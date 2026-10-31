@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestParseWhereRebasesSnapshotColumnReferences(t *testing.T) {
 		}
 	}
 	got, err := parser.Parse(`name = 'users.id'`)
-	if want := `("snapshot_row"."name" = 'users.id')`; err != nil || got != want {
+	if want := `("snapshot_row"."name" = E'users.id')`; err != nil || got != want {
 		t.Errorf("Parse() = %q, %v, want %q", got, err, want)
 	}
 	got, err = parser.Parse(`unknown.id > 1`)
@@ -42,8 +43,14 @@ func TestParseWhereRendersAcceptedExpressions(t *testing.T) {
 		{name: "bare identifier folds to lower case", where: "UserId = 1", want: `("userid" = 1)`},
 		{name: "quoted identifier keeps case and escapes", where: `"User""Id" = 1`, want: `("User""Id" = 1)`},
 		{name: "qualified column", where: `t.id = "T"."Id"`, want: `("t"."id" = "T"."Id")`},
-		{name: "keyword function without parentheses is a column", where: "current_user = 'x'", want: `("current_user" = 'x')`},
-		{name: "string escapes", where: "name = 'O''Brien'", want: `("name" = 'O''Brien')`},
+		{name: "keyword function without parentheses is a column", where: "current_user = 'x'", want: `("current_user" = E'x')`},
+		{name: "string escapes", where: "name = 'O''Brien'", want: `("name" = E'O''Brien')`},
+		{name: "empty string", where: `name = ''`, want: `("name" = E'')`},
+		{name: "literal backslash escapes", where: `name = '\n\t\x41\101'`, want: `("name" = E'\\n\\t\\x41\\101')`},
+		{name: "trailing backslash", where: `name = 'path\'`, want: `("name" = E'path\\')`},
+		{name: "backslash and apostrophe", where: `name = '\'''`, want: `("name" = E'\\''')`},
+		{name: "injection shaped literal", where: `name = '\''; DROP TABLE users; --'`, want: `("name" = E'\\''; DROP TABLE users; --')`},
+		{name: "typed literal backslash", where: `ts > timestamp '2024\01''02'`, want: `("ts" > TIMESTAMP E'2024\\01''02')`},
 		{name: "numbers", where: "a = 1.5 or a = .5 or a = 2. or a = 1e10 or a = 1E+3 or a = 1.5e-2",
 			want: `(((((("a" = 1.5) OR ("a" = .5)) OR ("a" = 2.)) OR ("a" = 1e10)) OR ("a" = 1E+3)) OR ("a" = 1.5e-2))`},
 		{name: "keyword literals", where: "a IS NULL AND b = TRUE AND c = false", want: `((("a" IS NULL) AND ("b" = TRUE)) AND ("c" = FALSE))`},
@@ -54,18 +61,18 @@ func TestParseWhereRendersAcceptedExpressions(t *testing.T) {
 			want: `((("a" IS NOT NULL) AND ("b" IS TRUE)) AND ("c" IS NOT FALSE))`},
 		{name: "is distinct from", where: "a is distinct from b or a is not distinct from 1",
 			want: `(("a" IS DISTINCT FROM "b") OR ("a" IS NOT DISTINCT FROM 1))`},
-		{name: "in", where: "a in (1, 2) and b not in ('x')", want: `(("a" IN (1, 2)) AND ("b" NOT IN ('x')))`},
+		{name: "in", where: "a in (1, 2) and b not in ('x')", want: `(("a" IN (1, 2)) AND ("b" NOT IN (E'x')))`},
 		{name: "between", where: "a between 1 and 2 and b not between 3 and 4",
 			want: `(("a" BETWEEN 1 AND 2) AND ("b" NOT BETWEEN 3 AND 4))`},
 		{name: "like", where: "a like 'x%' or a not like 'y' or a ilike 'z' or a not ilike 'w'",
-			want: `(((("a" LIKE 'x%') OR ("a" NOT LIKE 'y')) OR ("a" ILIKE 'z')) OR ("a" NOT ILIKE 'w'))`},
+			want: `(((("a" LIKE E'x%') OR ("a" NOT LIKE E'y')) OR ("a" ILIKE E'z')) OR ("a" NOT ILIKE E'w'))`},
 		{name: "arithmetic precedence", where: "a + b * c - d / e % f = 0", want: `((("a" + ("b" * "c")) - (("d" / "e") % "f")) = 0)`},
-		{name: "concatenation binds looser than arithmetic", where: "a || b + 1 = 'x'", want: `(("a" || ("b" + 1)) = 'x')`},
+		{name: "concatenation binds looser than arithmetic", where: "a || b + 1 = 'x'", want: `(("a" || ("b" + 1)) = E'x')`},
 		{name: "unary signs", where: "a = - -1 and b = +2", want: `(("a" = (-((-(1))))) AND ("b" = (+(2))))`},
 		{name: "cast binds tighter than unary minus", where: "-a::int = 1", want: `((-(("a"::int))) = 1)`},
-		{name: "chained casts", where: "a::text::varchar(10) = 'x'", want: `((("a"::text)::varchar(10)) = 'x')`},
+		{name: "chained casts", where: "a::text::varchar(10) = 'x'", want: `((("a"::text)::varchar(10)) = E'x')`},
 		{name: "multi-word types", where: "a::double precision = 1 and b::character varying = 'x' and c::character(2) = 'y'",
-			want: `(((("a"::double precision) = 1) AND (("b"::character varying) = 'x')) AND (("c"::character(2)) = 'y'))`},
+			want: `(((("a"::double precision) = 1) AND (("b"::character varying) = E'x')) AND (("c"::character(2)) = E'y'))`},
 		{name: "types with time zone", where: "a::timestamp with time zone = b::time(3) without time zone",
 			want: `(("a"::timestamp with time zone) = ("b"::time(3) without time zone))`},
 		{name: "timestamp without zone suffix", where: "a::timestamp = b::time", want: `(("a"::timestamp) = ("b"::time))`},
@@ -73,11 +80,11 @@ func TestParseWhereRendersAcceptedExpressions(t *testing.T) {
 		{name: "cast call", where: "CAST(a AS bigint) = 1", want: `(CAST("a" AS bigint) = 1)`},
 		{name: "extract", where: "extract(year from created_at) = 2024", want: `(EXTRACT(YEAR FROM "created_at") = 2024)`},
 		{name: "typed literals", where: "ts > now() - interval '1 day' and d >= date '2024-01-01' and t < timestamptz '2024-01-01 00:00Z'",
-			want: `((("ts" > (now() - INTERVAL '1 day')) AND ("d" >= DATE '2024-01-01')) AND ("t" < TIMESTAMPTZ '2024-01-01 00:00Z'))`},
+			want: `((("ts" > (now() - INTERVAL E'1 day')) AND ("d" >= DATE E'2024-01-01')) AND ("t" < TIMESTAMPTZ E'2024-01-01 00:00Z'))`},
 		{name: "current time keywords", where: "ts < current_timestamp and d <= CURRENT_DATE", want: `(("ts" < CURRENT_TIMESTAMP) AND ("d" <= CURRENT_DATE))`},
 		{name: "functions", where: "lower(name) = 'x' and date_trunc('day', ts) = to_timestamp(0) and coalesce(a, b, 0) = 1",
-			want: `(((lower("name") = 'x') AND (date_trunc('day', "ts") = to_timestamp(0))) AND (coalesce("a", "b", 0) = 1))`},
-		{name: "function name is case-insensitive", where: "UPPER(a) = 'X'", want: `(upper("a") = 'X')`},
+			want: `(((lower("name") = E'x') AND (date_trunc(E'day', "ts") = to_timestamp(0))) AND (coalesce("a", "b", 0) = 1))`},
+		{name: "function name is case-insensitive", where: "UPPER(a) = 'X'", want: `(upper("a") = E'X')`},
 		{name: "type name as a column", where: "date = 1", want: `("date" = 1)`},
 		{name: "keyword column", where: `"select" = 1`, want: `("select" = 1)`},
 		{name: "bare value", where: "active", want: `"active"`},
@@ -118,6 +125,8 @@ func TestParseWhereRejectsInvalidExpressions(t *testing.T) {
 		{name: "empty quoted identifier", where: `"" = 1`, want: "empty quoted identifier at offset 0"},
 		{name: "malformed exponent", where: "a = 1e", want: "malformed number at offset 4"},
 		{name: "escape string prefix", where: `a = E'x'`, want: `unexpected "x" at offset 5`},
+		{name: "lowercase escape string prefix", where: `a = e'x'`, want: `unexpected "x" at offset 5`},
+		{name: "typed escape string prefix", where: `a = interval E'7 days'`, want: `unexpected "e"`},
 		{name: "subquery", where: "a in (select id from t)", want: `unexpected "id"`},
 		{name: "exists subquery", where: "exists (select 1)", want: `function "exists" at offset 0 is not allowed`},
 		{name: "disallowed function", where: "pg_sleep(10) is null", want: `function "pg_sleep" at offset 0 is not allowed`},
@@ -195,6 +204,9 @@ func FuzzSnapshotWhereParser(f *testing.F) {
 		"id = 1",
 		`"User""Id" = 1 and t.id = "T"."Id"`,
 		"name = 'O''Brien' or a = 1.5e-2",
+		`name = '\''; DROP TABLE users; --'`,
+		`name = '\n\t\x41\101'`,
+		`name = 'path\'`,
 		"a is not distinct from b and c is not null",
 		"a in (1, 2) and b not between 3 and 4 and c not ilike 'x%'",
 		"a + b * c - d / e % f = 0 and a || b = 'x'",
@@ -240,9 +252,24 @@ func FuzzSnapshotWhereParser(f *testing.F) {
 			return
 		}
 
-		tokens, err := newSnapshotWhereLexer(got).lex()
+		tokens := lexSnapshotWhereOutput(t, got)
+		inputTokens, err := newSnapshotWhereLexer(where).lex()
 		if err != nil {
-			t.Fatalf("Parse(%q) = %q, which does not lex: %v", where, got, err)
+			t.Fatalf("accepted input no longer lexes: %v", err)
+		}
+		var inputStrings, outputStrings []string
+		for _, token := range inputTokens {
+			if token.kind == snapshotWhereTokenString {
+				inputStrings = append(inputStrings, token.text)
+			}
+		}
+		for _, token := range tokens {
+			if token.kind == snapshotWhereTokenString {
+				outputStrings = append(outputStrings, token.text)
+			}
+		}
+		if !slices.Equal(inputStrings, outputStrings) {
+			t.Fatalf("Parse(%q) = %q changed string values: %q != %q", where, got, inputStrings, outputStrings)
 		}
 
 		depth := 0
@@ -261,10 +288,6 @@ func FuzzSnapshotWhereParser(f *testing.F) {
 		if depth != 0 {
 			t.Fatalf("Parse(%q) = %q, which leaves %d parentheses open", where, got, depth)
 		}
-
-		if _, err := newSnapshotWhereParser().Parse(got); err != nil && !strings.Contains(err.Error(), "nested too deeply") {
-			t.Fatalf("Parse(%q) = %q, which does not parse again: %v", where, got, err)
-		}
 	})
 }
 
@@ -274,21 +297,103 @@ func FuzzSnapshotWhereQuoting(f *testing.F) {
 	f.Add("select", "'; DROP TABLE users; --")
 	f.Add("a -- b", "/* x */")
 	f.Add("\x00\xff", "\n\t\r")
+	f.Add("path\\", `\'; DROP TABLE users; --`)
+	f.Add("a", `\n\t\x41\101`)
 
 	f.Fuzz(func(t *testing.T, name, value string) {
 		if name == "" {
 			t.Skip("the lexer rejects an empty quoted identifier by design")
 		}
 
-		where := quoteIdentifier(name) + " = " + quoteLiteral(value)
+		where := quoteIdentifier(name) + " = '" + strings.ReplaceAll(value, "'", "''") + "'"
 
 		got, err := newSnapshotWhereParser().Parse(where)
 		if err != nil {
 			t.Fatalf("Parse(%q) error = %v, want a quoted comparison to be accepted", where, err)
 		}
 
-		if want := "(" + where + ")"; got != want {
+		if want := "(" + quoteIdentifier(name) + " = " + quoteLiteral(value) + ")"; got != want {
 			t.Fatalf("Parse(%q) = %q, want %q", where, got, want)
 		}
+		tokens := lexSnapshotWhereOutput(t, got)
+		if len(tokens) != 6 || tokens[1].kind != snapshotWhereTokenQuoted || tokens[1].text != name || tokens[3].kind != snapshotWhereTokenString || tokens[3].text != value {
+			t.Fatalf("rendered comparison %q changed its identifier, value, or token boundaries: %+v", got, tokens)
+		}
 	})
+}
+
+// lexSnapshotWhereOutput checks escape-literal boundaries before lexing decoded
+// output through the input lexer; the parser deliberately does not accept E literals.
+func lexSnapshotWhereOutput(t *testing.T, sql string) []snapshotWhereToken {
+	t.Helper()
+	var normalized strings.Builder
+	for i := 0; i < len(sql); {
+		switch {
+		case sql[i] == '"':
+			start := i
+			i++
+			closed := false
+			for i < len(sql) {
+				if sql[i] != '"' {
+					i++
+					continue
+				}
+				i++
+				if i < len(sql) && sql[i] == '"' {
+					i++
+					continue
+				}
+				closed = true
+				break
+			}
+			if !closed {
+				t.Fatalf("unterminated identifier in %q", sql)
+			}
+			normalized.WriteString(sql[start:i])
+		case sql[i] == 'E' && i+1 < len(sql) && sql[i+1] == '\'':
+			i += 2
+			var value strings.Builder
+			closed := false
+			for i < len(sql) {
+				switch sql[i] {
+				case '\\':
+					if i+1 >= len(sql) || sql[i+1] != '\\' {
+						t.Fatalf("undoubled backslash in %q at %d", sql, i)
+					}
+					value.WriteByte('\\')
+					i += 2
+				case '\'':
+					i++
+					if i < len(sql) && sql[i] == '\'' {
+						value.WriteByte('\'')
+						i++
+						continue
+					}
+					closed = true
+				default:
+					value.WriteByte(sql[i])
+					i++
+				}
+				if closed {
+					break
+				}
+			}
+			if !closed {
+				t.Fatalf("unterminated escape literal in %q", sql)
+			}
+			normalized.WriteByte('\'')
+			normalized.WriteString(strings.ReplaceAll(value.String(), "'", "''"))
+			normalized.WriteByte('\'')
+		case sql[i] == '\'':
+			t.Fatalf("non-escape literal in rendered SQL %q at %d", sql, i)
+		default:
+			normalized.WriteByte(sql[i])
+			i++
+		}
+	}
+	tokens, err := newSnapshotWhereLexer(normalized.String()).lex()
+	if err != nil {
+		t.Fatalf("rendered SQL %q has invalid token boundaries: %v", sql, err)
+	}
+	return tokens
 }

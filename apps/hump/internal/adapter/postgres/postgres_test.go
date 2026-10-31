@@ -355,6 +355,7 @@ func TestListenReusesMetricsAcrossCalls(t *testing.T) {
 
 // queryResult is the fake server's scripted answer to one statement.
 type queryResult struct {
+	stringSetting string
 	// columns is how many text fields the RowDescription announces.
 	columns int
 	// rows holds the text-format value of every column; a nil value is NULL.
@@ -377,11 +378,14 @@ type queryResult struct {
 type fakeServer struct {
 	listener net.Listener
 
-	mu         sync.Mutex
-	respond    func(sql string) queryResult
-	statements []string
-	params     [][][]byte
-	standby    []pglogrepl.StandbyStatusUpdate
+	mu             sync.Mutex
+	respond        func(sql string) queryResult
+	statements     []string
+	params         [][][]byte
+	standby        []pglogrepl.StandbyStatusUpdate
+	stringSetting  *string
+	startupParams  []map[string]string
+	closedSessions int
 	// refused drops every session that asks for replication=database, so the
 	// client's dial never completes.
 	refused bool
@@ -523,7 +527,12 @@ func (s *fakeServer) accept() {
 // protocol messages until the client goes away. START_REPLICATION hands the
 // session over to copyBoth and ends it there.
 func (s *fakeServer) serve(conn net.Conn) {
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		_ = conn.Close()
+		s.mu.Lock()
+		s.closedSessions++
+		s.mu.Unlock()
+	}()
 
 	backend := pgproto3.NewBackend(conn, conn)
 	if err := s.startup(backend); err != nil {
@@ -710,9 +719,17 @@ func (s *fakeServer) startup(backend *pgproto3.Backend) error {
 	if startup.Parameters["replication"] == "database" && s.replicationRefused() {
 		return errors.New("replication refused")
 	}
+	s.mu.Lock()
+	s.startupParams = append(s.startupParams, startup.Parameters)
+	setting := "on"
+	if s.stringSetting != nil {
+		setting = *s.stringSetting
+	}
+	s.mu.Unlock()
 
 	backend.Send(&pgproto3.AuthenticationOk{})
 	backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "17.0"})
+	backend.Send(&pgproto3.ParameterStatus{Name: "standard_conforming_strings", Value: setting})
 	backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
 	backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 
@@ -722,6 +739,9 @@ func (s *fakeServer) startup(backend *pgproto3.Backend) error {
 // sendRows writes the body of a result: an error, an empty query response, or
 // the data rows followed by their command tag.
 func sendRows(backend *pgproto3.Backend, result queryResult) {
+	if result.stringSetting != "" {
+		backend.Send(&pgproto3.ParameterStatus{Name: "standard_conforming_strings", Value: result.stringSetting})
+	}
 	switch {
 	case result.err != nil:
 		backend.Send(result.err)
@@ -1298,6 +1318,7 @@ func pipeStartup(backend *pgproto3.Backend) error {
 
 	backend.Send(&pgproto3.AuthenticationOk{})
 	backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
+	backend.Send(&pgproto3.ParameterStatus{Name: "standard_conforming_strings", Value: "on"})
 	backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
 	backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 

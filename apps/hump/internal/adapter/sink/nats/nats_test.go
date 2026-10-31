@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -285,6 +286,35 @@ func TestGetClientRejectsInvalidURL(t *testing.T) {
 	_, err := getClient(sinkcfg.NatsCommon{URL: mustTemplate(t, "nats://%zz")}, testContext())
 	if err == nil {
 		t.Fatal("getClient() error = nil, want an invalid URL error")
+	}
+}
+
+func TestGetClientConnectionErrorHidesSecretsAndPreservesCause(t *testing.T) {
+	rawURL := diagnosticURL("nats", "127.0.0.1:invalid-port")
+	nc, err := getClient(sinkcfg.NatsCommon{URL: mustTemplate(t, rawURL)}, testContext())
+	if nc != nil || err == nil {
+		t.Fatalf("getClient() = %v, %v, want no client and a URL error", nc, err)
+	}
+	if got, want := err.Error(), "nats client for [redacted endpoint]"; got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	var cause *url.Error
+	if !errors.As(err, &cause) {
+		t.Fatalf("getClient() error type = %T, want wrapped *url.Error", err)
+	}
+	if cause.URL != rawURL {
+		t.Errorf("cause URL = %q, want original connection URL %q", cause.URL, rawURL)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("connection error does not preserve its cause")
+	}
+	for _, format := range []string{"%s", "%v", "%+v"} {
+		text := fmt.Sprintf(format, err)
+		for _, secret := range []string{"diagnostic-user-sentinel", "diagnostic-password-sentinel", "diagnostic-vhost-sentinel", "diagnostic-query-sentinel"} {
+			if strings.Contains(text, secret) {
+				t.Errorf("format %q exposed %q: %s", format, secret, text)
+			}
+		}
 	}
 }
 

@@ -44,6 +44,28 @@ func TestEndpoint(t *testing.T) {
 	}
 }
 
+func TestEndpointRejectsUnsafeHostsWithoutLeakingSecrets(t *testing.T) {
+	tests := []struct{ name, raw string }{
+		{"missing host with port", "https://user:sentinel-secret@:443/private?token=sentinel-secret"},
+		{"percent in host", "https://sentinel%25secret/private?token=sentinel-secret"},
+		{"scoped IPv6", "https://[fe80::1%25sentinel-secret]/private?token=sentinel-secret"},
+		{"bracketed non-IP host", "https://[sentinel-secret]/private?token=sentinel-secret"},
+		{"non-ASCII host", "https://sentinel-secret.例え/private?token=sentinel-secret"},
+		{"non-allowlisted punctuation", "https://sentinel+secret/private?token=sentinel-secret"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Endpoint(tt.raw)
+			if got != hiddenEndpoint {
+				t.Errorf("Endpoint() = %q, want %q", got, hiddenEndpoint)
+			}
+			if strings.Contains(got, "sentinel") {
+				t.Errorf("Endpoint() leaked secret-bearing input: %q", got)
+			}
+		})
+	}
+}
+
 func TestEndpoints(t *testing.T) {
 	got := Endpoints("nats://user:password@one:4222/private?token=secret, tls://token@two:4223,{{ .Secret }}")
 	want := "nats://one:4222,tls://two:4223," + hiddenEndpoint

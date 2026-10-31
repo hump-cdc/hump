@@ -329,6 +329,47 @@ func TestReadSnapshotKeepsUserMetadataNamesAndQualifiesPhysicalCTID(t *testing.T
 	}
 }
 
+func TestReadSnapshotRebasesParentAndLeafFilters(t *testing.T) {
+	for _, qualifier := range []string{"users", "users_p1", "users_p2"} {
+		t.Run(qualifier, func(t *testing.T) {
+			leaves := []snapshotTestLeaf{{name: "users_p1", pages: 1}, {name: "users_p2", pages: 1}}
+			server := newFakeServer(t)
+			server.setResponder(snapshotReadResponder(false, leaves))
+			p, _, _ := newTestPostgres(t, server)
+
+			var rows []domain.DbRecord
+			var identities []database.SnapshotRowMetadata
+			err := p.ReadSnapshot(context.Background(), testSnapshotID, usersTable(), qualifier+".id > 1", func(record domain.DbRecord, metadata database.SnapshotRowMetadata) error {
+				rows = append(rows, record)
+				identities = append(identities, metadata)
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("ReadSnapshot() error = %v", err)
+			}
+
+			wantRows := []domain.DbRecord{{"id": int32(1), "name": "users_p1"}, {"id": int32(2), "name": "users_p2"}}
+			if !reflect.DeepEqual(rows, wantRows) {
+				t.Fatalf("rows = %#v, want %#v", rows, wantRows)
+			}
+			wantIdentities := []database.SnapshotRowMetadata{
+				{Schema: "public", Table: "users_p1", CTID: "(0,1)"},
+				{Schema: "public", Table: "users_p2", CTID: "(0,1)"},
+			}
+			if !reflect.DeepEqual(identities, wantIdentities) {
+				t.Errorf("identities = %#v, want %#v", identities, wantIdentities)
+			}
+
+			for _, leaf := range leaves {
+				read := findStatement(server.recorded(), "FROM ONLY "+qualifiedTableName(leaf.table()))
+				if !strings.Contains(read, `AS snapshot_row WHERE (("snapshot_row"."id" > 1))`) {
+					t.Errorf("read statement = %q, want the filter rebased onto the source alias", read)
+				}
+			}
+		})
+	}
+}
+
 func TestReadSnapshotSplitsLargeLeavesIntoChunks(t *testing.T) {
 	server := newFakeServer(t)
 	server.setResponder(snapshotReadResponder(false, []snapshotTestLeaf{{name: "users", pages: 2*snapshotChunkPages + 1}}))

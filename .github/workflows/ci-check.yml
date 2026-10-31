@@ -2,6 +2,7 @@ name: "Repository: check"
 
 on:
     pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
     push:
         branches:
             - main
@@ -20,6 +21,7 @@ defaults:
 jobs:
     go:
         name: Check Go app
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         runs-on: ubuntu-24.04
         timeout-minutes: 30
         permissions:
@@ -293,6 +295,7 @@ jobs:
 
     web-ui:
         name: Check web UI
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         runs-on: ubuntu-24.04
         timeout-minutes: 25
         permissions:
@@ -572,6 +575,7 @@ jobs:
 
     repository:
         name: Check repository
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         permissions:

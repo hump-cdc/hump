@@ -69,6 +69,16 @@ It uses the built-in `pgoutput` plugin, so PostgreSQL needs no extensions. Your 
 
 Every change to `public.users` now lands in the `public.users` topic. See the [documentation](https://hump.dev/docs/getting-started) for all options.
 
+## Replication slots and failover
+
+CDC continuity depends on preserving a usable replication slot. Hump creates a missing slot on startup, but the new slot does not recover missed events. Recovery after slot loss is the operator's responsibility.
+
+Hump does not discover the primary itself. After your infrastructure redirects the database endpoint and you restart Hump, the new server may lack the previous slot. Ensure a usable slot is available there if you need uninterrupted event history.
+
+If the old server remains running and generates WAL, an abandoned slot there can retain unread WAL and consume disk space, subject to PostgreSQL retention limits. Before removing it, confirm that no consumer or recovery process still needs it.
+
+A snapshot can backfill existing rows, but it cannot reconstruct missed event history or deletions. You may need to reconcile downstream data.
+
 ## Docker image
 
 The image is `docker.io/humpcdc/hump`, built for linux/amd64 and linux/arm64. Each release gets three tags: the full version (`1.2.3`), `major.minor` (`1.2`) and `major` (`1`, skipped for 0.x). Pre-releases do not move `latest`.

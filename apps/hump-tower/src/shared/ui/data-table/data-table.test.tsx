@@ -27,11 +27,15 @@ const Detail: FC<{ row: Row }> = ({ row }) => <div data-testid="detail">detail {
 /** Layout getters happy-dom leaves at zero, replaced while the tests run. */
 const stubbedLayout = ['clientWidth', 'clientHeight', 'offsetWidth', 'offsetHeight']
 
+/** Restores the exact prototypes captured after happy-dom registration. */
+let restoreLayout: (() => void) | undefined
+
 beforeAll(() => {
     if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
-    stubLayout()
+    restoreLayout = stubLayout()
 })
 afterAll(async () => {
+    restoreLayout?.()
     if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister()
 })
 afterEach(() => {
@@ -237,7 +241,12 @@ const body = (container: HTMLElement): HTMLElement => {
 const cellWidth = (label: HTMLElement): string | undefined => label.parentElement?.style.width
 
 /** Gives every element the viewport's size, which the virtualizer and flex columns read. */
-const stubLayout = (): void => {
+const stubLayout = (): (() => void) => {
+    const originals = [
+        ...stubbedLayout.map((key) => ({ target: HTMLElement.prototype, key })),
+        { target: Element.prototype, key: 'getBoundingClientRect' },
+    ].map(({ target, key }) => ({ target, key, descriptor: Object.getOwnPropertyDescriptor(target, key) }))
+
     for (const key of stubbedLayout) {
         Object.defineProperty(HTMLElement.prototype, key, {
             configurable: true,
@@ -245,4 +254,14 @@ const stubLayout = (): void => {
         })
     }
     Element.prototype.getBoundingClientRect = () => new DOMRect(0, 0, VIEWPORT.width, VIEWPORT.height)
+
+    return () => {
+        for (const { target, key, descriptor } of originals) {
+            if (descriptor) Object.defineProperty(target, key, descriptor)
+            else Reflect.deleteProperty(target, key)
+        }
+        for (const { target, key, descriptor } of originals) {
+            expect(Object.getOwnPropertyDescriptor(target, key)).toEqual(descriptor)
+        }
+    }
 }

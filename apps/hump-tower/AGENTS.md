@@ -30,7 +30,8 @@ catch:
 | `moon run hump-tower:openapi` | Go `apps/hump/cmd/openapi` → `src/shared/api/openapi.json`; `dev` and `build` depend on it |
 | `moon run hump-tower:test-file -- <path>` | `bun test` of one file; the path must start with `/` or `./`, a bare name is a substring filter. `test-cover` / `test-file-cover` add a coverage table in the terminal |
 | `moon run hump-tower:typecheck` | `tsc --noEmit`; there is no type-check script in `package.json` |
-| `moon run hump-tower:audit` | `bun audit` over the root `bun.lock`, transitive packages included (Dependabot alerts see only direct ones). CI's `ci-audit` skips `AUDIT_IGNORES` in `scripts/hump-tower-ci.sh` (repo root) and also checks that every package comes from `registry.npmjs.org` |
+| `moon run hump-tower:audit` | `bun audit` over the root `bun.lock`, transitive packages included (Dependabot alerts see only direct ones). Local audit checks all packages by default; Actions passes CI exclusions as arguments |
+| `moon run hump-tower:registry-check` | checks that every package comes from `registry.npmjs.org`, separately from the vulnerability audit |
 
 `bun test` runs every `*.test.ts(x)`, colocated with the code under test and written on `bun:test`.
 

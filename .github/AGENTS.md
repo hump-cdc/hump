@@ -1,15 +1,15 @@
 # .github — rules for workflows
 
-Applies to `.github/workflows/*.yml` and `.github/dependabot.yml`. moon conventions (`ci-*` tasks,
-the `.ci/` output contract, `tool` directives), the dependency age rule and adding a Go module are
+Applies to `.github/workflows/*.yml`, `.github/actions/*/action.yml` and `.github/dependabot.yml`.
+moon conventions (local commands, report arguments, `tool` directives), the dependency age rule and adding a Go module are
 in the root `AGENTS.md`.
 
 ## Workflows
 
 | File | Name | Purpose |
 |---|---|---|
-| `ci-check.yml` | `Repository: check` | One job per moon project (`hump`, `hump-tower`, `root`); each runs the affected lint, build and test tasks of its project through the `.github/actions/moon-ci` action |
-| `pr-workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:ci-actionlint` task |
+| `ci-check.yml` | `Repository: check` | One job per moon project (`hump`, `hump-tower`, `root`); explicit steps run the full set of checks every time |
+| `pr-workflows-lint.yml` | `Workflows: lint` | zizmor only; actionlint is the `root:actionlint` task |
 | `main-security-scan.yml` | `Repository: security scan` | zizmor, govulncheck and bun audit reports; rescans the latest release image |
 | `main-scorecard.yml` | `Repository: OpenSSF Scorecard` | Scorecard report behind the README badge |
 | `call-docker-scan.yml` | `Docker: build and scan` | Reusable: builds the image for both platforms, scans with Trivy |
@@ -45,10 +45,12 @@ Don't break these:
   `aquasecurity/trivy-action` `version`, `sigstore/cosign-installer` `cosign-release`,
   `codecov/codecov-action` `version`. zizmor-action has no `version` input set: its default
   `latest` is the zizmor version the action locks with hashes, so it follows the action SHA.
-- Drift checks are steps after `moon ci` in the job of the project they check; the embedded-build
-  check runs in both the Go app and web UI jobs. They diff regenerated files and fail with an `::error`
-  naming the local command to run. Tasks CI runs without `allowFailure` (`hump:tidy`,
-  `hump-tower:openapi`, the builds) fail `moon ci` directly.
+- Run checks as explicit steps using ordinary moon commands. Keep generation and build preparation
+  visible; dependent steps run only when their preparation succeeds. Independent checks continue
+  after another check fails, without suppressing the failed step's or job's status.
+- Drift checks follow regeneration in the job of the project they check; the embedded-build check
+  runs in both the Go app and web UI jobs. They diff regenerated files and fail with an `::error`
+  naming the local command to run.
 - The `main` ruleset's code scanning rule waits for tool `zizmor` on every PR commit, so
   `pr-workflows-lint.yml` (PRs) and `main-security-scan.yml` (`main`) both upload zizmor SARIF with
   category `zizmor`. `pr-workflows-lint.yml` checks out the PR head SHA, so the upload goes to the
@@ -98,12 +100,25 @@ Don't break these:
   actionlint`).
 - Job names are the required checks of the `main` ruleset; renaming a job means updating it. A
   reusable call shows as `caller job / called job`. Required: `Check Go app`, `Check web UI`,
-  `Check repository` (each passes when its project is unaffected), `Docker image / Build and
+  `Check repository`, `Docker image / Build and
   scan` and `Security`; the ruleset has no bypass actors.
 - The ruleset matches checks by job name alone, so two jobs share a name only if they should
   count as one check.
 
-## Failure messages
+## Reports and failure messages
+
+- Actions passes report formats and paths to the same commands used locally. Keep check execution
+  in workflow steps; reporting composites may share inline shell code, not hide check execution.
+  Reports may live in `.ci/<project>/`; do not use files to relay annotations or control job status.
+- Keep existing SARIF, JUnit, coverage and Codecov reporting. Security checks publish concrete
+  package names, versions and links in the job log and Summary, plus machine-readable artifacts.
+  Preserve govulncheck SARIF uploads with category `govulncheck`.
+- Run each scan once, then convert its result for other report formats. Preserve the tool's exit
+  status and distinguish blocking findings, excluded findings and tool errors. Missing or invalid
+  required reports are errors, not successful scans; publication must not hide a check failure.
+- Keep npm audit exclusions in Actions and pass them as arguments to `hump-tower:audit`; local
+  audit checks all packages by default. Run `hump-tower:registry-check` separately. Preserve the
+  existing exclusions, thresholds and review dates when changing reporting.
 
 - Every failure says what is wrong and how to fix it, so the developer can act on the message
   alone. A bare non-zero exit or a raw tool dump is not enough.

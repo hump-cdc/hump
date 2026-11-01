@@ -5,6 +5,7 @@ name: "Docker: scan"
 # doesn't run blocks the PR.
 on:
     pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
     push:
         branches:
             - main
@@ -20,6 +21,7 @@ jobs:
     # rename only together with it.
     image:
         name: Docker image
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         # The self-repository form ($/...) is not supported by actionlint v1.7.12 yet.
         uses: ./.github/workflows/call-docker-scan.yml # zizmor: ignore[self-repository]
         permissions:

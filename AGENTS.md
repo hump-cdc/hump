@@ -26,7 +26,6 @@ Project rules: `apps/hump/AGENTS.md` (Go app), `apps/hump-tower/AGENTS.md` (web 
 | `packages/` | Shared packages; empty for now |
 | `dev/` | Local dev environment: `docker-compose.yml`, `hump.yaml` |
 | `docs/` | Design notes |
-| `scripts/` | Long moon task scripts, named `<project>-<name>.sh` (`hump-ci.sh`); short ones are inlined into `script:` in `moon.yml` |
 | `.moon/` | `workspace.yml` (project globs), `toolchains.yml` (proto, Go, Bun versions) |
 | `moon.yml` | The `root` project: repo-wide tasks |
 | `go.work` | Go workspace: `use ./apps/hump` |
@@ -41,28 +40,27 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
 `packages/*/moon.yml` is picked up.
 
 - Run a task from any directory: `moon run <project>:<task>`, e.g. `moon run hump:test`.
-- CI runs `moon ci`: every task with `runInCI` in the projects affected since the base commit.
-  Run a CI-only task locally with `CI=true moon run <project>:<task>`.
+- CI runs the full set of checks in explicit Actions steps on every run, without affected-project
+  selection. It calls the same moon commands used locally and passes report arguments as needed.
 - Task names are kebab-case (`test-file-cover`) and every task has a `description`.
-- A short task body goes inline in `script:`. A long one goes to `scripts/<project>-<name>.sh` in
-  the repo root, listed in the task's `inputs` as `/scripts/...`; it still runs with the project
-  root as cwd.
+- Keep real checks inline in `moon.yml`: use `command:` for simple invocations with passthrough
+  arguments, and `script:` for multi-step actions with explicit argument handling. Put CI
+  orchestration and reporting inline in Actions, not in shell wrappers.
 - A task belongs to the project whose files it works on. Repo-wide tasks (workflow lint, the
   dev environment, the aggregate `check`) go to the root `moon.yml`. Exception:
   `hump-tower:openapi` runs Go code from `apps/hump` but lives in `hump-tower`, because a
   dependency back into `hump` would make a cycle (`apps/hump-tower/moon.yml`).
 - Developer tasks (`run`, `dev`, `lint-fix`, `test-cover` etc.) have `runInCI: false`; the
   ones that are not cached use `preset: 'utility'` or `'server'`.
-- `ci-*` tasks exist only for CI: `runInCI: 'only'`, `cache: false`, `allowFailure: true`.
-  A failed one does not cancel the other checks; it leaves a marker that the workflow fails on.
-- moon prefixes task output in CI, so workflow commands (`::error ...`) printed by a task do not
-  become annotations. Tasks write to `.ci/` (gitignored) instead:
-  - `.ci/<project>/` — reports: SARIF, coverage, JUnit;
-  - `.ci/annotations/<project>-<check>.txt` — annotations and fix hints;
-  - `.ci/failed/<project>-<check>` — failure markers.
-
-  `.github/workflows/ci-check.yml` reads them after `moon ci`, and `.github/workflows/main-security-scan.yml`
-  after its weekly `hump:ci-vulncheck` run. Details in `.github/AGENTS.md`.
+- Each moon command performs one action and returns its real exit status. Do not add CI-only
+  wrappers, report-only variants, GitHub annotations or failure markers to moon tasks.
+- Local output is readable by default. Actions supplies report formats and paths; `.ci/<project>/`
+  (gitignored) may hold SARIF, coverage and JUnit reports. Actions handles annotations, summaries
+  and uploads. Independent checks continue after a failure, but the job still fails; dependent
+  steps require successful preparation. Details in `.github/AGENTS.md`.
+- Security and policy checks are ordinary local commands: `moon run hump:vulncheck`,
+  `moon run hump:dep-age`, `moon run hump-tower:audit` and `moon run hump-tower:registry-check`.
+  Do not cache advisory or dependency-age checks. CI must execute checks and produce fresh reports.
 
 ### Adding a package
 
@@ -71,7 +69,7 @@ Projects: `root` (`moon.yml`), `hump` (`apps/hump/moon.yml`), `hump-tower`
 2. TypeScript: add a `package.json`, then run `bun install` in the root to update `bun.lock`.
 3. Go: add a `go.mod` and its directory to `go.work` (`go work use ./packages/<name>`). Add a
    `gomod` entry for it to `.github/dependabot.yml` and add the module to the dep-age check
-   (`hump:ci-dep-age`) in `scripts/hump-ci.sh`. A Go tool module kept outside `go.work`
+   (`hump:dep-age`) in `apps/hump/moon.yml`. A Go tool module kept outside `go.work`
    (like `apps/hump/tools/actionlint` and `apps/hump/tools/govulncheck`) gets the same
    Dependabot entry and dep-age check, plus a `GOWORK=off go -C <dir> mod tidy` in the
    `hump:tidy` task and its `go.mod` / `go.sum` in the tidy diff of `.github/workflows/ci-check.yml`.
@@ -92,13 +90,13 @@ versions everywhere.
   No dependency runs install scripts: `"trustedDependencies": []` in the root `package.json`
   replaces Bun's default allow list (it blocks e.g. esbuild's `postinstall`). To allow one, review
   its script and list that package there explicitly.
-- Go: `hump:ci-dep-age` fails when any module in the full build list (`go list -m all` with
+- Go: `hump:dep-age` fails when any module in the full build list (`go list -m all` with
   `GOWORK=off`, transitive included) of `apps/hump`, `apps/hump/tools/actionlint` or
   `apps/hump/tools/govulncheck` is too young. The last one pins govulncheck (`golang.org/x/vuln`),
-  which `hump:ci-vulncheck` builds from it. Run it locally with `CI=true moon run hump:ci-dep-age`.
+  which `hump:vulncheck` builds from it. Run the age check locally with `moon run hump:dep-age`.
   Before `go get` of a version, check its `Time` with `go list -m -json <module>@<version>`.
-  A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml`, a
-  script in the root `scripts/` or `.github`; CI fails on an unused one in
+  A `tool` directive in a `go.mod` must be run as `go tool <name>` in a `moon.yml` or
+  inline in a workflow or composite action under `.github`; CI fails on an unused one in
   `apps/hump/go.mod`. Remove it with `go get -tool <path>@none` and `go mod tidy`.
 - Toolchain: moon and Go in `.prototools`; proto, Go and Bun in `.moon/toolchains.yml`. Go is
   pinned in `.prototools` because `proto install` otherwise reads the `go` directive of `go.mod` /

@@ -202,6 +202,66 @@ func TestSnapshotRoutesRejectUnconfiguredTargets(t *testing.T) {
 	}
 }
 
+func TestSnapshotMutationRoutesEnforceBrowserPolicy(t *testing.T) {
+	for _, path := range []string{"/api/snapshot/start", "/api/snapshot/stop"} {
+		for _, tt := range []struct {
+			name        string
+			contentType string
+			origins     []string
+			cors        string
+			want        int
+		}{
+			{"missing content type", "", nil, "", http.StatusUnsupportedMediaType},
+			{"simple form", "application/x-www-form-urlencoded", nil, "", http.StatusUnsupportedMediaType},
+			{"malformed content type", "application/json; charset", nil, "", http.StatusUnsupportedMediaType},
+			{"media type before origin", "text/plain", []string{"null"}, "", http.StatusUnsupportedMediaType},
+			{"cross origin", "application/json", []string{"https://evil.test"}, "", http.StatusForbidden},
+			{"empty origin", "application/json", []string{""}, "", http.StatusForbidden},
+			{"null origin", "application/json", []string{"null"}, "null,*", http.StatusForbidden},
+			{"multiple origins", "application/json", []string{"http://example.com", "http://example.com"}, "", http.StatusForbidden},
+			{"malformed origin", "application/json", []string{"https://ui.test/"}, "https://ui.test/", http.StatusForbidden},
+			{"wildcard", "application/json", []string{"https://evil.test"}, "*", http.StatusForbidden},
+			{"CLI", "application/json", nil, "", 0},
+			{"same origin", "application/json", []string{"http://example.com"}, "", 0},
+			{"JSON parameters", "application/json; charset=utf-8", []string{"http://example.com"}, "", 0},
+			{"explicit CORS", "application/json", []string{"https://ui.test"}, " https://ui.test ,", 0},
+		} {
+			t.Run(path+"/"+tt.name, func(t *testing.T) {
+				t.Setenv("CORS", tt.cors)
+				runner := &snapshotTestRunner{}
+				cfg := config.Configuration{Tables: []config.Table{{Schema: "public", Name: "users"}}}
+				router := newTestRouterWithSnapshot(nil, cfg, nil, runner)
+				body := ""
+				if path == "/api/snapshot/start" {
+					body = `{"tables":[{"schema":"public","table":"users"}]}`
+				}
+				req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+				if tt.contentType != "" {
+					req.Header.Set("Content-Type", tt.contentType)
+				}
+				if tt.origins != nil {
+					req.Header["Origin"] = tt.origins
+				}
+				resp := httptest.NewRecorder()
+				router.ServeHTTP(resp, req)
+				want := tt.want
+				wantStarts, wantStops := 0, 0
+				if want == 0 {
+					if path == "/api/snapshot/start" {
+						want, wantStarts = http.StatusAccepted, 1
+					} else {
+						want, wantStops = http.StatusNoContent, 1
+					}
+				}
+				if resp.Code != want || runner.calls != wantStarts || runner.stopCalls != wantStops {
+					t.Fatalf("status, start calls, stop calls = %d, %d, %d; want %d, %d, %d; body = %s",
+						resp.Code, runner.calls, runner.stopCalls, want, wantStarts, wantStops, resp.Body)
+				}
+			})
+		}
+	}
+}
+
 func TestEmbeddedShellPolicyAllowsTheThemeScript(t *testing.T) {
 	handler := middleware.Static(humpTowerFS, "hump_tower")
 
@@ -244,7 +304,7 @@ func newTestRouterWithSnapshot(collector operationscollectorport.Collector, cfg 
 		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
 		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
 		startsnapshot.NewController(startsnapshot.NewUseCase(cfg, runner)),
-		stopsnapshot.NewController(stopsnapshot.NewUseCase(nil)),
+		stopsnapshot.NewController(stopsnapshot.NewUseCase(runner)),
 	).Api(router)
 
 	return router
@@ -265,15 +325,22 @@ func (d *snapshotTestDatabase) GetRowCount(_ context.Context, table domain.Table
 	return counts, nil
 }
 
-// snapshotTestRunner records whether a run was started.
+// snapshotTestRunner records snapshot mutations without doing any work.
 type snapshotTestRunner struct {
 	snapshot.Runner
-	calls int
+	calls     int
+	stopCalls int
 }
 
 // Start records a call without doing any work.
 func (r *snapshotTestRunner) Start(_ []snapshot.Request) error {
 	r.calls++
+	return nil
+}
+
+// Stop records a call without doing any work.
+func (r *snapshotTestRunner) Stop() error {
+	r.stopCalls++
 	return nil
 }
 

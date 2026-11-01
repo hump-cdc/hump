@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -156,6 +157,89 @@ func TestEstimateStopsWhenCancelled(t *testing.T) {
 	}
 }
 
+func TestEstimateSharesSlotsAcrossCalls(t *testing.T) {
+	for _, limit := range []int{0, 2, -1} {
+		t.Run(strconv.Itoa(limit), func(t *testing.T) {
+			db := newFakeDatabase()
+			db.block = make(chan struct{})
+			db.started = make(chan struct{}, defaultMaxConcurrentEstimates+1)
+			db.counts["users"] = []database.RowCount{{Num: 1}}
+			uc := NewUseCase(testConfiguration(), db, WithMaxConcurrentEstimates(limit))
+			want := defaultMaxConcurrentEstimates
+			if limit > 0 {
+				want = limit
+			}
+
+			var streams []<-chan Estimate
+			for range want {
+				streams = append(streams, uc.Estimate(t.Context(), []Request{request("public", "users", "")}))
+				receive(t, db.started)
+			}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			waiting := &notifyingContext{Context: ctx, waiting: make(chan struct{})}
+			queued := uc.Estimate(waiting, []Request{request("public", "users", "")})
+			receive(t, waiting.waiting)
+			cancel()
+			if got := collect(t, queued); len(got) != 0 {
+				t.Fatalf("cancelled queued estimates = %+v, want none", got)
+			}
+			if calls := len(db.recordedCalls()); calls != want {
+				t.Fatalf("GetRowCount calls = %d, want %d", calls, want)
+			}
+
+			close(db.block)
+			for _, stream := range streams {
+				if got := collect(t, stream); len(got) != 1 {
+					t.Fatalf("estimates = %+v, want one count", got)
+				}
+			}
+			if got := collect(t, uc.Estimate(t.Context(), []Request{request("public", "users", "")})); len(got) != 1 {
+				t.Fatalf("reused slot estimates = %+v, want one count", got)
+			}
+			if peak := db.peakActive(); peak != want {
+				t.Fatalf("peak concurrent counts = %d, want %d", peak, want)
+			}
+		})
+	}
+}
+
+func TestEstimateRetainsSlotUntilCancelledCountCloses(t *testing.T) {
+	db := &controlledDatabase{started: make(chan chan database.RowCount, 2)}
+	uc := NewUseCase(testConfiguration(), db, WithMaxConcurrentEstimates(1))
+	ctx, cancel := context.WithCancel(t.Context())
+	first := uc.Estimate(ctx, []Request{request("public", "users", "")})
+	counts := receive(t, db.started)
+	cancel()
+
+	// The second unbuffered send proves emit stopped and the drain is running.
+	for range 2 {
+		select {
+		case counts <- database.RowCount{Num: 1}:
+		case <-time.After(5 * time.Second):
+			t.Fatal("cancelled count was not drained")
+		}
+	}
+	if slots := len(uc.slots); slots != 1 {
+		t.Fatalf("occupied slots = %d, want 1 until counts closes", slots)
+	}
+
+	waiting := &notifyingContext{Context: t.Context(), waiting: make(chan struct{})}
+	second := uc.Estimate(waiting, []Request{request("public", "users", "")})
+	receive(t, waiting.waiting)
+	select {
+	case <-db.started:
+		t.Fatal("new count started before cancelled count closed")
+	default:
+	}
+	close(counts)
+	if got := collect(t, first); len(got) != 0 {
+		t.Fatalf("cancelled estimates = %+v, want none", got)
+	}
+	close(receive(t, db.started))
+	collect(t, second)
+}
+
 func TestEstimateDoesNothingWhenAlreadyCancelled(t *testing.T) {
 	db := newFakeDatabase()
 	requests := scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true})
@@ -246,10 +330,11 @@ type call struct {
 type fakeDatabase struct {
 	database.Database
 
-	counts map[string][]database.RowCount
-	errs   map[string]error
-	delay  time.Duration // delay is how long each count runs before it is streamed.
-	block  chan struct{} // block, when set, holds every count until it is closed or ctx is done.
+	counts  map[string][]database.RowCount
+	errs    map[string]error
+	delay   time.Duration // delay is how long each count runs before it is streamed.
+	block   chan struct{} // block, when set, holds every count until it is closed or ctx is done.
+	started chan struct{}
 
 	mu     sync.Mutex
 	calls  []call
@@ -275,6 +360,9 @@ func (d *fakeDatabase) GetRowCount(ctx context.Context, table domain.TableIdenti
 	}
 
 	d.track(1)
+	if d.started != nil {
+		d.started <- struct{}{}
+	}
 
 	// Buffered like the adapter's, so a sender never waits on a reader.
 	ch := make(chan database.RowCount, len(counts))
@@ -411,4 +499,43 @@ func sameElements[T comparable](got, want []T) bool {
 	}
 
 	return true
+}
+
+// notifyingContext signals when a worker reaches its cancellable slot select.
+type notifyingContext struct {
+	context.Context
+	waiting chan struct{}
+	once    sync.Once
+}
+
+// Done notifies the test before returning the underlying cancellation channel.
+func (c *notifyingContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.waiting) })
+	return c.Context.Done()
+}
+
+// controlledDatabase lets tests deliver counts and delay closing their channel.
+type controlledDatabase struct {
+	database.Database
+	started chan chan database.RowCount
+}
+
+// GetRowCount exposes a new unbuffered count stream to the test.
+func (d *controlledDatabase) GetRowCount(context.Context, domain.TableIdentifier, string) (<-chan database.RowCount, error) {
+	counts := make(chan database.RowCount)
+	d.started <- counts
+	return counts, nil
+}
+
+// receive waits for a test signal, failing rather than hanging on a regression.
+func receive[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	select {
+	case value := <-ch:
+		return value
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for signal")
+		var zero T
+		return zero
+	}
 }

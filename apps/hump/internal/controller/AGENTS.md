@@ -36,8 +36,11 @@ snapshot pauses WAL delivery, so the two never call it at once.
 
 ## `Serve` and `Api` are split on purpose
 
-`Api(router)` registers the routes and returns the `huma.API`; `Serve` adds middleware, the static
-handler and the listener around it. `Api` has three callers: `Serve`, `hump_tower_test.go`, and
+`Api(router)` installs the snapshot mutation guard, registers the routes and returns the `huma.API`;
+`Serve` adds CORS, compression, the static handler and the listener around it. The guard requires
+JSON Content-Type and an absent, same-origin or explicitly allowed `Origin` for snapshot start/stop
+POSTs; its rules are in `pkg/middleware/AGENTS.md`.
+`Api` has three callers: `Serve`, `hump_tower_test.go`, and
 `cmd/openapi/main.go`, which builds the controller with nil dependencies (handlers are registered,
 never invoked) and writes the spec to `apps/hump-tower/src/shared/api/openapi.json`. `openapi-ts`
 turns that committed file into the TypeScript client. So a route declaration here is also the
@@ -76,7 +79,7 @@ its output in memory and leaves the directory alone. `routes.json` is written by
 ## Things that will bite
 
 - **Without `CORS` the UI dev server cannot reach the API.** `middleware.Cors()` is then a
-  pass-through that sends no CORS headers, so only same-origin requests work.
+  pass-through that sends no CORS headers, so the browser cannot read cross-origin responses.
   `moon run hump-tower:dev` runs on port 3000 against the API on 3200, which is why
   `moon run hump:run` sets `CORS=http://localhost:3000`.
 - **`Compress(5)` is router-wide but leaves SSE alone.** chi compresses only its default content
@@ -90,7 +93,8 @@ its output in memory and leaves the directory alone. `routes.json` is written by
 
 ## Tests
 
-`hump_tower_test.go` drives `Api` on a bare `chi.Mux` — no middleware, no static handler — with
+`hump_tower_test.go` drives `Api` on a `chi.Mux` with the snapshot mutation guard, but no
+`Serve` middleware or static handler, with
 the operations endpoint backed by a real `operations_collector`. `newTestRouter` gives every other
 use case nil dependencies, so only its request validation is reachable. The exception is
 `snapshot.estimate`: its nil database answers a closed channel, so

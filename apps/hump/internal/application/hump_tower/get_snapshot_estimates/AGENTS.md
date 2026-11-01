@@ -22,11 +22,12 @@ schema and table so the client can match it to its row.
 ## Concurrency
 
 `Estimate` starts a goroutine for **every** requested table at once and returns an unbuffered
-channel that closes when all of them are done. What is bounded is the counting: a goroutine takes a
-slot from `slots` before it calls `GetRowCount`, and `defaultMaxConcurrentEstimates` is 6 because
-each count holds a database session of its own for as long as it runs
-(`adapter/postgres/postgres_row_count.go`). `WithMaxConcurrentEstimates` overrides it and ignores a
-non-positive value.
+channel that closes when all of them are done. Counting is bounded across parallel `Estimate`
+calls on one `UseCase`, not across separate instances. Its `slots` semaphore is created after
+options are applied; a goroutine acquires a slot before calling `GetRowCount` and holds it until
+the adapter closes its counts channel. `defaultMaxConcurrentEstimates` is 6 because each count
+holds its own database session (`adapter/postgres/postgres_row_count.go`).
+`WithMaxConcurrentEstimates` overrides it and ignores a non-positive value.
 
 Events of different tables interleave in arrival order. Events of **one** table keep the order
 `GetRowCount` produced them in, which is what makes "rough, then exact" reliable for the client.
@@ -40,12 +41,16 @@ pin it.
   return after a failed `send`. Without that, a client that drops mid-stream leaves goroutines
   parked on the unbuffered channel forever, each holding a session.
 - Every send goes through `emit`, a `select` against `ctx.Done()`; so does waiting for a slot.
+- When `emit` returns false after cancellation, `estimateTable` drains `counts` without sending
+  events and releases the slot only after the channel closes. The adapter must close this channel
+  after cancellation; otherwise cleanup and slot release cannot finish.
 - After a slot is acquired, `ctx.Err()` is checked **again**: when a slot frees up after the
   context is already done, `select` picks between the two ready cases at random, and half the time
   it would start a query nobody is waiting for.
 
-The handler's two exits differ: a failed `send` returns at once without `done`; a cancelled request
-drains the channel, which closes, and then attempts `done` anyway.
+The handler's two exits differ: a failed `send` returns at once without `done`; deferred cancellation
+leaves adapter cleanup running in the background. A cancelled request still drains the estimates
+channel until cleanup finishes and it closes, then attempts `done` anyway.
 
 ## Failures are events, not a failed stream
 

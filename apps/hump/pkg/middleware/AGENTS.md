@@ -1,9 +1,9 @@
 # pkg/middleware — how this package hangs together
 
-The two pieces of HTTP plumbing the web UI server needs: a CORS middleware driven by an environment
-variable, and the handler that serves the embedded single-page application. Its only caller is
-`internal/controller/hump_tower.go`, which installs `Cors()` with `router.Use` and `Static` as the
-router's `NotFound` handler — so `Static` sees every request the API routes did not claim.
+The HTTP plumbing the web UI server needs: CORS, a snapshot mutation guard, and the handler that
+serves the embedded single-page application. `internal/controller/hump_tower.go` installs the guard
+in `Api`, `Cors()` in `Serve`, and `Static` as the router's `NotFound` handler — so `Static` sees
+every request the API routes did not claim.
 
 ## CORS
 
@@ -12,10 +12,23 @@ skipped. With at least one origin it returns a go-chi/cors handler allowing cred
 methods and `Accept`/`Authorization`/`Content-Type`.
 
 With no usable origin it returns a **pass-through**, so `CORS` is optional: the server then sends
-no CORS headers and a browser can call the API from the same origin only. It must never return
+no CORS headers, so browsers cannot read cross-origin responses. CORS alone does not prevent a
+browser from sending simple cross-origin requests. It must never return
 nil. chi's `Mux.Use` accepts a nil middleware and panics when it builds the chain, and
 `hump_tower.go` calls it inside a function the runner spawned without a `recover`, so a nil here
 takes the whole process down at startup.
+
+## Snapshot mutation guard
+
+Only `POST /api/snapshot/start` and `POST /api/snapshot/stop` require `Content-Type: application/json`,
+including a bodyless stop; valid media-type parameters are accepted, other values return 415.
+An absent `Origin` is allowed for CLI clients. A present origin must exactly match the request's
+scheme (HTTPS when `r.TLS` is set, HTTP otherwise) and `r.Host`, or a valid explicit HTTP(S) origin
+in `CORS`. Wildcards grant no mutation access; empty, `null` and malformed origins return 403.
+CORS response headers and read access, including wildcard behavior, are unchanged.
+
+The guard does not trust forwarded headers. Behind an HTTPS-terminating proxy, add the public
+origin explicitly to `CORS`. This is not authentication, a Host allowlist or DNS-rebinding protection.
 
 ## Static
 

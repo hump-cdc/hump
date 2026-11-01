@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,9 @@ import (
 	streamsnapshot "hump/internal/application/hump_tower/stream_snapshot"
 	streamupdates "hump/internal/application/hump_tower/stream_updates"
 	"hump/internal/domain"
+	"hump/internal/port/database"
 	operationscollectorport "hump/internal/port/operations_collector"
+	"hump/internal/port/snapshot"
 	"hump/pkg/app/options"
 	"hump/pkg/middleware"
 
@@ -168,6 +171,37 @@ func TestSnapshotEstimateRouteRejectsATablelessBody(t *testing.T) {
 	}
 }
 
+func TestSnapshotRoutesRejectUnconfiguredTargets(t *testing.T) {
+	cfg := config.Configuration{Tables: []config.Table{{Schema: "public", Name: "users"}}}
+	db := &snapshotTestDatabase{}
+	runner := &snapshotTestRunner{}
+	router := newTestRouterWithSnapshot(nil, cfg, db, runner)
+	body := `{"tables":[{"table":"users"},{"schema":"pg_catalog","table":"pg_authid"}]}`
+	for _, path := range []string{"/api/snapshot/start", "/api/snapshot/estimate"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+		if path == "/api/snapshot/start" {
+			if resp.Code != http.StatusUnprocessableEntity || runner.calls != 0 {
+				t.Fatalf("start status = %d, runner calls = %d; want 422 and zero calls", resp.Code, runner.calls)
+			}
+			continue
+		}
+		if resp.Code != http.StatusOK || !strings.HasPrefix(resp.Header().Get("Content-Type"), "text/event-stream") {
+			t.Fatalf("estimate response = %d, %s", resp.Code, resp.Body)
+		}
+		for _, fragment := range []string{"event: estimate", `"schema":""`, `"count":3`, "event: error", `"schema":"pg_catalog"`, `"table":"pg_authid"`, "event: done"} {
+			if !strings.Contains(resp.Body.String(), fragment) {
+				t.Errorf("estimate body %q missing %q", resp.Body, fragment)
+			}
+		}
+	}
+	if len(db.calls) != 1 || db.calls[0] != (domain.TableIdentifier{Schema: "public", Name: "users"}) {
+		t.Fatalf("database calls = %+v, want only public.users", db.calls)
+	}
+}
+
 func TestEmbeddedShellPolicyAllowsTheThemeScript(t *testing.T) {
 	handler := middleware.Static(humpTowerFS, "hump_tower")
 
@@ -195,20 +229,52 @@ func newTestOperationsCollector(t *testing.T) *operationscollectoradapter.Collec
 // newTestRouter returns a router carrying the web UI API, with only the
 // operations endpoint backed by anything.
 func newTestRouter(collector operationscollectorport.Collector) chi.Router {
+	return newTestRouterWithSnapshot(collector, config.Configuration{}, nil, nil)
+}
+
+// newTestRouterWithSnapshot injects configured snapshot dependencies into the API.
+func newTestRouterWithSnapshot(collector operationscollectorport.Collector, cfg config.Configuration, db database.Database, runner snapshot.Runner) chi.Router {
 	router := chi.NewMux()
 	NewHumpTowerController(
 		getconfig.NewController(getconfig.NewUseCase(options.Options{}, config.Configuration{}, nil)),
 		getmetrics.NewController(getmetrics.NewUseCase(nil)),
 		getoperations.NewController(getoperations.NewUseCase(collector)),
 		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil, nil)),
-		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
+		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(cfg, db)),
 		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
 		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
-		startsnapshot.NewController(startsnapshot.NewUseCase(nil)),
+		startsnapshot.NewController(startsnapshot.NewUseCase(cfg, runner)),
 		stopsnapshot.NewController(stopsnapshot.NewUseCase(nil)),
 	).Api(router)
 
 	return router
+}
+
+// snapshotTestDatabase records count targets and returns one count.
+type snapshotTestDatabase struct {
+	database.Database
+	calls []domain.TableIdentifier
+}
+
+// GetRowCount records the resolved target.
+func (d *snapshotTestDatabase) GetRowCount(_ context.Context, table domain.TableIdentifier, _ string) (<-chan database.RowCount, error) {
+	d.calls = append(d.calls, table)
+	counts := make(chan database.RowCount, 1)
+	counts <- database.RowCount{Num: 3}
+	close(counts)
+	return counts, nil
+}
+
+// snapshotTestRunner records whether a run was started.
+type snapshotTestRunner struct {
+	snapshot.Runner
+	calls int
+}
+
+// Start records a call without doing any work.
+func (r *snapshotTestRunner) Start(_ []snapshot.Request) error {
+	r.calls++
+	return nil
 }
 
 // record stores one delivery of table, with the payload and attempt a sink

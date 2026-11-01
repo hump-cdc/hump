@@ -85,6 +85,19 @@ unmarshals into a zero `Configuration` with **no error**, because `validate:"min
 never runs. `options` returns `ErrConfigMissing` only when no source sets either `Config` or
 `ConfigPath`, so an empty `--config-file` gets through.
 
+## Snapshot table lookup
+
+`Configuration.ResolveSnapshotTable` is a pure lookup of configured `(schema, table)` pairs.
+Names are case-sensitive and matched exactly:
+
+- A nonempty request schema matches only that explicitly configured pair.
+- An empty request schema resolves only when the table name has one unique, nonempty configured
+  schema. Duplicate entries for that same pair are fine. Multiple schemas, or any entry with the
+  same table name and an empty schema, make the shorthand unresolvable.
+
+There is no `public` default, `search_path`, database lookup or partition fallback. Snapshot
+estimate and start use cases use this lookup before passing resolved pairs to their ports.
+
 ## Decoding: one pattern, repeated in every type
 
 ```go

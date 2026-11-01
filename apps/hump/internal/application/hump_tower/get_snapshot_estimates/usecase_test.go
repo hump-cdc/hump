@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"hump/config"
 	"hump/internal/domain"
 	"hump/internal/port/database"
 )
@@ -18,7 +19,7 @@ func TestEstimateStreamsEveryCountInOrderPerTable(t *testing.T) {
 	db.counts["users"] = []database.RowCount{{Num: 100, Rough: true}, {Num: 98}}
 	db.counts["orders"] = []database.RowCount{{Num: 7, Rough: true}}
 
-	got := collect(t, NewUseCase(db).Estimate(context.Background(), []Request{
+	got := collect(t, NewUseCase(testConfiguration(), db).Estimate(context.Background(), []Request{
 		request("public", "users", "id > 1"),
 		request("", "orders", ""),
 	}))
@@ -39,7 +40,7 @@ func TestEstimateStreamsEveryCountInOrderPerTable(t *testing.T) {
 
 	wantCalls := []call{
 		{table: users, where: "id > 1"},
-		{table: identifier("", "orders"), where: ""},
+		{table: identifier("public", "orders"), where: ""},
 	}
 	if calls := db.recordedCalls(); !sameElements(calls, wantCalls) {
 		t.Errorf("GetRowCount calls = %+v, want %+v", calls, wantCalls)
@@ -53,14 +54,14 @@ func TestEstimateReportsFailures(t *testing.T) {
 	db.errs["missing"] = database.ErrTableNotFound
 	db.counts["broken"] = []database.RowCount{{Error: explainErr}}
 
-	got := collect(t, NewUseCase(db).Estimate(context.Background(), []Request{
-		request("public", "missing", ""),
-		request("public", "broken", ""),
+	got := collect(t, NewUseCase(testConfiguration(), db).Estimate(context.Background(), []Request{
+		request("", "missing", ""),
+		request("", "broken", ""),
 	}))
 
 	want := []Estimate{
-		{Table: identifier("public", "missing"), Error: database.ErrTableNotFound},
-		{Table: identifier("public", "broken"), Error: explainErr},
+		{Table: identifier("", "missing"), Error: database.ErrTableNotFound},
+		{Table: identifier("", "broken"), Error: explainErr},
 	}
 	if !sameElements(got, want) {
 		t.Fatalf("estimates = %+v, want %+v", got, want)
@@ -73,8 +74,8 @@ func TestEstimateClosesAtOnceWithoutWork(t *testing.T) {
 		useCase  *UseCase
 		requests []Request
 	}{
-		{name: "no database", useCase: NewUseCase(nil), requests: []Request{request("public", "users", "")}},
-		{name: "no tables", useCase: NewUseCase(newFakeDatabase())},
+		{name: "no database", useCase: NewUseCase(testConfiguration(), nil), requests: []Request{request("public", "users", "")}},
+		{name: "no tables", useCase: NewUseCase(testConfiguration(), newFakeDatabase())},
 	}
 
 	for _, tt := range tests {
@@ -92,7 +93,7 @@ func TestEstimateCapsConcurrentCounts(t *testing.T) {
 
 	requests := scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true})
 
-	got := collect(t, NewUseCase(db).Estimate(context.Background(), requests))
+	got := collect(t, NewUseCase(testConfiguration(), db).Estimate(context.Background(), requests))
 
 	if peak := db.peakActive(); peak != defaultMaxConcurrentEstimates {
 		t.Errorf("peak concurrent counts = %d, want %d", peak, defaultMaxConcurrentEstimates)
@@ -120,7 +121,7 @@ func TestEstimateCapsConcurrentCountsAtTheOption(t *testing.T) {
 
 			requests := scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true})
 
-			got := collect(t, NewUseCase(db, WithMaxConcurrentEstimates(tc.limit)).Estimate(context.Background(), requests))
+			got := collect(t, NewUseCase(testConfiguration(), db, WithMaxConcurrentEstimates(tc.limit)).Estimate(context.Background(), requests))
 
 			if peak := db.peakActive(); peak != tc.want {
 				t.Errorf("peak concurrent counts = %d, want %d", peak, tc.want)
@@ -141,7 +142,7 @@ func TestEstimateStopsWhenCancelled(t *testing.T) {
 	requests := scriptTables(db, 3*defaultMaxConcurrentEstimates, database.RowCount{Num: 1, Rough: true})
 
 	ctx, cancel := context.WithCancel(context.Background())
-	estimates := NewUseCase(db).Estimate(ctx, requests)
+	estimates := NewUseCase(testConfiguration(), db).Estimate(ctx, requests)
 
 	waitFor(t, func() bool { return db.peakActive() == defaultMaxConcurrentEstimates })
 	cancel()
@@ -162,7 +163,7 @@ func TestEstimateDoesNothingWhenAlreadyCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if got := collect(t, NewUseCase(db).Estimate(ctx, requests)); len(got) != 0 {
+	if got := collect(t, NewUseCase(testConfiguration(), db).Estimate(ctx, requests)); len(got) != 0 {
 		t.Errorf("estimates = %+v, want none", got)
 	}
 
@@ -176,7 +177,7 @@ func TestEstimateStopsAReaderlessTable(t *testing.T) {
 	db.counts["users"] = []database.RowCount{{Num: 1, Rough: true}, {Num: 1}}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	estimates := NewUseCase(db).Estimate(ctx, []Request{request("public", "users", "")})
+	estimates := NewUseCase(testConfiguration(), db).Estimate(ctx, []Request{request("public", "users", "")})
 
 	<-estimates
 	cancel()
@@ -191,12 +192,47 @@ func TestEstimateStopsAReaderlessFailure(t *testing.T) {
 	db.errs["missing"] = database.ErrTableNotFound
 
 	ctx, cancel := context.WithCancel(context.Background())
-	estimates := NewUseCase(db).Estimate(ctx, []Request{request("public", "missing", "")})
+	estimates := NewUseCase(testConfiguration(), db).Estimate(ctx, []Request{request("public", "missing", "")})
 
 	waitFor(t, func() bool { return len(db.recordedCalls()) == 1 })
 	cancel()
 
 	collect(t, estimates)
+}
+
+func TestEstimateRejectsUnconfiguredTargetsAndContinues(t *testing.T) {
+	db := newFakeDatabase()
+	db.counts["users"] = []database.RowCount{{Num: 3}}
+	got := collect(t, NewUseCase(testConfiguration(), db).Estimate(context.Background(), []Request{
+		request("", "users", "id > 1"),
+		request("private", "users", ""),
+		request("pg_catalog", "pg_authid", ""),
+		request("public", "users_2026", ""),
+	}))
+	want := []Estimate{
+		{Table: identifier("", "users"), Count: 3},
+		{Table: identifier("private", "users"), Error: ErrTableNotConfigured},
+		{Table: identifier("pg_catalog", "pg_authid"), Error: ErrTableNotConfigured},
+		{Table: identifier("public", "users_2026"), Error: ErrTableNotConfigured},
+	}
+	if !sameElements(got, want) {
+		t.Fatalf("estimates = %+v, want %+v", got, want)
+	}
+	if calls := db.recordedCalls(); !sameElements(calls, []call{{table: identifier("public", "users"), where: "id > 1"}}) {
+		t.Fatalf("database calls = %+v, want only the resolved allowed target", calls)
+	}
+}
+
+// testConfiguration authorizes the scripted tables with explicit schemas.
+func testConfiguration() config.Configuration {
+	cfg := config.Configuration{}
+	for _, name := range []string{"users", "orders", "missing", "broken"} {
+		cfg.Tables = append(cfg.Tables, config.Table{Schema: "public", Name: domain.TableName(name)})
+	}
+	for i := range 3 * defaultMaxConcurrentEstimates {
+		cfg.Tables = append(cfg.Tables, config.Table{Schema: "public", Name: domain.TableName(fmt.Sprintf("t%d", i))})
+	}
+	return cfg
 }
 
 // call is one recorded GetRowCount call.

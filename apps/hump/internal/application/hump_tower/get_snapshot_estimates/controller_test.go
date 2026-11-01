@@ -20,10 +20,11 @@ func TestHandlerStreamsEventsThenDone(t *testing.T) {
 	db.counts["broken"] = []database.RowCount{{Error: errors.New("explain failed")}}
 
 	sender := &fakeSender{}
-	serve(t, NewController(NewUseCase(db)), sender,
-		table("public", "users", "id > 1"),
+	serve(t, NewController(NewUseCase(testConfiguration(), db)), sender,
+		table("", "users", "id > 1"),
 		table("", "missing", ""),
-		table("public", "broken", ""),
+		table("", "broken", ""),
+		table("pg_catalog", "pg_authid", ""),
 	)
 
 	events := sender.events()
@@ -32,10 +33,11 @@ func TestHandlerStreamsEventsThenDone(t *testing.T) {
 	}
 
 	want := []any{
-		EstimateEvent{Schema: "public", Table: "users", Count: 100, Rough: true},
-		EstimateEvent{Schema: "public", Table: "users", Count: 98},
+		EstimateEvent{Table: "users", Count: 100, Rough: true},
+		EstimateEvent{Table: "users", Count: 98},
 		EstimateErrorEvent{Table: "missing", Error: database.ErrTableNotFound.Error()},
-		EstimateErrorEvent{Schema: "public", Table: "broken", Error: "explain failed"},
+		EstimateErrorEvent{Table: "broken", Error: "explain failed"},
+		EstimateErrorEvent{Schema: "pg_catalog", Table: "pg_authid", Error: ErrTableNotConfigured.Error()},
 	}
 	if got := events[:len(events)-1]; !sameElements(got, want) {
 		t.Fatalf("events = %#v, want %#v", got, want)
@@ -43,7 +45,7 @@ func TestHandlerStreamsEventsThenDone(t *testing.T) {
 
 	if calls := db.recordedCalls(); !sameElements(calls, []call{
 		{table: identifier("public", "users"), where: "id > 1"},
-		{table: identifier("", "missing"), where: ""},
+		{table: identifier("public", "missing"), where: ""},
 		{table: identifier("public", "broken"), where: ""},
 	}) {
 		t.Errorf("GetRowCount calls = %+v, want every requested table with its filter", calls)
@@ -52,7 +54,7 @@ func TestHandlerStreamsEventsThenDone(t *testing.T) {
 
 func TestHandlerSendsOnlyDoneWithoutDatabase(t *testing.T) {
 	sender := &fakeSender{}
-	serve(t, NewController(NewUseCase(nil)), sender, table("public", "users", ""))
+	serve(t, NewController(NewUseCase(testConfiguration(), nil)), sender, table("public", "users", ""))
 
 	if events := sender.events(); len(events) != 1 || events[0] != (EstimatesDoneEvent{}) {
 		t.Fatalf("events = %#v, want only done", events)
@@ -69,7 +71,7 @@ func TestHandlerStopsOnceTheClientIsGone(t *testing.T) {
 	}
 
 	sender := &fakeSender{failAfter: 1}
-	serve(t, NewController(NewUseCase(db)), sender, tables...)
+	serve(t, NewController(NewUseCase(testConfiguration(), db)), sender, tables...)
 
 	if events := sender.events(); len(events) != 2 {
 		t.Fatalf("send was attempted %d times, want the first event and the failing one only", len(events))
@@ -95,7 +97,7 @@ func TestHandlerStopsWhenTheRequestIsCancelled(t *testing.T) {
 
 		input := &EstimatesRequest{}
 		input.Body.Tables = []EstimateTable{table("public", "users", "")}
-		NewController(NewUseCase(db)).Handler()(ctx, input, sender.send)
+		NewController(NewUseCase(testConfiguration(), db)).Handler()(ctx, input, sender.send)
 	}()
 
 	waitFor(t, func() bool { return len(db.recordedCalls()) == 1 })

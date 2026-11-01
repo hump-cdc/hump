@@ -2,8 +2,10 @@ package getsnapshotestimates
 
 import (
 	"context"
+	"errors"
 	"sync"
 
+	"hump/config"
 	"hump/internal/domain"
 	"hump/internal/port/database"
 )
@@ -11,6 +13,9 @@ import (
 // defaultMaxConcurrentEstimates caps the tables counted at once; each holds a
 // database session of its own while it runs.
 const defaultMaxConcurrentEstimates = 6
+
+// ErrTableNotConfigured reports a target that cannot resolve to a configured pair.
+var ErrTableNotConfigured = errors.New("snapshot table is not configured or is ambiguous")
 
 // Request is one table to count and the filter its rows are counted with.
 type Request struct {
@@ -28,6 +33,7 @@ type Estimate struct {
 
 // UseCase counts the rows a snapshot of the requested tables would read.
 type UseCase struct {
+	cfg                    config.Configuration
 	db                     database.Database // db is nil when only the API is described, never served.
 	maxConcurrentEstimates int
 }
@@ -45,9 +51,10 @@ func WithMaxConcurrentEstimates(n int) Option {
 	}
 }
 
-// NewUseCase returns a use case counting rows of db.
-func NewUseCase(db database.Database, opts ...Option) *UseCase {
+// NewUseCase returns a use case counting configured snapshot targets in db.
+func NewUseCase(cfg config.Configuration, db database.Database, opts ...Option) *UseCase {
 	uc := &UseCase{
+		cfg:                    cfg,
 		db:                     db,
 		maxConcurrentEstimates: defaultMaxConcurrentEstimates,
 	}
@@ -111,7 +118,13 @@ func (uc *UseCase) estimateTable(ctx context.Context, request Request, estimates
 		}
 	}
 
-	counts, err := uc.db.GetRowCount(ctx, request.Table, request.Where)
+	resolved, ok := uc.cfg.ResolveSnapshotTable(request.Table)
+	if !ok {
+		emit(Estimate{Table: request.Table, Error: ErrTableNotConfigured})
+		return
+	}
+
+	counts, err := uc.db.GetRowCount(ctx, resolved, request.Where)
 	if err != nil {
 		emit(Estimate{Table: request.Table, Error: err})
 		return

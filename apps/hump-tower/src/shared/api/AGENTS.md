@@ -8,6 +8,11 @@ side emits; the hand-written part is `client.ts` (base URL), `error-message.ts` 
 `*Model` type), `generated/@tanstack/react-query.gen` and `generated/zod.gen`. `client.ts` and
 the `client` instance are not exported: the base URL is set in one place and nowhere else.
 
+`index.ts` installs a request interceptor on the generated default client only for
+`POST /api/snapshot/stop`. It restores `Content-Type: application/json` after the generated transport
+strips the header from bodyless requests, as required by the server's snapshot mutation guard.
+The request stays bodyless; base URL resolution, fetch and error handling are unchanged.
+
 ## The generation pipeline
 
 ```

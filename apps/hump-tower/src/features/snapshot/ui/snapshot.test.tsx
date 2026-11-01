@@ -80,6 +80,7 @@ const doneClean: SnapshotDoneEventModel = {
 
 let stream: SseChannel
 let view: ProvidersRender | undefined
+let stopRequest: Request | undefined
 // Stream errors are logged; the log is muted and checked.
 let warn: Mock<typeof console.warn>
 
@@ -87,12 +88,16 @@ beforeAll(registerDom)
 afterAll(unregisterDom)
 
 beforeEach(() => {
+    stopRequest = undefined
     warn = spyOn(console, 'warn').mockImplementation(() => {})
     stream = createSseChannel()
     fakeApi.serve({
         'GET /api/snapshot': (request) => stream.respond(request, undefined),
         'POST /api/snapshot/tables': () => json({ tables: [] }),
-        'POST /api/snapshot/stop': () => empty(),
+        'POST /api/snapshot/stop': (request) => {
+            stopRequest = request
+            return empty()
+        },
     })
 })
 
@@ -158,6 +163,8 @@ describe('Snapshot', () => {
 
         await act(async () => fireEvent.click(getByText('Stop snapshot')))
         await waitFor(() => expect(callsTo('POST /api/snapshot/stop')).toBe(1))
+        expect(stopRequest?.headers.get('Content-Type')).toBe('application/json')
+        expect(stopRequest?.body).toBeNull()
     })
 
     test('reports a failed stop in a toast', async () => {
@@ -190,6 +197,8 @@ describe('Snapshot', () => {
 
         await act(async () => fireEvent.click(getByText('Run another snapshot')))
         await waitFor(() => expect(callsTo('POST /api/snapshot/stop')).toBe(1))
+        expect(stopRequest?.headers.get('Content-Type')).toBe('application/json')
+        expect(stopRequest?.body).toBeNull()
     })
 
     test('reports a clean run as complete', async () => {

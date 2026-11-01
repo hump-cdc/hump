@@ -111,6 +111,8 @@ func (c *HumpTowerController) Serve(ctx context.Context, port uint) error {
 // Api registers the web UI API routes on router and returns the resulting API,
 // whose OpenAPI spec is also used to generate the web UI client.
 func (c *HumpTowerController) Api(router chi.Router) huma.API {
+	router.Use(middleware.SnapshotMutations())
+
 	apiCfg := huma.DefaultConfig("hump", version.Version)
 	apiCfg.CreateHooks = nil
 	apiCfg.OpenAPIPath = ""

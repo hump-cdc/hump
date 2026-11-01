@@ -36,6 +36,7 @@ type UseCase struct {
 	cfg                    config.Configuration
 	db                     database.Database // db is nil when only the API is described, never served.
 	maxConcurrentEstimates int
+	slots                  chan struct{}
 }
 
 // Option configures a UseCase.
@@ -62,13 +63,14 @@ func NewUseCase(cfg config.Configuration, db database.Database, opts ...Option) 
 	for _, opt := range opts {
 		opt(uc)
 	}
+	uc.slots = make(chan struct{}, uc.maxConcurrentEstimates)
 
 	return uc
 }
 
 // Estimate counts every requested table in a goroutine of its own, at most
-// uc.maxConcurrentEstimates at a time, and streams their estimates on a channel
-// that closes once all of them are done. A cancelled ctx stops them early.
+// uc.maxConcurrentEstimates across all calls, and streams their estimates until
+// all counts close. A cancelled ctx stops delivery and queued counts.
 func (uc *UseCase) Estimate(ctx context.Context, requests []Request) <-chan Estimate {
 	estimates := make(chan Estimate)
 
@@ -77,14 +79,12 @@ func (uc *UseCase) Estimate(ctx context.Context, requests []Request) <-chan Esti
 		return estimates
 	}
 
-	slots := make(chan struct{}, uc.maxConcurrentEstimates)
-
 	var wg sync.WaitGroup
 	for _, request := range requests {
 		wg.Go(func() {
 			select {
-			case slots <- struct{}{}:
-				defer func() { <-slots }()
+			case uc.slots <- struct{}{}:
+				defer func() { <-uc.slots }()
 			case <-ctx.Done():
 				return
 			}
@@ -107,7 +107,7 @@ func (uc *UseCase) Estimate(ctx context.Context, requests []Request) <-chan Esti
 }
 
 // estimateTable sends the row counts of one table to estimates, or the error
-// that prevented them, until GetRowCount is done or ctx is cancelled.
+// that prevented them, and waits for GetRowCount to finish even after cancellation.
 func (uc *UseCase) estimateTable(ctx context.Context, request Request, estimates chan<- Estimate) {
 	emit := func(estimate Estimate) bool {
 		select {
@@ -132,6 +132,9 @@ func (uc *UseCase) estimateTable(ctx context.Context, request Request, estimates
 
 	for count := range counts {
 		if !emit(Estimate{Table: request.Table, Count: count.Num, Rough: count.Rough, Error: count.Error}) {
+			// Keep the slot until the adapter has closed its database session.
+			for range counts {
+			}
 			return
 		}
 	}

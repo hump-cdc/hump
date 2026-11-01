@@ -114,6 +114,39 @@ func TestHandlerStopsWhenTheRequestIsCancelled(t *testing.T) {
 	}
 }
 
+func TestHandlerReturnsBeforeCancelledCountCloses(t *testing.T) {
+	db := &controlledDatabase{started: make(chan chan database.RowCount, 2)}
+	uc := NewUseCase(testConfiguration(), db, WithMaxConcurrentEstimates(1))
+	controller := NewController(uc)
+	sender := &fakeSender{failAfter: 1}
+	input := &EstimatesRequest{}
+	input.Body.Tables = []EstimateTable{table("public", "users", "")}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		controller.Handler()(t.Context(), input, sender.send)
+	}()
+	counts := receive(t, db.started)
+	for range 2 {
+		select {
+		case counts <- database.RowCount{Num: 1}:
+		case <-time.After(5 * time.Second):
+			t.Fatal("handler did not read count")
+		}
+	}
+	receive(t, done)
+	if slots := len(uc.slots); slots != 1 {
+		t.Fatalf("occupied slots = %d, want 1 until counts closes", slots)
+	}
+	if events := sender.events(); len(events) != 2 {
+		t.Fatalf("events = %#v, want only the successful and failed sends", events)
+	}
+	close(counts)
+	next := uc.Estimate(t.Context(), []Request{request("public", "users", "")})
+	close(receive(t, db.started))
+	collect(t, next)
+}
+
 func TestEventsNamesEveryPayload(t *testing.T) {
 	events := NewController(nil).Events()
 

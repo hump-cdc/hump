@@ -216,6 +216,9 @@ jobs:
                       --ignore=GHSA-xhq7-xmqj-769h
                       --ignore=GHSA-wjr9-j795-jxcr
                       --ignore=GHSA-333x-w4r6-6crp
+                      # deepmerge (dev-only, via Storybook): temporary exception; no patched release currently.
+                      # Maintainer disputes advisory: https://github.com/TehShrike/deepmerge/issues/273. Revisit on 2026-11-15.
+                      --ignore=GHSA-gcqx-w48m-w2h4
                   )
                   status=0
                   moon --cache off --quiet --log off run hump-tower:audit --output-style stream -- --json "${ignores[@]}" > .ci/hump-tower/audit.json || status=$?
@@ -233,7 +236,7 @@ jobs:
                   status: ${{ steps.audit.outputs.status }}
                   ignores: >-
                       GHSA-834v-8h66-3h79 GHSA-w74x-v6f9-j3xg GHSA-xhq7-xmqj-769h
-                      GHSA-wjr9-j795-jxcr GHSA-333x-w4r6-6crp
+                      GHSA-wjr9-j795-jxcr GHSA-333x-w4r6-6crp GHSA-gcqx-w48m-w2h4
 
             - name: Upload npm vulnerability machine report
               if: ${{ !cancelled() && hashFiles('.ci/hump-tower/audit.json') != '' }}

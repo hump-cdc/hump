@@ -22,6 +22,28 @@ func (c *Configuration) ResolveAll() []Table {
 	return c.Tables
 }
 
+// ResolveSnapshotTable resolves an explicitly configured pair or an unambiguous
+// unqualified name; configured tables without a schema cannot authorize snapshots.
+func (c *Configuration) ResolveSnapshotTable(request domain.TableIdentifier) (domain.TableIdentifier, bool) {
+	var resolved domain.TableIdentifier
+	for _, table := range c.Tables {
+		if table.Name != request.Name {
+			continue
+		}
+		if request.Schema != "" {
+			if table.Schema == request.Schema {
+				return request, true
+			}
+			continue
+		}
+		if table.Schema == "" || (resolved.Schema != "" && resolved.Schema != table.Schema) {
+			return domain.TableIdentifier{}, false
+		}
+		resolved = domain.TableIdentifier{Schema: table.Schema, Name: table.Name}
+	}
+	return resolved, resolved.Schema != ""
+}
+
 // Table is one replicated table and the sinks its changes are delivered to.
 type Table struct {
 	Schema domain.TableSchema `yaml:"schema"            validate:"omitempty"`

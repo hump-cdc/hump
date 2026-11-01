@@ -196,7 +196,7 @@ export type EstimateEventModel = {
 
 export type EstimateTableModel = {
     /**
-     * Schema of the table; empty resolves the table through search_path
+     * Exact configured schema; empty requires an unambiguous table name with an explicit schema in configuration
      */
     schema?: string;
     /**
@@ -758,7 +758,7 @@ export type SnapshotStartRequestBodyModel = {
 
 export type SnapshotStartTableModel = {
     /**
-     * Schema of the table; empty resolves the table through search_path
+     * Exact configured schema; empty requires an unambiguous table name with an explicit schema in configuration
      */
     schema?: string;
     /**

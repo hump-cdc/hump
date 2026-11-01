@@ -39,10 +39,10 @@ func main() {
 		getmetrics.NewController(getmetrics.NewUseCase(nil)),
 		getoperations.NewController(getoperations.NewUseCase(nil)),
 		streamupdates.NewController(streamupdates.NewUseCase(nil, nil, nil, nil)),
-		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(nil)),
+		getsnapshotestimates.NewController(getsnapshotestimates.NewUseCase(config.Configuration{}, nil)),
 		getsnapshottables.NewController(getsnapshottables.NewUseCase(config.Configuration{}, nil)),
 		streamsnapshot.NewController(streamsnapshot.NewUseCase(nil)),
-		startsnapshot.NewController(startsnapshot.NewUseCase(nil)),
+		startsnapshot.NewController(startsnapshot.NewUseCase(config.Configuration{}, nil)),
 		stopsnapshot.NewController(stopsnapshot.NewUseCase(nil)),
 	).Api(chi.NewMux())
 

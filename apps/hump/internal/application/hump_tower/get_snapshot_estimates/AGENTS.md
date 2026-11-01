@@ -6,6 +6,19 @@ estimate first (`rough: true`), then the exact count, which the adapter drops si
 or times out. It feeds the snapshot dialog while the user is still editing filters, so it is
 independent of any run and safe to call at any time.
 
+## Configured tables only
+
+The use case receives `cfg` by injection and resolves each requested table through
+`config.Configuration.ResolveSnapshotTable`. Only exact, case-sensitive configured pairs are
+allowed. An empty request schema resolves to the unique nonempty configured schema for that table
+name; duplicate entries for the same pair are fine. Multiple schemas, or any matching configuration
+entry with an empty schema, make shorthand unresolvable. There is no `public`, `search_path`,
+database or partition fallback.
+
+A rejected table produces an `error` event without a database call; other tables continue.
+`GetRowCount` receives the resolved schema and table, but every event keeps the original request's
+schema and table so the client can match it to its row.
+
 ## Concurrency
 
 `Estimate` starts a goroutine for **every** requested table at once and returns an unbuffered
@@ -40,9 +53,8 @@ A table that cannot be counted does not end the stream. Both an error from `GetR
 invalid filter, a missing table) and a `RowCount.Error` arriving mid-stream (a failed planner
 estimate) become an `error` event for that table, and the other tables carry on.
 
-`schema` and `table` are echoed **as requested**, not as resolved: an empty schema resolves through
-`search_path` on the server and stays empty in the event, since the client matches events to its
-rows by what it sent.
+`schema` and `table` are echoed **as requested**, not as resolved, in both count and error events.
+An empty request schema stays empty in the event even when configuration resolves it.
 
 A nil database closes the channel at once, so the stream is a lone `done`.
 

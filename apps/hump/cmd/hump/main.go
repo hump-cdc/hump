@@ -140,10 +140,10 @@ func run() int {
 						getMetricsFeature.NewController(getMetricsFeature.NewUseCase(collector)),
 						getOperationsFeature.NewController(getOperationsFeature.NewUseCase(operations)),
 						streamUpdatesFeature.NewController(streamUpdatesFeature.NewUseCase(collector, operations, live, snapshot)),
-						getSnapshotEstimatesFeature.NewController(getSnapshotEstimatesFeature.NewUseCase(db)),
+						getSnapshotEstimatesFeature.NewController(getSnapshotEstimatesFeature.NewUseCase(configuration, db)),
 						getSnapshotTablesFeature.NewController(getSnapshotTablesFeature.NewUseCase(configuration, db)),
 						streamSnapshotFeature.NewController(streamSnapshotFeature.NewUseCase(snapshot)),
-						startSnapshotFeature.NewController(startSnapshotFeature.NewUseCase(snapshot)),
+						startSnapshotFeature.NewController(startSnapshotFeature.NewUseCase(configuration, snapshot)),
 						stopSnapshotFeature.NewController(stopSnapshotFeature.NewUseCase(snapshot)),
 					)
 					return server.Serve(ctx, *opts.WebPort)

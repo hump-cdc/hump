@@ -163,7 +163,7 @@ export type EstimateEvent = z.infer<typeof EstimateEventSchema>;
 
 export const EstimateTableSchema = z.object({
     schema: z.string().register(z.globalRegistry, {
-        description: 'Schema of the table; empty resolves the table through search_path'
+        description: 'Exact configured schema; empty requires an unambiguous table name with an explicit schema in configuration'
     }).optional(),
     table: z.string().min(1).register(z.globalRegistry, {
         description: 'Name of the table'
@@ -616,7 +616,7 @@ export type SnapshotSink = z.infer<typeof SnapshotSinkSchema>;
 
 export const SnapshotStartTableSchema = z.object({
     schema: z.string().register(z.globalRegistry, {
-        description: 'Schema of the table; empty resolves the table through search_path'
+        description: 'Exact configured schema; empty requires an unambiguous table name with an explicit schema in configuration'
     }).optional(),
     table: z.string().min(1).register(z.globalRegistry, {
         description: 'Name of the table'

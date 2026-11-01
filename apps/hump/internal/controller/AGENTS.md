@@ -91,10 +91,14 @@ its output in memory and leaves the directory alone. `routes.json` is written by
 ## Tests
 
 `hump_tower_test.go` drives `Api` on a bare `chi.Mux` — no middleware, no static handler — with
-only the operations endpoint backed by a real `operations_collector`; every other use case gets nil
-dependencies, so only its request validation is reachable. The exception is `snapshot.estimate`:
-its nil database answers a closed channel, so `TestSnapshotEstimateRouteStreamsEvents` gets a 200
-event stream ending in `event: done`. The tests decode responses into a
+the operations endpoint backed by a real `operations_collector`. `newTestRouter` gives every other
+use case nil dependencies, so only its request validation is reachable. The exception is
+`snapshot.estimate`: its nil database answers a closed channel, so
+`TestSnapshotEstimateRouteStreamsEvents` gets a 200 event stream ending in `event: done`.
+`TestSnapshotRoutesRejectUnconfiguredTargets` uses `newTestRouterWithSnapshot` with configured
+tables and a fake database and runner: start returns 422 without calling the runner; estimate
+streams errors for denied targets and preserves request identities, while database calls use only
+resolved, allowed targets. The tests decode responses into a
 client-shaped struct on purpose: they catch a field that marshals into something the generated
 client cannot parse (payload as text rather than base64, duration as whole milliseconds, metadata
 as `{}` rather than `null`), plus the window semantics and huma's 422s. `Serve`, the static handler

@@ -2,7 +2,7 @@ package getsnapshotestimates
 
 // EstimateTable is one table to estimate and the filter its rows are counted with.
 type EstimateTable struct {
-	Schema string `json:"schema,omitempty" doc:"Schema of the table; empty resolves the table through search_path"`
+	Schema string `json:"schema,omitempty" doc:"Exact configured schema; empty requires an unambiguous table name with an explicit schema in configuration"`
 	Table  string `json:"table"            required:"true" minLength:"1" doc:"Name of the table"`
 	Where  string `json:"where,omitempty"  doc:"Boolean expression the rows are filtered with, as it would follow WHERE; empty counts every row"`
 }

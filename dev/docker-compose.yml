@@ -167,7 +167,7 @@ services:
 
     # HTTP sink target: /submit1 → 200, /submit2 → 5/95 200/500 after 950ms, logs body, /submit3 → 500
     http-sink:
-        image: openresty/openresty:1.31.1.1-4-alpine@sha256:52ff9a6e337bd0138745c73cdfeb5aaa0e783e29eeec0695eec6971c1231f3bd
+        image: openresty/openresty:1.31.1.1-5-alpine@sha256:646cdd1451ea0d465ee4a5aa42f146228f04101e318ede576f9f08a78d10423d
         restart: unless-stopped
         ports:
             - "5050:80"

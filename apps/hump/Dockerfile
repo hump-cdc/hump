@@ -29,7 +29,7 @@ RUN mkdir -p /src/apps/hump/internal/controller \
     && NODE_ENV=production VERSION=$VERSION bun run build
 
 # hump binary. Cross-compiles on the build platform instead of emulating the target.
-FROM --platform=$BUILDPLATFORM golang:1.27.3@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d AS build
 
 ARG TARGETOS TARGETARCH
 

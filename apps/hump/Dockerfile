@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Runtime: the static binary only; no shell, runs as nonroot.
 # Digest pushed 2026-10-24: younger than the 7-day minimum age by an explicit exception.
-FROM docker.io/chainguard/static:latest@sha256:c12f0107f8afb0bbc1b0eff96ff8675e85a10c6083d039b777c51fef5c27420f
+FROM docker.io/chainguard/static:latest@sha256:fc42af33e643f20d08baf03cddcc1c02ba57052dfb02edb0d79f3fc47bcea8d9
 
 COPY --from=build /out/hump /usr/bin/hump
 

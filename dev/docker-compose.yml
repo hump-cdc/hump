@@ -31,7 +31,7 @@ services:
         <<: *pg-command
 
     postgres-16:
-        image: timescale/timescaledb:2.30.2-pg16@sha256:6f139d56042989bd35f50ba5986e492cd32e35cc6778c50be2659add298dc09f
+        image: timescale/timescaledb:2.31.0-pg16@sha256:322ae364eca3321cf2a48f1ef31213b87843413b3cf8feeebf54e999a26bb731
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -42,7 +42,7 @@ services:
         <<: *pg-command
 
     postgres-17:
-        image: timescale/timescaledb:2.30.2-pg17@sha256:b346edcdb51a1fd6020e3965e0bd1c9f3406fa6d5fbce1e28f4852587ef934e2
+        image: timescale/timescaledb:2.31.0-pg17@sha256:b56a3f51991df1f79d0c1a0841cad5c5fa8058fdd6a3ee6886394a6d4c174538
         restart: unless-stopped
         environment: *pg-env
         ports:
@@ -53,7 +53,7 @@ services:
         <<: *pg-command
 
     postgres-18:
-        image: timescale/timescaledb:2.30.2-pg18@sha256:e72689191e1c977892c53d6f2c344dbc4a9657a867dc8cc1899229f9d3672b2e
+        image: timescale/timescaledb:2.31.0-pg18@sha256:0fcff5761363809d1242f2261a3482197b5a5337407f8b97a976fb174206d579
         restart: unless-stopped
         environment: *pg-env
         ports:

@@ -19,6 +19,13 @@ afterEach(cleanup)
 
 type Store = ReturnType<typeof useStoreApi>
 
+type CaptureProps = { captured: { store?: Store } }
+
+const Capture: FC<CaptureProps> = ({ captured }) => {
+    captured.store = useStoreApi()
+    return null
+}
+
 /** xyflow's pan-zoom controller, as the store holds it. */
 type PanZoomInstance = NonNullable<ReactFlowState['panZoom']>
 
@@ -27,14 +34,9 @@ const mount = (zoom: number) => {
     const captured: { store?: Store } = {}
     const scaleBy = mock(async () => true)
 
-    const Capture: FC = () => {
-        captured.store = useStoreApi()
-        return null
-    }
-
     const view = render(
         <ReactFlowProvider>
-            <Capture />
+            <Capture captured={captured} />
             <FlowControls insets={{ top: 10, right: 20, bottom: 30, left: 40 }}>
                 <button type="button">Extra</button>
             </FlowControls>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type FC, useState } from 'react'
 
 import type { Meta, StoryObj } from '@storybook/react'
 import { CreditCard, LogOut, Settings, User } from 'lucide-react'
@@ -56,72 +56,71 @@ const meta: Meta<StoryArgs> = {
         disableItem: false,
         onSelect: fn(),
     },
-    render: ({ label, showShortcuts, disableItem, onSelect }) => {
-        const Story = () => {
-            const [showStatus, setShowStatus] = useState(true)
-            const [position, setPosition] = useState('top')
-
-            return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline">{label}</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem onSelect={() => onSelect('profile')}>
-                                <User />
-                                Profile
-                                {showShortcuts && <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => onSelect('billing')}>
-                                <CreditCard />
-                                Billing
-                                {showShortcuts && <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem disabled={disableItem} onSelect={() => onSelect('settings')}>
-                                <Settings />
-                                Settings
-                                {showShortcuts && <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>}
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem checked={showStatus} onCheckedChange={setShowStatus}>
-                            Show status bar
-                        </DropdownMenuCheckboxItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel inset>Panel position</DropdownMenuLabel>
-                        <DropdownMenuRadioGroup value={position} onValueChange={setPosition}>
-                            <DropdownMenuRadioItem value="top">Top</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>More options</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
-                                <DropdownMenuItem onSelect={() => onSelect('invite')}>Invite users</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => onSelect('team')}>New team</DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onSelect={() => onSelect('logout')}>
-                            <LogOut />
-                            Log out
-                            {showShortcuts && <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )
-        }
-
-        return <Story />
-    },
+    render: (args) => <DropdownMenuStory {...args} />,
 }
 
 export default meta
 
 export const Default: StoryObj<StoryArgs> = {
     name: 'Dropdown Menu',
+}
+
+/** Keeps menu selections in local state while story args control the displayed items. */
+const DropdownMenuStory: FC<StoryArgs> = ({ label, showShortcuts, disableItem, onSelect }) => {
+    const [showStatus, setShowStatus] = useState(true)
+    const [position, setPosition] = useState('top')
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline">{label}</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                    <DropdownMenuItem onSelect={() => onSelect('profile')}>
+                        <User />
+                        Profile
+                        {showShortcuts && <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onSelect('billing')}>
+                        <CreditCard />
+                        Billing
+                        {showShortcuts && <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={disableItem} onSelect={() => onSelect('settings')}>
+                        <Settings />
+                        Settings
+                        {showShortcuts && <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>}
+                    </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem checked={showStatus} onCheckedChange={setShowStatus}>
+                    Show status bar
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel inset>Panel position</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={position} onValueChange={setPosition}>
+                    <DropdownMenuRadioItem value="top">Top</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>More options</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuItem onSelect={() => onSelect('invite')}>Invite users</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onSelect('team')}>New team</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => onSelect('logout')}>
+                    <LogOut />
+                    Log out
+                    {showShortcuts && <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
 }

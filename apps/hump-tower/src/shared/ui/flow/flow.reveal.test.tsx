@@ -30,6 +30,13 @@ const noInsets: ViewportInsets = { top: 0, right: 0, bottom: 0, left: 0 }
 
 type Store = ReturnType<typeof useStoreApi>
 
+type CaptureProps = { captured: { store?: Store } }
+
+const Capture: FC<CaptureProps> = ({ captured }) => {
+    captured.store = useStoreApi()
+    return null
+}
+
 /** xyflow's pan-zoom controller, as the store holds it. */
 type PanZoomInstance = NonNullable<ReactFlowState['panZoom']>
 
@@ -41,14 +48,9 @@ const mount = (props: RevealProps) => {
     const setViewport = mock(async () => undefined)
     const userMovedRef = props.userMoved ?? { current: false }
 
-    const Capture: FC = () => {
-        captured.store = useStoreApi()
-        return null
-    }
-
     const tree = (next: RevealProps) => (
         <ReactFlowProvider>
-            <Capture />
+            <Capture captured={captured} />
             <FlowReveal
                 revealId={next.revealId}
                 revealKey={next.revealKey ?? next.revealId}

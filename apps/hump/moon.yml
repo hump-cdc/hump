@@ -180,6 +180,14 @@ tasks:
         fi
         while read -r module version published allowed; do
           [[ -n "$module" && "$published" > "$cutoff" ]] || continue
+          # Approved security cooldown exception for GO-2026-5932 and the
+          # term/text versions required by the x/crypto fix, in the main app only.
+          case "${directory}:${module}@${version}" in
+            .:golang.org/x/crypto@v0.59.0|.:golang.org/x/term@v0.48.0|.:golang.org/x/text@v0.44.0)
+              echo "${directory}/go.mod: approved GO-2026-5932 cooldown exception for ${module} ${version}."
+              continue
+              ;;
+          esac
           echo "${directory}/go.mod: ${module} ${version} was published ${published}; allowed from ${allowed}."
           echo "Pick a version at least ${min_age_days} days old (go list -m -json ${module}@<version>), run GOWORK=off go -C ${directory} get ${module}@<version> and moon run hump:tidy, or wait until ${allowed}." >&2
           status=1

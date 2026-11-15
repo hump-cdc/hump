@@ -28,6 +28,11 @@ afterEach(cleanup)
 /** Icon a config entry can carry in place of the color swatch. */
 const Icon: FC = () => <svg data-testid="icon" />
 
+const Probe: FC = () => {
+    useChart()
+    return null
+}
+
 const config: ChartConfig = {
     ok: { label: 'Delivered', color: 'var(--success)' },
     lag: { label: 'Lagging', icon: Icon, theme: { light: 'red', dark: 'blue' } },
@@ -88,11 +93,6 @@ describe('ChartLegend', () => {
 
 describe('useChart', () => {
     test('throws outside a ChartContainer', () => {
-        const Probe: FC = () => {
-            useChart()
-            return null
-        }
-
         expect(() => render(<Probe />)).toThrow('useChart must be used within a <ChartContainer />')
     })
 })

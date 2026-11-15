@@ -67,7 +67,7 @@ export const DatabaseStructSchema = z.object({
     name: z.string().register(z.globalRegistry, {
         description: 'PostgreSQL database name'
     }),
-    port: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).register(z.globalRegistry, {
+    port: z.int().gte(0).lte(65535).register(z.globalRegistry, {
         description: 'PostgreSQL port'
     }),
     publication: z.string().register(z.globalRegistry, {

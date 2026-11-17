@@ -19,7 +19,7 @@ require (
 	github.com/prometheus/client_model v0.6.3
 	github.com/rabbitmq/amqp091-go v1.16.0
 	github.com/rabbitmq/rabbitmq-stream-go-client v1.9.0
-	github.com/twmb/franz-go v1.22.2
+	github.com/twmb/franz-go v1.22.3
 	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/term v0.48.0
@@ -227,7 +227,7 @@ require (
 	github.com/timonwong/loggercheck v0.12.0 // indirect
 	github.com/tomarrell/wrapcheck/v2 v2.12.0 // indirect
 	github.com/tommy-muehle/go-mnd/v2 v2.5.1 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.15.0 // indirect
+	github.com/twmb/franz-go/pkg/kmsg v1.15.1 // indirect
 	github.com/ultraware/funlen v0.2.0 // indirect
 	github.com/ultraware/whitespace v0.2.0 // indirect
 	github.com/uudashr/gocognit v1.2.1 // indirect

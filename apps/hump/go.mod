@@ -10,16 +10,16 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hellofresh/health-go/v5 v5.5.5
 	github.com/jackc/pglogrepl v0.0.0-20260401131349-e37c41485510
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/lmittmann/tint v1.2.1
-	github.com/nats-io/nats.go v1.55.0
+	github.com/nats-io/nats.go v1.56.0
 	github.com/nats-io/nkeys v0.4.17
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/rabbitmq/amqp091-go v1.16.0
-	github.com/rabbitmq/rabbitmq-stream-go-client v1.9.0
-	github.com/twmb/franz-go v1.22.2
+	github.com/rabbitmq/amqp091-go v1.17.0
+	github.com/rabbitmq/rabbitmq-stream-go-client v1.10.0
+	github.com/twmb/franz-go v1.22.3
 	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/term v0.48.0
@@ -227,7 +227,7 @@ require (
 	github.com/timonwong/loggercheck v0.12.0 // indirect
 	github.com/tomarrell/wrapcheck/v2 v2.12.0 // indirect
 	github.com/tommy-muehle/go-mnd/v2 v2.5.1 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.15.0 // indirect
+	github.com/twmb/franz-go/pkg/kmsg v1.15.1 // indirect
 	github.com/ultraware/funlen v0.2.0 // indirect
 	github.com/ultraware/whitespace v0.2.0 // indirect
 	github.com/uudashr/gocognit v1.2.1 // indirect

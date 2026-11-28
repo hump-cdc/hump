@@ -107,7 +107,7 @@ services:
 
     # NATS
     nats:
-        image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
+        image: nats:2.15.3@sha256:4b83414183aa5fb87cd164962c47eaffd214e84668dc4fa4f1d4c44a3e765ee8
         restart: unless-stopped
         ports:
             - "4222:4222"
@@ -118,7 +118,7 @@ services:
             - nats-data:/data
 
     nats2:
-        image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
+        image: nats:2.15.3@sha256:4b83414183aa5fb87cd164962c47eaffd214e84668dc4fa4f1d4c44a3e765ee8
         restart: unless-stopped
         ports:
             - "4223:4222"
